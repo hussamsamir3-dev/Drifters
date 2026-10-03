@@ -12,36 +12,46 @@ def save(name,x,note,loop=False):
 bp=lambda x,lo,hi: sosfilt(butter(2,[lo,hi],'bandpass',fs=FS,output='sos'),x)
 lp=lambda x,f: sosfilt(butter(2,f,'lowpass',fs=FS,output='sos'),x)
 hp=lambda x,f: sosfilt(butter(2,f,'highpass',fs=FS,output='sos'),x)
-def bang(dur,sub,crack,tail,seed):
-    # unburnt fuel igniting in the exhaust: a hard pressure front, a chest thump, the pipe ringing, then smaller after-pops
+def comb(x,ms,fb):                       # the tailpipe: a short tube that rings after the pressure front passes
+    d=int(ms/1000*FS); y=x.copy()
+    for n in range(d,len(y)): y[n]+=fb*y[n-d]
+    return y
+def bang(dur,boom,crack,tail,seed):
+    # fuel igniting in the exhaust: a very short broadband crack, a boom of low-frequency pressure (noise, not a tone),
+    # the pipe ringing, and sometimes smaller pops after it. Short and dry: it is heard outdoors, not in a hall.
     r=np.random.default_rng(seed); N=int(dur*FS); t=np.arange(N)/FS; x=np.zeros(N)
     def pop(t0,a,dec):
-        i=int(t0*FS); n=N-i; tt=np.arange(n)/FS; env=(1-np.exp(-tt/.0006))*np.exp(-tt/dec)
-        nz=r.normal(0,1,n); body=lp(nz,2200)*1.0+bp(nz,2500,7000)*crack
-        ring=sum(g*np.sin(2*np.pi*f0*tt+r.random()*6)*np.exp(-tt/d) for f0,g,d in [(165,1.0,.07),(390,.7,.05),(880,.4,.035)])
-        thump=np.sin(2*np.pi*(46+34*np.exp(-tt/.03))*tt)*np.exp(-tt/.11)*sub
-        x[i:]+=a*(body*env*1.6+ring*.9*np.exp(-tt/.004+0)*0+ring*.8*(1-np.exp(-tt/.001))+thump*1.5)
-    pop(.004,1.0,.05)
-    for k in range(tail): pop(.07+.05*k+r.random()*.04,.5*.6**k*(.6+.8*r.random()),.03)
-    rumble=lp(r.normal(0,1,N),300)*np.exp(-t/.16)*.9*sub                      # the pressure wave rolling down the pipe
-    return np.tanh((x+rumble)*.9)
-save('exhaust_bang_1.wav',bang(.7,1.0,.7,2,1),'exhaust bang on a hard upshift: deep')
-save('exhaust_bang_2.wav',bang(.6,.7,1.2,1,2),'exhaust bang: sharper crack')
-save('exhaust_bang_3.wav',bang(.9,1.2,.9,4,3),'exhaust bang with a run of after-pops')
+        i=int(t0*FS); n=N-i; tt=np.arange(n)/FS; nz=r.normal(0,1,n)
+        front=nz*np.exp(-tt/.0022)*(1-np.exp(-tt/.0002))                       # the crack itself: about 3 ms
+        mid=bp(nz,220,1400)*np.exp(-tt/(dec*.6))*(1-np.exp(-tt/.001))*1.5      # body of the pop
+        low=lp(r.normal(0,1,n),150)*np.exp(-tt/dec)*(1-np.exp(-tt/.003))*4.5*boom   # the boom you feel
+        x[i:]+=a*(front*crack*1.4+mid+low)
+    pop(.003,1.0,.075)
+    for k in range(tail): pop(.085+.055*k+r.random()*.03,.42*.62**k*(.6+.8*r.random()),.035)
+    x=comb(comb(x,5.6,.42),9.3,.3)
+    return np.tanh(lp(x,6500)*.55)
+save('exhaust_bang_1.wav',bang(.5,1.0,.8,1,31),'exhaust bang: deep boom')
+save('exhaust_bang_2.wav',bang(.42,.7,1.2,0,32),'exhaust bang: single sharp crack')
+save('exhaust_bang_3.wav',bang(.7,1.1,.9,3,33),'exhaust bang with a few after-pops')
+def pink(r,n): z=np.fft.rfft(r.normal(0,1,n)); fq=np.fft.rfftfreq(n,1/FS); z/=np.sqrt(np.maximum(fq,40)); y=np.fft.irfft(z,n); return y/np.std(y)
 def bov(dur,flutter,seed):
-    # blow-off valve: boost dumped to atmosphere. A sharp hiss that falls in pitch; the flutter version chops it as the compressor surges
-    r=np.random.default_rng(seed); N=int(dur*FS); t=np.arange(N)/FS; nz=r.normal(0,1,N); out=np.zeros(N); B=24
-    for b in range(B):                                                        # falling filter: cross-faded bands from 7 kHz down to 2 kHz
-        fc=7000*(2000/7000)**(b/(B-1)); w=np.exp(-((t/dur*B-b)/1.3)**2); out+=bp(nz,fc*.7,min(fc*1.4,FS/2-200))*w
-    env=(1-np.exp(-t/.002))*np.exp(-t/(dur*.42))
-    if flutter: f=26*np.exp(-t/.45)+11; ph=np.cumsum(f)/FS; env*=.25+.75*np.clip(np.sin(2*np.pi*ph),0,None)**.6
-    whis=np.sin(2*np.pi*np.cumsum(5200*np.exp(-t/.12)+900)/FS)*np.exp(-t/.07)*.25   # the turbo winding down underneath
-    return np.tanh((out/np.max(np.abs(out))*env*1.4+whis*env)*1.2)
-save('turbo_blowoff_1.wav',bov(.55,False,4),'turbo blow-off: clean whoosh')
-save('turbo_blowoff_2.wav',bov(.8,True,5),'turbo blow-off with compressor flutter')
+    # boost venting through the blow-off valve: a soft-edged rush of air that falls in pitch as pressure drops. Flutter: the air
+    # backs up through the compressor instead, in a run of short chuffs that slow down and die away.
+    r=np.random.default_rng(seed); N=int(dur*FS); t=np.arange(N)/FS; nz=pink(r,N); out=np.zeros(N); B=20
+    for b in range(B): fc=5200*(1500/5200)**(b/(B-1)); w=np.exp(-((t/(dur*.8)*B-b)/1.6)**2); out+=bp(nz,fc*.6,min(fc*1.7,FS/2-300))*w
+    out/=np.max(np.abs(out))
+    if not flutter: env=(1-np.exp(-t/.006))*np.exp(-t/(dur*.3))
+    else:
+        env=np.zeros(N); tp=.012; gap=.034; a=1.0
+        while tp<dur-.05: env+=a*np.exp(-((t-tp)/.011)**2); tp+=gap; gap*=1.17; a*=.8
+        out=bp(out,500,3600)*1.4                                            # chuffs are lower and rounder than a clean vent
+    valve=np.sin(2*np.pi*np.cumsum(1900*np.exp(-t/.09)+650)/FS)*np.exp(-t/.05)*.07   # the valve seat: a brief falling note under the air
+    return np.tanh((out*env+valve*(0 if flutter else 1))*1.1)
+save('turbo_blowoff_1.wav',bov(.45,False,34),'blow-off valve: a soft rush of venting air')
+save('turbo_blowoff_2.wav',bov(.6,True,35),'compressor flutter: a run of chuffs that slows and fades')
 N=3*FS; f=np.fft.rfftfreq(N,1/FS); r=np.random.default_rng(9)
 def band(shape): y=np.fft.irfft(np.fft.rfft(r.normal(0,1,N))*shape,N); return y/np.std(y)
 def slow(nb,d): z=np.fft.rfft(r.normal(0,1,N)); z[nb:]=0; z[0]=0; y=np.fft.irfft(z,N); return 1+d*y/np.max(np.abs(y))
-sp=band(1/(1+((f-4300)/45)**2)**2)*slow(20,.3)+.55*band(1/(1+((f-6450)/70)**2)**2)*slow(20,.3)+.5*band((f/(f+2500))**2/(1+(f/9000)**4))+.2*band(1/(1+((f-2150)/60)**2)**2)
+sp=band(1/(1+((f-3900)/16)**2)**2)*slow(14,.18)+.22*band(1/(1+((f-7800)/40)**2)**2)*slow(14,.2)+.3*band((f/(f+1800))**2/(1+(f/7000)**4))   # a clean whistle from the compressor wheel over a bed of rushing intake air
 save('turbo_spool.wav',sp*slow(8,.12),'turbo spool: compressor whistle and rushing air; pitch follows boost',True)
 m=json.load(open(OUT+'audio_manifest.json')); m.setdefault('generated',{}).setdefault('files',[]).extend(man); json.dump(m,open(OUT+'audio_manifest.json','w'),indent=1)
