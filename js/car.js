@@ -60,7 +60,14 @@ export class Car {
     }
     const w = this.wheels; this.a = w.FL.z; this.b = -w.RL.z; this.tw = w.FL.x; this.R = w.RL.y;
     { const T = TUNE.toy; chassis.scale.set(T.w, T.h, T.l); for (const k in w) { const q = w[k]; q.mesh.scale.setScalar(T.wheel); q.y *= T.wheel; q.pivot.position.set(q.x * T.w, q.y, q.z * T.l); } this.rideY = this.R * (T.wheel - 1); this.R *= T.wheel; }
-    const box = new THREE.Box3().setFromObject(chassis); this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
+    const box = new THREE.Box3().setFromObject(chassis);
+    // upgrades you can see: rear wing grows with Engine, rim colour shows Tyres, blue underglow for Nitro, nose bar for Armour
+    { const U = this.up, T = TUNE.toy, add = (geo, mat, x, y, z) => { const me = new THREE.Mesh(geo, mat); me.position.set(x / T.w, y / T.h, z / T.l); me.castShadow = true; chassis.add(me); return me; };
+      const hwX = (box.max.x - box.min.x) / 2, dark = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: .5, metalness: .4 });
+      if (U.eng > 0) { const wy = box.max.y * (.78 + U.eng * .05), wz = box.min.z + .32; add(new THREE.BoxGeometry(hwX * 1.75 / T.w, .05, (.3 + U.eng * .07) / T.l), this.m.paint, 0, wy + .22 + U.eng * .05, wz); for (const sx of [-.5, .5]) add(new THREE.BoxGeometry(.06, (.24 + U.eng * .05) / T.h, .14), dark, sx * hwX, wy + .1, wz); }
+      if (U.tyre > 0) { const rim = new THREE.MeshStandardMaterial({ color: [0, 0xb87333, 0xf2c200, 0xe3262e][U.tyre], metalness: .9, roughness: .25 }); for (const k in w) w[k].mesh.traverse(o => { if (o.isMesh && (o.material === this.m.rim || o.material === this.m.rimDark)) o.material = rim; }); }
+      if (U.nitro > 0) { const glow = add(new THREE.PlaneGeometry(hwX * 1.7 / T.w, (box.max.z - box.min.z) * .8 / T.l), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x19a7ce).multiplyScalar(.8 + U.nitro * .7), transparent: true, opacity: .55, depthWrite: false, side: THREE.DoubleSide }), 0, .09, (box.max.z + box.min.z) / 2); glow.rotation.x = -Math.PI / 2; glow.castShadow = false; }
+      if (U.armor > 0) add(new THREE.BoxGeometry(hwX * (1.3 + U.armor * .15) / T.w, (.1 + U.armor * .04) / T.h, .12), dark, 0, box.max.y * .3, box.max.z + .04); } this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
     this.I = spec.mass * this.a * this.b * spec.yawK; this.h = .3;
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
     this.reset(0, 0, 0);
@@ -328,7 +335,7 @@ export class Car {
   // Snapshot interpolation. Every packet carries the sender's clock; the rival is drawn a short, self-adjusting
   // delay in the past, between two real snapshots, so late or bunched packets are absorbed instead of shown as jumps.
   netApply(p, now) {
-    const N = this.nb || (this.nb = { buf: [], off: Infinity, iv: 50, jit: 5, last: 0, delay: 110 }), t = p[8];
+    const N = this.nb || (this.nb = { buf: [], off: Infinity, iv: 1000 / TUNE.net.hz, jit: 4, last: 0, delay: 70 }), t = p[8];
     if (N.buf.length && t <= N.buf[N.buf.length - 1].t) return;               // stale or out of order
     N.buf.push({ t, x: p[0], z: p[1], th: p[2], vx: p[3], vz: p[4], r: p[5] }); if (N.buf.length > 40) N.buf.shift();
     N.off = Math.min(N.off + .05, now - t);                                   // clock offset + fastest trip seen (relaxes slowly)
@@ -337,7 +344,7 @@ export class Car {
   }
   netStep(dt, track, now) {
     const N = this.nb; if (!N || !N.buf.length) return;
-    N.delay += (clamp(N.iv * 1.6 + N.jit * 3.5, 80, 320) - N.delay) * Math.min(1, dt * .6);     // buffer just enough for the current jitter
+    { const want = clamp(N.iv * TUNE.net.intervalK + N.jit * TUNE.net.jitterK, TUNE.net.minBuffer, TUNE.net.maxBuffer); N.delay += (want - N.delay) * Math.min(1, dt * (want > N.delay ? 2.5 : .5)); }   // grows quickly when the link gets rough, shrinks back slowly     // buffer just enough for the current jitter
     const T = now - N.off - N.delay, B = N.buf; let k = B.length - 1; while (k > 0 && B[k].t > T) k--;
     const a = B[k], b = B[k + 1]; let x, z, th, vx, vz, r;
     if (b && T >= a.t) {                                                      // between two snapshots: cubic (Hermite) blend using their velocities

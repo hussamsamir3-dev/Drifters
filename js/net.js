@@ -4,7 +4,7 @@
 const cfg = window.GAME_CONFIG || {};
 export const hasSupabase = !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase);
 let client = null;
-const sb = () => client || (client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 30 } } }));
+const sb = () => client || (client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 60 } } }));
 const myId = Math.random().toString(36).slice(2, 10);
 
 export class Room {
@@ -19,7 +19,7 @@ export class Room {
         ch.on('broadcast', { event: 'm' }, ({ payload }) => this.onMessage(payload));
         ch.on('presence', { event: 'sync' }, () => {
           const st = ch.presenceState(); this.peers = {};
-          for (const k in st) if (k !== this.id && st[k][0]) this.peers[k] = st[k][0];
+          for (const k in st) if (k !== this.id && st[k].length) this.peers[k] = st[k][st[k].length - 1];   // newest entry: the one with the current car and paint
           this.onPeers(this.peers);
         });
         ch.subscribe(async status => {

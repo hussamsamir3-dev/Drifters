@@ -30,6 +30,10 @@ export const TUNE = {
   assistYawDamp: 1.1,                   // extra rotation damping at Assist Full
   wall: { bounce: .04, spin: .35, friction: .22, yawKeep: .97 },   // barrier contact: restitution, share of impulse that may rotate the car, wall friction
   yawDamp: .6, yawDampSpeed: .012,       // yaw damping (1/s), rising with speed for high-speed stability
+  // Online sync. hz = state messages per second from each player. The free Supabase plan allows 100 messages/s for the
+  // whole project, so 24 keeps a duel safely under it; on a paid plan 30-40 is fine. minBuffer/maxBuffer bound how far in
+  // the past the rival is drawn (ms): lower = more immediate, higher = smoother on a poor connection.
+  net: { hz: 24, minBuffer: 45, maxBuffer: 300, intervalK: 1.2, jitterK: 2.6 },
   reset: { penalty: 2 },                // seconds held stationary after pressing reset
   toy: { w: 1.08, h: 1.16, l: .88, wheel: 1.12 },   // visual proportions only: short, tall, big-wheeled miniature cars
 };

@@ -170,7 +170,8 @@ async function startRace(o) {
     R.cars.push(me); placeOnGrid(me, count);
   } else if (o.mode === 'online') {
     R.cars.push(me); placeOnGrid(me, isHost ? 0 : 1);
-    if (peer) { const ps = CARS.find(c => c.id === peer.car) || CARS[0], rc = R.remote = new Car(ps, peer.paint ?? ps.color, peer.name || 'Rival'); rc.isRemote = true; R.cars.push(rc); placeOnGrid(rc, isHost ? 1 : 0); }
+    if (peer) { const ps = CARS.find(c => c.id === peer.car) || CARS[0], rc = R.remote = new Car(ps, peer.paint ?? ps.color, peer.name || 'Rival', peer.up); rc.isRemote = true; rc.look = lookKey(peer); R.cars.push(rc); placeOnGrid(rc, isHost ? 1 : 0); }
+    room.send({ k: 'me', i: myInfo() });
   } else { R.cars.push(me); placeOnGrid(me, 0); }
   for (const c of R.cars) { scene.add(c.root); c.y = track.height(c.x, c.z); c.render(.016, track); }
   setupExtras(); audio.music(false); hudCache.cond = '';
@@ -472,7 +473,7 @@ function updateRace(dt) {
   if (R.state === 'done') { R.doneT += dt; if (R.doneT > 2.2) showResults(); }
 
   // network
-  if (R.mode === 'online' && room) { R.sendT += dt; if (R.sendT >= 1 / 20) { R.sendT = 0; room.send({ k: 's', p: me.netPack() }); }
+  if (R.mode === 'online' && room) { R.sendT += dt; if (R.sendT >= 1 / TUNE.net.hz) { R.sendT = 0; room.send({ k: 's', p: me.netPack() }); }
     R.pingT = (R.pingT || 0) + dt; if (R.pingT > 2) { R.pingT = 0; room.send({ k: 'ping', t: performance.now() }); }
     const nb = R.remote && R.remote.nb; setTxt('hPing', (R.ping != null ? Math.round(R.ping) + ' ms' : '…') + (nb ? ' · buffer ' + Math.round(nb.delay) + ' ms' : '')); }
 
@@ -668,7 +669,7 @@ async function refreshMenu() {
 const pick = (key, n, d) => { sel[key] = (sel[key] + d + n) % n; };
 $('trkPrev').onclick = () => { pick('track', TRACKS.length, -1); sel.laps = TRACKS[sel.track].laps; refreshMenu(); };
 $('trkNext').onclick = () => { pick('track', TRACKS.length, 1); sel.laps = TRACKS[sel.track].laps; refreshMenu(); };
-const carChanged = () => { const s = CARS[sel.car]; if (save.owned.includes(s.id)) { save.car = s.id; persist(); room && room.setMeta({ car: s.id, paint: paintOf(s.id) }); } showGarageCar(); refreshMenu(); };
+const carChanged = () => { const s = CARS[sel.car]; if (save.owned.includes(s.id)) { save.car = s.id; persist(); tellPeer(); } showGarageCar(); refreshMenu(); };
 $('carPrev').onclick = () => { pick('car', CARS.length, -1); carChanged(); };
 $('carNext').onclick = () => { pick('car', CARS.length, 1); carChanged(); };
 $('lapMinus').onclick = () => { sel.laps = Math.max(1, sel.laps - 1); refreshMenu(); };
@@ -679,7 +680,7 @@ $('chPrev').onclick = () => { sel.ch = (sel.ch + CHAPTERS.length - 1) % CHAPTERS
 $('chNext').onclick = () => { sel.ch = (sel.ch + 1) % CHAPTERS.length; sel.ev = EVENTS.indexOf(CHAPTERS[sel.ch].events[0]); refreshMenu(); };
 $('events').onclick = e => { const li = e.target.closest('li'); if (li && !li.classList.contains('locked')) { sel.ev = +li.dataset.i; refreshMenu(); } };
 $('gfxBtn').onclick = () => { const o = ['auto', 'high', 'medium', 'low']; save.gfx = o[(o.indexOf(save.gfx) + 1) % 4]; persist(); setGfx(save.gfx === 'auto' ? (isTouch ? 'medium' : 'high') : save.gfx); refreshMenu(); };
-$('ups').onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const spec = CARS[sel.car], up = upOf(spec.id), cost = upCost(spec, up[b.dataset.k]); if (save.credits < cost) return; save.credits -= cost; up[b.dataset.k]++; persist(); audio.init(); audio.wrench(); showGarageCar(); refreshMenu(); };
+$('ups').onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const spec = CARS[sel.car], up = upOf(spec.id), cost = upCost(spec, up[b.dataset.k]); if (save.credits < cost) return; save.credits -= cost; up[b.dataset.k]++; persist(); tellPeer(); audio.init(); audio.wrench(); showGarageCar(); refreshMenu(); };
 const ASSIST_HELP = { off: 'Assist off: no automatic counter-steer, no throttle cut. Slides are yours to catch.', low: 'Assist low: half-strength counter-steer in a slide and a gentle throttle cut past 24° of slip.', full: 'Assist full: the car counter-steers for you in a slide and eases the throttle before it becomes a spin.' };
 $('assistBtn').onclick = () => { const o = ['full', 'low', 'off']; save.assist = o[(o.indexOf(save.assist) + 1) % 3]; persist(); toast(ASSIST_HELP[save.assist]); refreshMenu(); };
 $('rulesSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.rules = b.dataset.r; persist(); toast(save.rules === 'circuit' ? 'Circuit rules: pure racing. Fuel, tyres, damage and pit stops.' : 'Arcade rules: adds nitro, pickups, slipstream and random events.'); refreshMenu(); } };
@@ -697,7 +698,7 @@ $('stSkip').onclick = launchEvent;
 $('diff').onclick = e => { const b = e.target.closest('button'); if (b) { sel.diff = +b.dataset.d; refreshMenu(); } };
 $('paints').onclick = e => { const b = e.target.closest('button'); if (b) { save.paint[CARS[sel.car].id] = +b.dataset.p; persist(); carChanged(); } };
 $('buyBtn').onclick = () => { const s = CARS[sel.car]; if (save.credits >= s.price && !save.owned.includes(s.id)) { save.credits -= s.price; save.owned.push(s.id); audio.init(); audio.beep(880, .3); toast(s.name + ' unlocked'); carChanged(); } };
-$('name').onchange = e => { save.name = (e.target.value.trim() || save.name).slice(0, 16); persist(); room && room.setMeta({ name: save.name }); refreshMenu(); };
+$('name').onchange = e => { save.name = (e.target.value.trim() || save.name).slice(0, 16); persist(); tellPeer(); refreshMenu(); };
 $('muteBtn').onclick = () => { audio.init(); setMuted(!save.muted); audio.music(!R); };
 addEventListener('pointerdown', () => { if (!audio.ctx) { audio.init(); audio.music(!R); } }, { once: false });
 $('startBtn').onclick = () => {
@@ -719,7 +720,7 @@ async function joinRoom(code) {
   if (!/^[A-Z0-9]{5}$/.test(code)) { $('onlineMsg').textContent = 'Room codes are 5 letters or digits.'; return; }
   audio.init(); $('onlineMsg').textContent = 'Connecting…';
   const r = new Room(); r.onPeers = onPeers; r.onMessage = onNet;
-  try { await r.join(code, { name: save.name, car: save.car, paint: paintOf(save.car) }); } catch (e) { $('onlineMsg').textContent = e.message; return; }
+  try { await r.join(code, myInfo()); } catch (e) { $('onlineMsg').textContent = e.message; return; }
   room = r; isHost = true; peer = null; $('lobbyCode').textContent = code; $('onlineMsg').textContent = 'Share the code. The race starts when the host presses start.'; refreshMenu(); onPeers(room.peers);
 }
 function leaveRoom(why) { if (room) room.leave(); room = null; peer = null; if (R && R.mode === 'online') toMenu(); refreshMenu(); if (why) $('onlineMsg').textContent = why; }
@@ -732,9 +733,18 @@ function onPeers(peers) {
   if (!had && peer && !R) toast(peer.name + ' joined');
   if (!R) refreshMenu();
 }
+// what the other player needs to draw my car exactly as I see it: model, paint and upgrade levels
+const myInfo = () => ({ name: save.name, car: save.car, paint: paintOf(save.car), up: { ...upOf(save.car) } });
+const lookKey = m => m.car + '|' + m.paint + '|' + JSON.stringify(m.up || {});
+function tellPeer() { if (!room) return; const i = myInfo(); room.setMeta(i); room.send({ k: 'me', i }); }
+function rebuildRemote() {
+  const old = R.remote, ps = CARS.find(c => c.id === peer.car) || CARS[0], rc = new Car(ps, peer.paint ?? ps.color, peer.name || 'Rival', peer.up);
+  for (const k of ['x', 'z', 'th', 'px', 'pz', 'pth', 'vx', 'vz', 'r', 'y', 'nb', 'idx', 'prog', 'lap', 'laps', 'lapStart', 'finished', 'finishTime', 'wrong']) rc[k] = old[k];
+  rc.isRemote = true; rc.look = lookKey(peer); rc.noNitro = old.noNitro; R.cars[R.cars.indexOf(old)] = rc; R.remote = rc; scene.remove(old.root); old.dispose(); scene.add(rc.root); R.orderKey = '';
+}
 function renderLobby() {
   if (!room) return;
-  const row = (m, me) => `<li><i style="background:${hex(m.paint ?? 0x888888)}"></i>${m.name}${me ? ' (you)' : ''} — ${(CARS.find(c => c.id === m.car) || CARS[0]).name}${(me ? isHost : !isHost) ? ' · host' : ''}</li>`;
+  const row = (m, me) => `<li><i style="background:${hex(m.paint ?? 0x888888)}"></i>${m.name}${me ? ' (you)' : ''} — ${(CARS.find(c => c.id === m.car) || CARS[0]).name}${m.up && Object.values(m.up).some(v => v) ? ' <small>(' + UPS.filter(([k]) => m.up[k]).map(([k, l]) => l + ' ' + m.up[k]).join(', ') + ')</small>' : ''}${(me ? isHost : !isHost) ? ' · host' : ''}</li>`;
   $('lobbyList').innerHTML = row(room.meta, true) + (peer ? row(peer, false) : '<li>Waiting for a second driver…</li>');
 }
 function onNet(m) {
@@ -742,6 +752,7 @@ function onNet(m) {
   else if (m.k === 'loaded') { peerLoaded = true; checkGo(); }
   else if (m.k === 'go') beginCountdown();
   else if (m.k === 's' && R && R.remote) R.remote.netApply(m.p, performance.now());
+  else if (m.k === 'me' && peer) { Object.assign(peer, m.i); if (R && R.remote && R.remote.look !== lookKey(peer)) rebuildRemote(); else if (!R) renderLobby(); }
   else if (m.k === 'ping') room.send({ k: 'pong', t: m.t });
   else if (m.k === 'pong' && R) R.ping = R.ping == null ? performance.now() - m.t : R.ping + (performance.now() - m.t - R.ping) * .3;
   else if (m.k === 'd' && R && R.remote) { const rc = R.remote; rc.hitL = m.l; rc.hitN = m.n; rc.hitX = rc.x; rc.hitZ = rc.z; rc.damage(m.p); rc.impactFX(R.fx, R.track, m.p); }
