@@ -15,7 +15,7 @@ export const TUNE = {
     wear: { base: .0011, slip: .011, spin: .008, lock: .03, offroad: .002 },   // per second, scaled by what the tyre is doing
     wetLossSlick: .27, wetLossWet: .07, dryLossWet: .07,
   },
-  steer: { lock: .68, speedK: .04, rate: 5.4, rateSpeedK: .022, returnRate: 6.5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
+  steer: { lock: .76, speedK: .038, rate: 6.6, rateSpeedK: .02, returnRate: 7.5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
   // Stability assist. `counter` adds automatic counter-steer in a slide, `power` eases the throttle as the slide angle grows.
   assist: { off: 0, low: .4, medium: .7, full: 1 },
   surface: { kerbGrip: .95, grassDrag: .15, roadDrag: .03, airDrag: .25 },
@@ -23,22 +23,24 @@ export const TUNE = {
   pit: { limit: 16.7, tyres: 2.6, fuelFull: 4.0, repairFull: 6.0 },   // limit in m/s (60 km/h); service times in seconds
   damage: { threshold: 3.5, scale: 34, enginePowerLoss: .4, steerPull: .05 },
   // ---- easy-to-drive set-up ----
-  gripScale: 1.42,                       // overall tyre grip. Raise for a more planted car, lower for a looser one
+  gripScale: 1.48,                       // overall tyre grip. Raise for a more planted car, lower for a looser one
   rearBias: 1.12,                       // rear grip relative to front. Higher = safer, more understeer
   powerSlide: .85,                      // how much full throttle loosens the rear (0 = never, 1 = a lot)
-  slideAid: 1.5,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
+  slideAid: .75,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
   assistYawDamp: .6,
   enginePower: 1.22,                    // all engines: more torque than the rear tyres can take in the low gears
   shock: { minHit: 7, perMs: .08, max: 1.6 },   // a hard hit switches the driving aids off for up to this many seconds
   // Turn-in look: the body swings into the corner as soon as you steer, a moment before the car's path bends.
   // It is visual only, so it costs no grip. steer/yaw = how much each adds (rad per rad), max = limit (rad), rate = how fast it swings in.
-  visualLead: { steer: .5, yaw: .12, max: .21, rate: 9, fullSpeed: 14 },                   // extra rotation damping at Assist Full
+  visualLead: { steer: .78, yaw: .16, max: .33, rate: 13, fullSpeed: 12 },                   // extra rotation damping at Assist Full
   wall: { bounce: .02, spin: .28, friction: .2, yawKeep: .94 },   // barrier contact: no bounce, little spin, the car settles and slides along   // barrier contact: restitution, share of impulse that may rotate the car, wall friction
   yawDamp: .45, yawDampSpeed: .01,       // yaw damping (1/s), rising with speed for high-speed stability
   // Online sync. hz = state messages per second from each player. The free Supabase plan allows 100 messages/s for the
   // whole project, so 24 keeps a duel safely under it; on a paid plan 30-40 is fine. minBuffer/maxBuffer bound how far in
   // the past the rival is drawn (ms): lower = more immediate, higher = smoother on a poor connection.
   net: { hz: 24, minBuffer: 45, maxBuffer: 300, intervalK: 1.2, jitterK: 2.6 },
+  // Component damage. Where a hit lands decides what breaks: nose = engine, tail = gearbox, corners and sides = that wheel.
+  parts: { enginePower: .55, engineDead: .98, gearboxTop: .45, wheelGrip: .65, wheelPull: .09, flatAt: .7, flatDrag: .22, towSeconds: 12 },
   reset: { penalty: 2 },                // seconds held stationary after pressing reset
   // garage tuning: effect of one click (each setting runs from -2 to +2)
   setup: { gearAcc: .04, gearTop: .035, aeroDown: .35, aeroTop: .02, biasStep: .05, rollStep: .03, compound: { soft: [1.04, 1.6], medium: [1, 1], hard: [.97, .6] } },

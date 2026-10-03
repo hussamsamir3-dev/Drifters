@@ -407,9 +407,9 @@ function buildProc(track) {
     }
     const cb = new THREE.CapsuleGeometry(.3, .75, 3, 8); cb.translate(0, .68, 0); const chd = new THREE.SphereGeometry(.27, 8, 6); chd.translate(0, 1.52, 0);
     crew.forEach((q, n2) => { q.beh = 0; q.r = Math.atan2(path[0].tx, path[0].tz) - Math.PI / 2 + (n2 % 3 - 1) * .5; }); people(crew);
-    const p0 = path[0], gar = new THREE.Mesh(new THREE.BoxGeometry(8, 4.6, (nb + na) * 1.5), new THREE.MeshStandardMaterial({ color: night ? 0x2a2c33 : 0xe9e2d4, roughness: .9 }));
-    gar.position.set(p0.x + p0.tz * (pitWall + 5.5), 2.3, p0.z - p0.tx * (pitWall + 5.5)); gar.rotation.y = Math.atan2(p0.tx, p0.tz); gar.castShadow = gar.receiveShadow = true; G.add(gar);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(9.4, .5, (nb + na) * 1.5 + 1), new THREE.MeshStandardMaterial({ color: 0x3f7a5a, roughness: .8 })); roof.position.copy(gar.position); roof.position.y = 4.85; roof.rotation.y = gar.rotation.y; roof.castShadow = true; G.add(roof);
+    const p0 = path[0], gar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.15, (nb + na) * 1.5), new THREE.MeshStandardMaterial({ color: night ? 0x2a2c33 : 0xe9e2d4, roughness: .9 }));
+    gar.position.set(p0.x + p0.tz * (pitWall + 1.4), .58, p0.z - p0.tx * (pitWall + 1.4));   // a low pit wall: nothing tall here, so the fixed camera always sees the boxes gar.rotation.y = Math.atan2(p0.tx, p0.tz); gar.castShadow = gar.receiveShadow = true; G.add(gar);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(9.4, .5, (nb + na) * 1.5 + 1), new THREE.MeshStandardMaterial({ color: 0x3f7a5a, roughness: .8 })); roof.position.copy(gar.position); roof.position.y = 4.85; roof.rotation.y = gar.rotation.y; roof.visible = false; G.add(roof);
   }
   // -- trackside life: spectators, sponsor boards, hay bales, support vans
   if (!def.dev) {

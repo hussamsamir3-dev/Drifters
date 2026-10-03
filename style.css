@@ -342,3 +342,15 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 #hTow{font-weight:900;letter-spacing:.04em}
 
 .zoomrow{gap:12px;font-size:16px}.zoomrow b{min-width:64px;font-style:italic;font-weight:900;font-size:22px}.zoomrow .btn{padding:6px 18px;font-size:22px;line-height:1}
+
+/* ---------- v10: parts panel, daily box, developer tools ---------- */
+.parts{display:grid;grid-template-columns:auto auto auto;gap:3px 5px;align-items:center;font-style:normal;font-size:9px;font-weight:700;margin-left:4px}
+.parts>i{font-style:normal;padding:3px 5px;border-radius:3px;background:rgba(47,180,87,.85);color:#06240f}
+.parts span{display:grid;grid-template-columns:9px 9px;gap:3px 7px}.parts span i{width:9px;height:13px;border-radius:2px;background:rgba(47,180,87,.85)}
+.parts i.warn{background:var(--yellow);color:#3a2a00}.parts i.bad{background:var(--red);color:#fff;animation:pulse 1s infinite}
+.parts small{grid-column:1/-1;font-size:10px;color:var(--dim);font-weight:500;min-height:12px}
+.daily.box{background:linear-gradient(100deg,rgba(25,167,206,.2),rgba(35,37,43,.9) 60%);border-color:rgba(25,167,206,.6)}.daily.box small{color:var(--blue)}
+#boxWin{pointer-events:none;justify-content:flex-end;padding-bottom:9vh}#boxWin *{pointer-events:auto}
+#boxWin small{font-size:15px;color:var(--yellow);font-weight:700;text-transform:uppercase;letter-spacing:.12em}#boxWin h2{font-size:clamp(34px,6vw,64px);font-style:italic;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.5)}
+.dev{border:1px dashed var(--yellow);padding:8px}.dev .note{width:100%;margin:2px 0 0}
+@media (max-width:900px),(max-height:480px){.parts{font-size:8px}.parts small{display:none}}
