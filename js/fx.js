@@ -85,7 +85,7 @@ export class Ambient {
   update(dt, cam, wet, scale) {
     for (const o of [this.dust, this.rain]) { o.material.uniforms.uTime.value += dt; o.material.uniforms.uCam.value.copy(cam.position); }
     this.dust.material.uniforms.uScale.value = scale; this.dust.material.uniforms.uA.value = .5 * (1 - wet);
-    this.rain.visible = wet > .02; this.rain.material.uniforms.uA.value = wet;
+    this.rain.visible = wet > .02; this.rain.material.uniforms.uA.value = wet * .4;
   }
   dispose() { for (const o of [this.dust, this.rain]) { this.scene.remove(o); o.geometry.dispose(); o.material.dispose(); } }
 }

@@ -21,13 +21,14 @@ const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
 // ---------------- save game ----------------
 const KEY = 'tafheet.v1';
-const save = { v8: 0, tc: true, abs: true, sens: 1, v7: 0, lang: 'en', zoom: 2.25, units: 'kmh', mvol: .5, svol: .7, look: {}, tune: {}, gp: null, v5: 0, assist: 'full', rules: 'circuit', sectors: {}, up: {}, stats: {}, trophies: {}, gfx: 'auto', autoGas: false, story: {}, xp: 0, daily: '', streak: 0, credits: 0, owned: ['Ford', 'Sterrato'], car: 'Ford', paint: {}, name: '', best: {}, bestDrift: {}, muted: false };
+const save = { v9: 0, tc: true, abs: true, sens: 1, v7: 0, lang: 'en', zoom: 2.25, units: 'kmh', mvol: .5, svol: .7, look: {}, tune: {}, gp: null, v5: 0, assist: 'full', rules: 'circuit', sectors: {}, up: {}, stats: {}, trophies: {}, gfx: 'auto', autoGas: false, story: {}, xp: 0, daily: '', streak: 0, credits: 0, owned: ['Ford', 'Sterrato'], car: 'Ford', paint: {}, name: '', best: {}, bestDrift: {}, muted: false };
 try { Object.assign(save, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
 if (!save.name) save.name = 'Driver' + (100 + Math.random() * 900 | 0);
 { const q = new URLSearchParams(location.search).get('gfx'); if (['auto', 'high', 'medium', 'low'].includes(q)) save.gfx = q; }   // e.g. index.html?gfx=low
 if (!save.v5) { save.autoGas = false; save.v5 = 1; }
 if (!save.v7) { save.zoom = 2.25; save.v7 = 1; }
-if (!save.v8) { save.assist = 'medium'; save.v8 = 1; }   // automatic gas is now off unless switched on in the menu
+if (!save.v8) { save.assist = 'medium'; save.v8 = 1; }
+if (!save.v9) { save.zoom = 1.5; save.v9 = 1; }   // automatic gas is now off unless switched on in the menu
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
 const tx = s => save.lang === 'ar' && AR[s] != null ? AR[s] : s;
 const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 });
@@ -48,7 +49,8 @@ const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(55, 1, .3,
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1), sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; sun.shadow.normalBias = .04;
-Object.assign(sun.shadow.camera, { left: -95, right: 95, top: 95, bottom: -95, near: 1, far: 360 }); sun.shadow.mapSize.set(4096, 4096);
+function fitShadow() { const h = 30 * (save.zoom || 1.5) + 18, c = sun.shadow.camera; Object.assign(c, { left: -h, right: h, top: h, bottom: -h, near: 1, far: 360 }); c.updateProjectionMatrix(); const sz = h > 75 ? 4096 : 2048; if (sun.shadow.mapSize.x !== sz) { sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } }   // shadows cover what the camera shows, no more
+fitShadow();
 scene.add(hemi, sun, sun.target);
 let post = null;
 function resize() { const w = innerWidth, h = innerHeight; renderer.setPixelRatio(pixelRatio); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (post) post.setSize(w, h, pixelRatio); }
@@ -100,6 +102,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
   if (e.code === 'KeyR') respawn(R.player, true);
   if (e.code === 'KeyM') setMuted(!save.muted);
+  if (e.code === 'KeyH') audio.horn();
   if (e.code === 'KeyT') $('tele').hidden = !$('tele').hidden;
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -217,7 +220,7 @@ function endRace() {
   show('hud', false); show('pause', false); show('results', false); $('lights').classList.remove('show'); $('msg').className = '';
 }
 function toMenu() { endRace(); menuView = ''; if (sel.tab === 'career') { sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci; } applyTheme(null); garage.visible = true; show('menu', true); refreshMenu(); audio.music(true); }
-function togglePause() { if (!R || R.state === 'over') return; paused = !paused; show('pause', paused); if (paused) audio.silence(); else last = performance.now(); if (R.mode === 'online') paused = false; }
+function togglePause() { if (!R || R.state === 'over') return; paused = !paused; show('pause', paused); $('zoomVal').textContent = Math.round(save.zoom / 1.5 * 100) + '%'; if (paused) audio.silence(); else last = performance.now(); if (R.mode === 'online') paused = false; }
 
 // ---------------- per-frame race update ----------------
 function progress(car) {
@@ -260,11 +263,12 @@ function knockout() {      // Knockout: each time the leader completes a lap, th
   else if (act.length === 2 && act[0] === me) { me.finished = true; me.finishTime = R.t * 1000; finishPlayer(); }
 }
 // every contact goes through here: light touches scrape, real hits dent the car, shake the camera and cost the combo
-function impact(car, power) {
+function impact(car, power, wall) {
   if (power < 2) return;
   const me = R.player, near = (car.x - me.x) ** 2 + (car.z - me.z) ** 2 < 3600;
   if (power < 4) { if (car === me && Math.random() < .2) { audio.scrape(power); car.impactFX(R.fx, R.track, power * .4); } return; }
-  const amt = car.damage(power);
+  const amt = car.damage(power, !wall);
+  if (car.glass) { car.glass = false; if (near) for (let i = 0; i < 18; i++) R.fx.glow.emit(car.hitX, car.y + .6, car.hitZ, car.vx * .5 + (Math.random() - .5) * 8, 1 + Math.random() * 4, car.vz * .5 + (Math.random() - .5) * 8, .5 + Math.random() * .4, .09, 0, .85, .95, 1, 1, 14); if (car === me) me.spotK = me.lamps.filter(l => l.ok).length / 2; }   // headlight glass
   if (car === me) { if (power > 8) R.crashes++; if (amt > 0 && R.mode === 'online' && room) room.send({ k: 'd', l: me.hitL, n: me.hitN, p: +power.toFixed(1) }); }
   if (near) car.impactFX(R.fx, R.track, power);
   if (car.lost.length || amt > .06) {
@@ -285,9 +289,9 @@ function physics(h, live) {
   const hold = (R.pit && R.pit.busy) || R.t < (me.holdT || 0);
   let pin = auto ? R.ais.get(me).inp : hold ? PIT_INP : readInput();
   if (R.demo === 'keys') { const a = R.ais.get(me).inp; pin = { steer: Math.abs(a.steer) > .15 ? Math.sign(a.steer) : 0, throttle: a.throttle > .3 ? 1 : 0, brake: a.brake > .2 ? 1 : 0, hand: false, nitro: false }; }   // test driver limited to on/off keyboard inputs
-  impact(me, me.step(h, pin, tr, live));
+  impact(me, me.step(h, pin, tr, live), true);
   if (hold) { me.vx = me.vz = me.r = 0; }
-  for (const c of R.cars) if (c !== me && !c.isRemote && !c.out) { const ai = R.ais.get(c); impact(c, c.step(h, R.t < (c.holdT || 0) ? PIT_INP : ai.inp, tr, live, 1)); }
+  for (const c of R.cars) if (c !== me && !c.isRemote && !c.out) { const ai = R.ais.get(c); impact(c, c.step(h, R.t < (c.holdT || 0) ? PIT_INP : ai.inp, tr, live, 1), true); }
   for (let i = 0; i < R.cars.length; i++) for (let j = i + 1; j < R.cars.length; j++) {
     const a = R.cars[i], b = R.cars[j];
     if (a.out || b.out || Math.abs(a.x - b.x) > 6 || Math.abs(a.z - b.z) > 6) continue;
@@ -427,7 +431,8 @@ function setupExtras() {
   if (tr.theme.night) for (const sx of [-1, 1]) { const p0 = tr.path[0], gl = new THREE.SpotLight(0xcfe0ff, 220, 70, .75, .6, 1.4); gl.position.set(p0.x + p0.tz * sx * 5, tr.height(p0.x, p0.z) + 9, p0.z - p0.tx * sx * 5); gl.target.position.set(p0.x - p0.tx * 22 + p0.tz * sx * 3, 0, p0.z - p0.tz * 22 - p0.tx * sx * 3); G.add(gl, gl.target); }
   R.rainAt = R.rainAt != null ? R.rainAt : w === 'rain' ? 6 : w === 'storm' ? 0 : (w === 'random' && def.theme !== 'desert' && !def.dev && Math.random() < .3) ? 18 + Math.random() * 30 : Infinity;
   R.roadMats = []; G.traverse(o => { if (o.isMesh && o.material && /racetrack|conc_plates/.test(o.material.name || '')) R.roadMats.push([o.material, o.material.roughness, o.material.metalness]); });
-  if (tr.theme.night) { const sl = new THREE.SpotLight(0xfff1d6, 90, 70, .5, .7, 1.4); sl.position.set(0, .75, 1.7); sl.target.position.set(0, -.6, 16); me.root.add(sl, sl.target); }
+  if (tr.theme.night) { const sl = new THREE.SpotLight(0xfff1d6, 90, 70, .5, .7, 1.4); sl.position.set(0, .75, 1.7); sl.target.position.set(0, -.6, 16); me.root.add(sl, sl.target); me.spot = sl; me.spotK = 1; }
+  R.lit = !!tr.theme.night || def.theme === 'coast'; for (const c of R.cars) c.setLights(R.lit);
 }
 function raceExtras(dt) {
   const tr = R.track, me = R.player, pit = R.pit;
@@ -462,13 +467,16 @@ function raceExtras(dt) {
   // --- rain rolls in: less grip, wet shine on the road, darker sky
   if (R.t > R.rainAt && R.wet < 1) { if (R.wet === 0) { flash('Rain', true, 1600); radio('Rain. Brake earlier — box for wet tyres if it gets heavy.', true); } R.wet = Math.min(1, R.wet + dt / 9); tr.wet = R.wet;
     for (const [m, r0, m0] of R.roadMats) { m.roughness = r0 - (r0 - .28) * R.wet; m.metalness = m0 + (.35 - m0) * R.wet; }
-    scene.fog.density = baseFog * (1 + 1.6 * R.wet); sun.intensity = baseSun * (1 - .6 * R.wet); hemi.intensity = baseHemi * (1 - .2 * R.wet); }
-  R.haze += ((R.ev.cur && R.ev.cur.type === 'haze' ? 1 : 0) - R.haze) * Math.min(1, dt * .8); scene.fog.density = baseFog * (1 + 1.6 * R.wet) * (1 + 4.5 * R.haze);
+    scene.fog.density = baseFog * (1 + .5 * R.wet); sun.intensity = baseSun * (1 - .35 * R.wet); hemi.intensity = baseHemi * (1 - .2 * R.wet); }
+  R.haze += ((R.ev.cur && R.ev.cur.type === 'haze' ? 1 : 0) - R.haze) * Math.min(1, dt * .8); scene.fog.density = baseFog * (1 + .5 * R.wet) * (1 + 4.5 * R.haze);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
   R.ambient.update(dt, camera, R.wet, sc);
   // --- sun disc + post-processing drivers
   const d = THEMES[tr.def.theme].sunDir, l = Math.hypot(d[0], d[1], d[2]);
   if (sunDisc) { sunDisc.position.set(camera.position.x + d[0] / l * 3400, camera.position.y + d[1] / l * 3400, camera.position.z + d[2] / l * 3400); sunDisc.lookAt(camera.position); sunDisc.visible = R.wet < .5; }
+  if (!R.lit && R.wet > .3) { R.lit = true; for (const c of R.cars) c.setLights(true); }      // lights come on in the rain
+  if (me.spot) me.spot.intensity = 90 * (me.spotK ?? 1);
+  if (tr.cullables.length) { const D = (gfx === 'high' ? 340 : gfx === 'medium' ? 250 : 180), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) c.m.visible = (c.x - cx) ** 2 + (c.z - cz) ** 2 < D * D; }   // draw distance
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
     const u = post.u; u.tilt.value = R.attract ? .7 : CAMS[camMode].fixed ? 1 : 0; u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
@@ -514,6 +522,7 @@ function updateRace(dt) {
   // network
   if (R.mode === 'online' && room) { R.sendT += dt; if (R.sendT >= 1 / TUNE.net.hz) { R.sendT = 0; room.send({ k: 's', p: me.netPack() }); }
     R.pingT = (R.pingT || 0) + dt; if (R.pingT > 2) { R.pingT = 0; room.send({ k: 'ping', t: performance.now() }); }
+    R.stT = (R.stT || 0) + dt; if (R.stT > 1) { R.stT = 0; const D = me.dmg; room.send({ k: 'st', d: [D.front, D.rear, D.left, D.right].map(v => +v.toFixed(2)), ty: +me.tyre.toFixed(2), w: me.wetTyres ? 1 : 0, lm: me.lamps.map(l => l.ok ? 1 : 0), lo: me.lightsOn ? 1 : 0 }); }   // condition, tyres and lights, re-sent every second so both screens agree
     const nb = R.remote && R.remote.nb; setTxt('hPing', (R.ping != null ? Math.round(R.ping) + ' ms' : '…') + (nb ? ' · buffer ' + Math.round(nb.delay) + ' ms' : '')); }
 
   raceExtras(dt);
@@ -527,6 +536,7 @@ function updateRace(dt) {
   updateHUD(dt);
   const skid = (me.slipR > .16 && me.speed > 6) || me.wspin > .12 || (me.locked && me.speed > 3);
   if (me.gear !== R.lastGear) { if (R.lastGear && me.gear > 0) audio.shift(); R.lastGear = me.gear; }
+  { let bd = 1e9, bc = null; for (const c of R.cars) if (c !== me && !c.out) { const d = Math.hypot(c.x - me.x, c.z - me.z); if (d < bd) { bd = d; bc = c; } } audio.rival(bc ? bc.rpm : 0, bd); }
   audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 });
   audio.drive({ turbo: me.up.eng, rpm: me.rpm, throttle: R.state === 'done' ? .3 : inp.throttle, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
   adaptQuality(dt);
@@ -539,7 +549,7 @@ function updateCamera(dt) {
   if (R.marker) { R.marker.position.y = me.top + 1.5 + Math.sin(R.t * 4) * .12; R.marker.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
-    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), la = clamp(sp * .6, 0, 22) * Math.min(1, (save.zoom || 2.25) / 2.25), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 2.25) * (1 - .62 * intro);
+    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), la = clamp(sp * .6, 0, 22) * Math.min(1, (save.zoom || 1.5) / 2.25), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro);
     cam.look.x += (lx - cam.look.x) * k; cam.look.z += (lz - cam.look.z) * k; cam.look.y += (me.y - cam.look.y) * k;
     camera.position.set(cam.look.x - Math.sin(yaw) * m.d * z, cam.look.y + m.h * z * (1 - .45 * intro), cam.look.z - Math.cos(yaw) * m.d * z); camera.lookAt(cam.look); cam.pos.copy(camera.position); cam.yaw = yaw;
     if (Math.abs(camera.fov - m.fov) > .05) { camera.fov = cam.fov = m.fov; camera.updateProjectionMatrix(); }
@@ -773,7 +783,9 @@ const carLook = () => { persist(); tellPeer(); showGarageCar(); refreshMenu(); }
 $('lookRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; lookOf(CARS[sel.car].id)[b.dataset.k] = +b.dataset.v; carLook(); };
 $('tuneRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; const tn = tuneSet(CARS[sel.car].id); if (b.dataset.c) tn.tyre = b.dataset.c; else tn[b.dataset.k] = clamp(tn[b.dataset.k] + +b.dataset.d, -2, 2); persist(); refreshMenu(); };
 $('langSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.lang = b.dataset.l; persist(); refreshMenu(); } };
-$('zoomSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.zoom = +b.dataset.z; persist(); refreshMenu(); } };
+$('zoomSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.zoom = +b.dataset.z; persist(); fitShadow(); refreshMenu(); } };
+const zoomBy = d => { save.zoom = clamp(Math.round((save.zoom + d) * 100) / 100, .7, 3.4); persist(); fitShadow(); $('zoomVal').textContent = Math.round(save.zoom / 1.5 * 100) + '%'; if (R) { updateCamera(0); draw(0); } };
+$('zoomOut').onclick = () => zoomBy(.15); $('zoomIn').onclick = () => zoomBy(-.15);
 $('unitSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.units = b.dataset.u; persist(); refreshMenu(); } };
 $('wxSeg').onclick = e => { const b = e.target.closest('button'); if (b) { sel.wx = b.dataset.w; refreshMenu(); } };
 $('rivMinus').onclick = () => { sel.rivals = Math.max(1, sel.rivals - 2); refreshMenu(); }; $('rivPlus').onclick = () => { sel.rivals = Math.min(11, sel.rivals + 2); refreshMenu(); };
@@ -858,7 +870,8 @@ function onNet(m) {
   else if (m.k === 'me' && peer) { Object.assign(peer, m.i); if (R && R.remote && R.remote.look !== lookKey(peer)) rebuildRemote(); else if (!racing()) renderLobby(); }
   else if (m.k === 'ping') room.send({ k: 'pong', t: m.t });
   else if (m.k === 'pong' && R) R.ping = R.ping == null ? performance.now() - m.t : R.ping + (performance.now() - m.t - R.ping) * .3;
-  else if (m.k === 'd' && R && R.remote) { const rc = R.remote; rc.hitL = m.l; rc.hitN = m.n; rc.hitX = rc.x; rc.hitZ = rc.z; rc.damage(m.p); rc.impactFX(R.fx, R.track, m.p); }
+  else if (m.k === 'd' && R && R.remote) { const rc = R.remote; rc.hitL = m.l; rc.hitN = m.n; rc.hitX = rc.x; rc.hitZ = rc.z; impact(rc, m.p, true); }
+  else if (m.k === 'st' && R && R.remote) { const rc = R.remote, z = ['front', 'rear', 'left', 'right']; z.forEach((k, i) => { rc.dmg[k] = m.d[i]; }); rc.tyre = m.ty; rc.wetTyres = !!m.w; m.lm.forEach((ok, i) => { rc.lamps[i].ok = !!ok; }); rc.setLights(!!m.lo); }
   else if (m.k === 'fix' && R && R.remote) { R.remote.repair(); R.remote.wetTyres = !!m.w; }
   else if (m.k === 'fin' && R && R.remote) { R.remote.finished = true; R.remote.finishTime = m.t; if (!R.player.finished) flash(R.remote.name + ' finished', true, 1500); }
 }

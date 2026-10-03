@@ -32,6 +32,8 @@ export class GameAudio {
     // turbo whistle (only heard on cars with the engine upgrade) and a murmuring crowd
     this.turboO = c.createOscillator(); this.turboO.type = 'sine'; this.turboG = c.createGain(); this.turboG.gain.value = 0; this.turboO.connect(this.turboG); this.turboG.connect(this.master); this.turboO.start();
     this.crowd = bed('bandpass', 950, .5); this.wave = wave; this.ctxN = N;
+    // a second engine voice for the nearest rival, so cars are heard as they come alongside
+    this.rivO = c.createOscillator(); this.rivO.type = 'sawtooth'; const rf = c.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 520; this.rivG = c.createGain(); this.rivG.gain.value = 0; this.rivO.connect(rf); rf.connect(this.rivG); this.rivG.connect(this.master); this.rivO.start();
     this.whine = c.createOscillator(); this.whine.type = 'sine'; this.whineG = c.createGain(); this.whineG.gain.value = 0; this.whine.connect(this.whineG); this.whineG.connect(this.master); this.whine.start();
     // ---- calm menu pad
     this.pad = c.createGain(); this.pad.gain.value = 0; const pl = c.createBiquadFilter(); pl.type = 'lowpass'; pl.frequency.value = 900; this.pad.connect(pl); pl.connect(this.master);
@@ -56,6 +58,8 @@ export class GameAudio {
     if (!this.ctx) return; this.crowd.g.gain.setTargetAtTime(o.on ? .028 : 0, this.ctx.currentTime, .6);
     this.birdT -= dt; if (o.on && o.day && !o.rain && this.birdT < 0) { this.birdT = 2 + Math.random() * 6; const base = 2300 + Math.random() * 1600, n = 2 + (Math.random() * 3 | 0); for (let i = 0; i < n; i++) setTimeout(() => this.tone(base * (1 + i * .06), .08, .011, 'sine', 1.22), i * 120); }
   }
+  rival(rpm, dist) { if (!this.ctx || this.quiet) return; const t = this.ctx.currentTime, k = Math.max(0, 1 - dist / 42); this.rivO.frequency.setTargetAtTime(44 + rpm * 125, t, .05); this.rivG.gain.setTargetAtTime(k * k * .085, t, .08); }
+  horn() { this.tone(392, .4, .1, 'square'); this.tone(494, .4, .08, 'square'); }
   turboDemo() { this.tone(1800, .7, .05, 'sine', 3.2); setTimeout(() => { this.burst('highpass', 2600, .6, .35, .12, 1.3); this.tone(2100, .25, .03, 'sine', .4); }, 720); }
 
   // s: { rpm 0..1, throttle 0..1, speed m/s, skid 0..1, dirt 0..1, nitro bool, brake 0..1, rain 0..1 }
@@ -77,7 +81,7 @@ export class GameAudio {
     if (tb && this.lastThr > .6 && s.throttle < .2 && s.rpm > .45 && t - (this.bovT || 0) > 1.2) { this.bovT = t; this.burst('highpass', 2600, .6, .3, .05 + tb * .025, 1.3); this.tone(1900, .2, .012 + tb * .006, 'sine', .45); }   // blow-off valve when you lift
     this.lastThr = s.throttle;
   }
-  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; for (const g of [this.engGain, this.wind.g, this.roll.g, this.skid.g, this.skidHi.g, this.dirt.g, this.nitro.g, this.brake.g, this.rain.g, this.intake.g, this.whineG, this.burbG, this.turboG, this.crowd.g]) g.gain.setTargetAtTime(0, t, .12); }
+  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; for (const g of [this.engGain, this.wind.g, this.roll.g, this.skid.g, this.skidHi.g, this.dirt.g, this.nitro.g, this.brake.g, this.rain.g, this.intake.g, this.whineG, this.burbG, this.turboG, this.crowd.g, this.rivG]) g.gain.setTargetAtTime(0, t, .12); }
 
   tone(freq, dur = .2, vol = .2, type = 'sine', slide = 1) {
     if (!this.ctx || this.quiet) return; const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime; o.type = type; o.frequency.setValueAtTime(freq, t); if (slide !== 1) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);

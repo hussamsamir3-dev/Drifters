@@ -44,7 +44,7 @@
     <div id="tabSettings" hidden class="settings">
       <label><span data-t>Language</span><div class="seg" id="langSeg"><button data-l="en">English</button><button data-l="ar">العربية</button></div></label>
       <label><span data-t>Driver name</span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
-      <label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1.25" data-t>Close</button><button data-z="1.75" data-t>Normal</button><button data-z="2.25" data-t>Far</button><button data-z="3" data-t>Very far</button></div></label>
+      <label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1" data-t>Close</button><button data-z="1.5" data-t>Normal</button><button data-z="2.25" data-t>Far</button><button data-z="3" data-t>Very far</button></div></label>
       <label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label>
       <label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label>
       <label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label>
@@ -147,6 +147,7 @@
 <!-- ============ PAUSE / RESULTS ============ -->
 <div id="pause" class="screen center dim" hidden>
   <h2 data-t>Paused</h2>
+  <div class="row zoomrow"><span data-t>Camera distance</span><button class="btn ghost" id="zoomIn" aria-label="Closer">−</button><b id="zoomVal">100%</b><button class="btn ghost" id="zoomOut" aria-label="Further">+</button></div>
   <button class="start" id="resumeBtn" data-t>Resume</button>
   <button class="btn" id="restartBtn" data-t>Restart</button>
   <button class="btn ghost" id="quitBtn" data-t>Back to menu</button>

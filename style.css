@@ -340,3 +340,5 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 
 #modeSeg{grid-template-columns:repeat(3,1fr)}#modeSeg button{padding:8px 4px}
 #hTow{font-weight:900;letter-spacing:.04em}
+
+.zoomrow{gap:12px;font-size:16px}.zoomrow b{min-width:64px;font-style:italic;font-weight:900;font-size:22px}.zoomrow .btn{padding:6px 18px;font-size:22px;line-height:1}

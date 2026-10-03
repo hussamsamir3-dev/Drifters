@@ -216,15 +216,25 @@ function wallStrip(path, offIn, h, vScale) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
+// Scenery is split into ~80 m cells. Each cell is its own batch, so the graphics card skips whatever is off-screen
+// and the game hides whatever is beyond the draw distance.
+let CULL = [];
 function instanced(geo, mat, list, shadow = true) {
+  if (list.length > 50) { const cells = new Map(); for (const t of list) { const k = Math.floor(t.x / 80) + ',' + Math.floor(t.z / 80); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(t); }
+    if (cells.size > 1) { const g = new THREE.Group(); for (const sub of cells.values()) g.add(instanced1(geo, mat, sub, shadow)); return g; } }
+  return instanced1(geo, mat, list, shadow);
+}
+function instanced1(geo, mat, list, shadow = true) {
   const m = new THREE.InstancedMesh(geo, mat, list.length), d = new THREE.Object3D();
   list.forEach((t, i) => { d.position.set(t.x, t.y || 0, t.z); d.rotation.set(0, t.r || 0, 0); d.scale.set(t.sx || t.s || 1, t.sy || t.s || 1, t.sz || t.s || 1); d.updateMatrix(); m.setMatrixAt(i, d.matrix); if (t.c) m.setColorAt(i, t.c); });
-  m.castShadow = shadow; m.receiveShadow = true; return m;
+  m.castShadow = shadow; m.receiveShadow = true;
+  if (list.length && !list.some(t => (t.sx || 1) > 8)) { let x = 0, z = 0; for (const t of list) { x += t.x; z += t.z; } CULL.push({ m, x: x / list.length, z: z / list.length }); }
+  return m;
 }
 
 function buildProc(track) {
   const def = track.def, th = track.theme, hw = def.width / 2, B = hw + def.runoff, G = track.group;
-  seed = def.id.length * 7919 + 13;
+  CULL = []; seed = def.id.length * 7919 + 13;
   // things that move: spectators bounce, flags wave, balloons drift, light beams sweep. main calls track.tick(time) each frame.
   const uT = track.uTime = { value: 0 }, movers = []; track.fancyLights = [];
   const anim = (mat, code) => { mat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + code); }; return mat; };
@@ -232,21 +242,25 @@ function buildProc(track) {
   // 1 = fan (arms up, jumping, wilder as a car comes past), 2 = walking a beat back and forth. Everyone cheers when a car is close.
   const CK = window.__crowdK || 1, uCar = { value: new THREE.Vector3(1e6, 0, 0) }, uCar2 = { value: new THREE.Vector3(1e6, 0, 0) };
   track.tick = (t, x, z, x2, z2) => { uT.value = t; if (x != null) { uCar.value.set(x, 0, z); uCar2.value.set(x2 ?? x, 0, z2 ?? z); } for (const f of movers) f(t); };
-  const personGeo = (() => {
+  const personGeo = (() => {      // a figure with rounded limbs: shirt, bare forearms, trousers, shoes, neck, head, hair or a cap
     const tag = (g, part, limb) => { const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(part), 1)); g.setAttribute('aLimb', new THREE.BufferAttribute(new Float32Array(n).fill(limb), 1)); return g; };
-    const box = (w, h, d, x, y, z, part, limb) => tag(new THREE.BoxGeometry(w, h, d).translate(x, y, z), part, limb);
-    const torso = tag(new THREE.CylinderGeometry(.2, .16, .56, 8).scale(1, 1, .68).translate(0, 1.06, 0), 0, 0);
-    const head = tag(new THREE.SphereGeometry(.155, 8, 6).translate(0, 1.52, 0), 1, 5), hair = tag(new THREE.SphereGeometry(.166, 8, 4, 0, 6.2832, 0, 1.45).translate(0, 1.545, -.018), 3, 5);
-    return mergeGeometries([torso, box(.3, .14, .2, 0, .8, 0, 2, 0), box(.13, .78, .16, .085, .39, 0, 2, 3), box(.13, .78, .16, -.085, .39, 0, 2, 4), box(.1, .5, .11, .26, 1.06, 0, 0, 1), box(.1, .5, .11, -.26, 1.06, 0, 0, 2), box(.09, .1, .1, .26, .76, 0, 1, 1), box(.09, .1, .1, -.26, .76, 0, 1, 2), head, hair]);
+    const cap = (r, len, x, y, z, part, limb) => tag(new THREE.CapsuleGeometry(r, len, 2, 7).translate(x, y, z), part, limb);
+    const parts = [tag(new THREE.CapsuleGeometry(.165, .3, 3, 9).scale(1.18, 1, .74).translate(0, 1.1, 0), 0, 0), tag(new THREE.SphereGeometry(.17, 9, 5).scale(1.12, .7, .82).translate(0, .84, 0), 2, 0),
+      tag(new THREE.CylinderGeometry(.05, .06, .09, 7).translate(0, 1.4, 0), 1, 0), tag(new THREE.SphereGeometry(.138, 10, 8).scale(1, 1.13, 1.03).translate(0, 1.54, 0), 1, 5),
+      tag(new THREE.SphereGeometry(.15, 10, 5, 0, 6.2832, 0, 1.5).translate(0, 1.565, -.014), 3, 5), tag(new THREE.BoxGeometry(.2, .022, .15).translate(0, 1.6, .16), 5, 5)];
+    for (const [sx, la, ll] of [[1, 1, 3], [-1, 2, 4]]) parts.push(cap(.074, .58, sx * .09, .43, 0, 2, ll), tag(new THREE.BoxGeometry(.1, .07, .23).translate(sx * .09, .035, .04), 4, ll), cap(.056, .2, sx * .25, 1.2, 0, 0, la), cap(.046, .24, sx * .25, .94, 0, 1, la));
+    return mergeGeometries(parts);
   })();
   const personMat = new THREE.MeshStandardMaterial({ roughness: .85 });
   personMat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.uniforms.uCar = uCar; sh.uniforms.uCar2 = uCar2;
     sh.vertexShader = 'uniform float uTime; uniform vec3 uCar, uCar2; attribute float aPart, aLimb, aBeh, aPh, aWalk; attribute vec3 aSkin;\n' + sh.vertexShader
       .replace('#include <color_vertex>', `#include <color_vertex>
         #ifdef USE_INSTANCING_COLOR
-          vColor.rgb = aPart < .5 ? instanceColor.rgb : aPart < 1.5 ? aSkin : aPart < 2.5 ? vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14) : vec3(.07, .05, .04) + fract(aPh * 3.) * .32;
+          float capW = step(.7, fract(aPh * 13.));
+          vColor.rgb = aPart < .5 ? instanceColor.rgb : aPart < 1.5 ? aSkin : aPart < 2.5 ? vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14) : aPart < 3.5 ? mix(vec3(.07, .05, .04) + fract(aPh * 3.) * .32, instanceColor.rgb * .8, capW) : aPart < 4.5 ? vec3(.06) + fract(aPh * 5.) * .5 : instanceColor.rgb * .8;
         #endif`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
+        if (aPart > 4.5) transformed = mix(vec3(0., 1.6, 0.), transformed, step(.7, fract(aPh * 13.)));   // only cap wearers get a brim
         vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
         float near = max(smoothstep(46., 10., distance(ip, uCar.xz)), smoothstep(46., 10., distance(ip, uCar2.xz)));
         float ph = aPh * 6.2832, T = uTime, walk = aBeh > 1.5 ? 1. : 0.;
@@ -266,11 +280,14 @@ function buildProc(track) {
         transformed.x += sin(T * 1.1 + ph) * .03 * (1. - walk);
         if (walk > .5) { float u = fract(T * .6 / max(aWalk, 1.) + aPh), tri = abs(u * 2. - 1.); transformed.xz *= (u < .5 ? -1. : 1.); transformed.z += (tri - .5) * aWalk; }`); };
   const SKIN = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
-  const people = list => {
-    if (!list.length) return; const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
-    list.forEach((q, i) => { beh[i] = q.beh || 0; ph[i] = rnd(); const k = q.k || SKIN[rnd() * 4 | 0]; sk[i * 3] = k.r; sk[i * 3 + 1] = k.g; sk[i * 3 + 2] = k.b; wk[i] = q.walk || 0; if (!q.c) q.c = new THREE.Color(0xf3f4f6); });
-    g.setAttribute('aBeh', new THREE.InstancedBufferAttribute(beh, 1)); g.setAttribute('aPh', new THREE.InstancedBufferAttribute(ph, 1)); g.setAttribute('aSkin', new THREE.InstancedBufferAttribute(sk, 3)); g.setAttribute('aWalk', new THREE.InstancedBufferAttribute(wk, 1));
-    const m = instanced(g, personMat, list, false); m.frustumCulled = false; G.add(m);
+  const people = all => {
+    const cells = new Map(); for (const q of all) { const k = Math.floor(q.x / 60) + ',' + Math.floor(q.z / 60); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(q); }
+    for (const list of cells.values()) {
+      const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
+      list.forEach((q, i) => { beh[i] = q.beh || 0; ph[i] = rnd(); const k = q.k || SKIN[rnd() * 4 | 0]; sk[i * 3] = k.r; sk[i * 3 + 1] = k.g; sk[i * 3 + 2] = k.b; wk[i] = q.walk || 0; if (!q.c) q.c = new THREE.Color(0xf3f4f6); const b = q.s || 1; q.sx = b * (.9 + rnd() * .22); q.sz = q.sx; q.sy = b * (.94 + rnd() * .14); });   // different heights and builds
+      g.setAttribute('aBeh', new THREE.InstancedBufferAttribute(beh, 1)); g.setAttribute('aPh', new THREE.InstancedBufferAttribute(ph, 1)); g.setAttribute('aSkin', new THREE.InstancedBufferAttribute(sk, 3)); g.setAttribute('aWalk', new THREE.InstancedBufferAttribute(wk, 1));
+      const m = instanced1(g, personMat, list, false); m.computeBoundingSphere(); m.boundingSphere.radius += 9; G.add(m);
+    }
   };
   const BOB = 'transformed.y += abs(sin(uTime * 3.4 + instanceMatrix[3][0] * 1.7 + instanceMatrix[3][2] * 2.3)) * .14;';
   const path = resampleClosed(def.pts, 2); track.finishPath(path);
@@ -338,7 +355,7 @@ function buildProc(track) {
     const btex = canvasTex(64, 128, (k) => { k.fillStyle = '#0d0e14'; k.fillRect(0, 0, 64, 128); for (let y = 4; y < 124; y += 10) for (let x = 4; x < 60; x += 9) if (Math.random() > .45) { k.fillStyle = ['#ffd27a', '#8fd8ff', '#ff9ad5'][Math.random() * 3 | 0]; k.fillRect(x, y, 5, 6); } });
     const bm = new THREE.MeshStandardMaterial({ map: btex, emissive: 0xffffff, emissiveMap: btex, emissiveIntensity: 1.1, roughness: .8 });
     const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, .5, 0);
-    G.add(instanced(g, bm, spots.filter((_, i) => i % 3 === 0).map(s => ({ x: s.x, z: s.z, r: 0, sx: 14 + rnd() * 12, sy: 18 + rnd() * 50, sz: 14 + rnd() * 12 })), false));
+    G.add(instanced(g, bm, spots.filter((_, i) => i % 3 === 0).map(s => ({ x: s.x, z: s.z, r: 0, sx: 14 + rnd() * 12, sy: 5 + rnd() * 9, sz: 14 + rnd() * 12 })), false));
     const lamp = new THREE.CylinderGeometry(.12, .16, 7, 6); lamp.translate(0, 3.5, 0);
     const bulb = new THREE.SphereGeometry(.45, 8, 6); bulb.translate(0, 7.1, 0);
     const lp = []; for (let i = 0; i < n; i += 14) { const p = path[i], off = (i % 28 ? 1 : -1) * (B + 1.2); lp.push({ x: p.x + p.tz * off, z: p.z - p.tx * off }); }
@@ -457,6 +474,7 @@ function buildProc(track) {
 export async function loadTrack(id, onProgress) {
   const def = TRACKS.find(t => t.id === id), track = new Track(def);
   if (def.type === 'glb') await buildLider(track, onProgress); else buildProc(track);
+  track.cullables = def.type === 'glb' ? [] : CULL;
   addStart(track);
   // minimap bounds
   let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const p of track.path) { a = Math.min(a, p.x); b = Math.max(b, p.x); c = Math.min(c, p.z); d = Math.max(d, p.z); }

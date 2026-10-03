@@ -19,6 +19,7 @@ export const PAINTS = [0x0f5c4a, 0x8a1c2b, 0x2b2f8a, 0xff9d2e, 0xd81e2c, 0xff6a1
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const wrap = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 const WK = ['FL', 'FR', 'RL', 'RR'];
+const LAMP = {};
 const DUST = [new THREE.Color(0x5a4630), new THREE.Color(0xc9a66b)];
 let protos = null;
 
@@ -68,6 +69,7 @@ export class Car {
     { const T = TUNE.toy; chassis.scale.set(T.w, T.h, T.l); for (const k in w) { const q = w[k]; q.mesh.scale.setScalar(T.wheel); q.y *= T.wheel; q.pivot.position.set(q.x * T.w, q.y, q.z * T.l); } this.rideY = this.R * (T.wheel - 1); this.R *= T.wheel; }
     const box = new THREE.Box3().setFromObject(chassis);
     this.tn = tuneOf(spec, tune); this.wear = this.tn.wear; this.dress(look);
+    this.hw0 = (box.max.x - box.min.x) / 2; this.zf0 = box.max.z; this.makeLamps();
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
     this.I = spec.mass * this.a * this.b * spec.yawK; this.h = .3;
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
@@ -189,7 +191,7 @@ export class Car {
   collideWalls(track) {
     const sn = Math.sin(this.th), cs = Math.cos(this.th), m = this.spec.mass, hw = this.hw, W = TUNE.wall;
     const pts = [[hw, this.zf], [-hw, this.zf], [hw, -this.zr], [-hw, -this.zr], [hw, 0], [-hw, 0]];
-    let hit = 0, touched = false;
+    let hit = 0, touched = false, wn = null;
     for (const [lx, lz] of pts) {
       const rx = sn * lz + cs * lx, rz = cs * lz - sn * lx, px = this.x + rx, pz = this.z + rz;
       if (track.surf(px, pz) !== WALL) continue;
@@ -206,8 +208,13 @@ export class Car {
       this.vx += j * nx / m; this.vz += j * nz / m; this.r += j * c / this.I * W.spin;
       const tx = -nz, tz = nx, vt = this.vx * tx + this.vz * tz, dv = Math.sign(vt) * Math.min(Math.abs(vt), W.friction * j / m); this.vx -= tx * dv; this.vz -= tz * dv;
       if (-vn > hit) { hit = -vn; this.hitX = px; this.hitZ = pz; this.hitL = [lx, lz]; this.hitN = [nx, nz]; }
+      wn = [nx, nz];
     }
-    if (touched) this.r = clamp(this.r * W.yawKeep, -2.2, 2.2);
+    if (wn && this.speed > 3) {       // glance off: ease the nose round to run along the barrier instead of grinding into it
+      let tx = -wn[1], tz = wn[0]; if (this.vx * tx + this.vz * tz < 0) { tx = -tx; tz = -tz; } const d = wrap(Math.atan2(tx, tz) - this.th);
+      if (Math.abs(d) < 1.15) { this.th += d * .07; this.x += wn[0] * .01; this.z += wn[1] * .01; }
+    }
+    if (touched) { this.r = clamp(this.r * W.yawKeep, -1.8, 1.8); this.touchT = .35; }
     return hit;
   }
 
@@ -262,14 +269,29 @@ export class Car {
     for (const m of this.bodyMeshes) if (m.userData.kind === 'window') m.material = winM;
   }
 
+  // Headlights: a lens, a low beam and a pool of light on the road for each side. A front hit breaks the lamp on that side.
+  makeLamps() {
+    if (!LAMP.cone) { LAMP.cone = new THREE.ConeGeometry(2.1, 13, 16, 1, true).translate(0, -6.5, 0).rotateX(-Math.PI / 2).scale(1, .3, 1);
+      LAMP.coneM = new THREE.MeshBasicMaterial({ color: 0xfff0cc, transparent: true, opacity: .03, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const c = document.createElement('canvas'); c.width = c.height = 128; const k = c.getContext('2d'), g = k.createRadialGradient(64, 64, 4, 64, 64, 64); g.addColorStop(0, 'rgba(255,244,214,1)'); g.addColorStop(.5, 'rgba(255,240,200,.45)'); g.addColorStop(1, 'rgba(255,240,200,0)'); k.fillStyle = g; k.fillRect(0, 0, 128, 128);
+      LAMP.poolM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8, fog: false });
+      LAMP.pool = new THREE.PlaneGeometry(4.6, 10); LAMP.lens = new THREE.SphereGeometry(.085, 8, 6); LAMP.lensM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4d6).multiplyScalar(2.5) }); }
+    const mk = sx => { const g = new THREE.Group(); g.position.set(sx * this.hw0 * .64, .56, this.zf0 - .04);
+      const cone = new THREE.Mesh(LAMP.cone, LAMP.coneM); cone.rotation.x = .05; const pool = new THREE.Mesh(LAMP.pool, LAMP.poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(-sx * .2, -.5, 6.2);
+      g.add(cone, pool, new THREE.Mesh(LAMP.lens, LAMP.lensM)); g.visible = false; this.root.add(g); return { g, ok: true }; };
+    this.lamps = [mk(1), mk(-1)]; this.lightsOn = false;
+  }
+  setLights(on) { this.lightsOn = on; for (const l of this.lamps) l.g.visible = on && l.ok; }
+
   toLocal(wx, wz) { const dx = wx - this.x, dz = wz - this.z, sn = Math.sin(this.th), cs = Math.cos(this.th); return [dx * cs - dz * sn, dx * sn + dz * cs]; }
 
   // ---- damage: zone health + real dents in the bodywork around the point of impact
-  damage(power) {
+  damage(power, shock = true) {
     const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale; if (amt <= 0 || !this.hitL) return 0;
-    if (power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
+    if (shock && power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
     D[zone] = Math.min(1, D[zone] + amt);
+    if (zone === 'front' && amt > .035) for (const i of amt > .22 ? [0, 1] : [lx > 0 ? 0 : 1]) if (this.lamps[i].ok) { this.lamps[i].ok = false; this.lamps[i].g.visible = false; this.glass = true; }   // smashed headlight
     // parts tear off: a rear hit takes the wing and exhaust tips, a front hit the splitter, a side hit the skirts
     if (amt > .07 && this.addons) { const want = zone === 'rear' ? ['wing', 'pipe'] : zone === 'front' ? ['split'] : ['skirt']; for (const c of this.addons.children) if (want.includes(c.userData.part) && !c.userData.gone) { c.userData.gone = true; this.lost.push(c); } }
     const sn = Math.sin(this.th), cs = Math.cos(this.th), n = this.hitN, dx = n[0] * cs - n[1] * sn, dz = n[0] * sn + n[1] * cs, R = 1.25, depth = Math.min(.3, amt * 2.4);
@@ -289,14 +311,14 @@ export class Car {
   }
   get health() { const D = this.dmg; return 1 - (D.front + D.rear + D.left + D.right) / 4; }
   repair() {
-    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.dress(this.look);
+    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.dress(this.look); for (const l of this.lamps) l.ok = true; this.setLights(this.lightsOn);
     for (const mesh of this.bodyMeshes) { mesh.geometry.attributes.position.array.set(mesh.userData.orig); mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.computeVertexNormals(); }
   }
 
   // ---- visuals: ride height from the track, body roll, wheel spin + steer
   render(dt, track, al = 1) {
     const X = this.rx = this.px + (this.x - this.px) * al, Z = this.rz = this.pz + (this.z - this.pz) * al, TH = this.pth + wrap(this.th - this.pth) * al;
-    { const VL = TUNE.visualLead, sp = Math.hypot(this.vx, this.vz), want = clamp(this.steer * VL.steer + this.r * VL.yaw, -VL.max, VL.max) * Math.min(1, sp / VL.fullSpeed) * (this.vf > 1 ? 1 : 0); this.lead += (want - this.lead) * Math.min(1, dt * VL.rate); }
+    { const VL = TUNE.visualLead, sp = Math.hypot(this.vx, this.vz), want = clamp(this.steer * VL.steer + this.r * VL.yaw, -VL.max, VL.max) * Math.min(1, sp / VL.fullSpeed) * (this.vf > 1 && !(this.touchT > 0) ? 1 : 0); this.touchT = Math.max(0, (this.touchT || 0) - dt); this.lead += (want - this.lead) * Math.min(1, dt * VL.rate); }
     const sn = Math.sin(TH), cs = Math.cos(TH), h = [];
     for (let i = 0; i < 4; i++) { const w = this.wheels[WK[i]]; h.push(track.height(X + sn * w.z + cs * w.x, Z + cs * w.z - sn * w.x)); }
     const k = Math.min(1, dt * 14);
@@ -306,7 +328,7 @@ export class Car {
     this.root.position.set(X, this.y, Z); this.root.rotation.set(this.pitch, TH + this.lead, this.roll);
     this.rollD += (clamp(this.ayS * .011, -.085, .085) - this.rollD) * Math.min(1, dt * 7);
     this.pitchD += (clamp(-this.axS * .0055, -.05, .05) - this.pitchD) * Math.min(1, dt * 7);
-    const rough = this.speed > 2 ? (this.grass * .035 + (this.wsurf.includes(KERB) ? .02 : 0)) : 0;
+    const rough = this.speed > 2 ? (this.grass * .011 + (this.wsurf.includes(KERB) ? .005 : 0)) : 0;
     this.chassis.rotation.set(this.pitchD + (Math.random() - .5) * rough * .5 + this.dmg.front * .02, 0, this.rollD + (Math.random() - .5) * rough + (this.dmg.left - this.dmg.right) * .035);
     this.chassis.position.y = this.rideY + (Math.random() - .5) * rough + (this.rpm > .2 ? Math.sin(performance.now() * .05) * .003 : 0);
     const vf = this.vf, d = vf / this.R * dt;
@@ -314,7 +336,7 @@ export class Car {
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[WK[i]]; w.mesh.rotation.x = this.spin[i < 2 ? 0 : 1];
       if (i < 2) w.pivot.rotation.y = this.steer;
-      w.pivot.position.y = w.y + (this.wsurf[i] === GRASS && this.speed > 2 ? (Math.random() - .5) * .04 : 0);
+      w.pivot.position.y = w.y + (this.wsurf[i] === GRASS && this.speed > 2 ? (Math.random() - .5) * .012 : 0);
     }
     this.m.rear.emissiveIntensity = this.braking ? 2.4 : .5;
     if (Math.abs(this.dirt - this.dirtShown) > .03) { this.dirtShown = this.dirt; this.m.paint.color.copy(this.baseColor).lerp(DUST[track.def.theme === 'desert' ? 1 : 0], this.dirt * .6); this.m.paint.roughness = .32 + this.dirt * .5; this.m.paint.clearcoat = 1 - this.dirt * .8; }
@@ -330,7 +352,7 @@ export class Car {
       const onRoad = sf === ROAD || sf === KERB;
       if (skid && onRoad) {
         const inten = clamp(this.slipR * 1.6 + this.wspin + (this.locked ? .6 : 0), .3, 1);
-        for (let k = 0; k < n; k++) if (Math.random() < inten) fx.smoke.emit(wx + (Math.random() - .5) * .3, y + .15, wz + (Math.random() - .5) * .3, this.vx * .25 + (Math.random() - .5) * 1.5, .7 + Math.random() * 1.2, this.vz * .25 + (Math.random() - .5) * 1.5, .9 + Math.random() * .9, .9, 3.2, .93, .93, .95, .34 * inten);
+        for (let k = 0; k < n; k++) if (Math.random() < inten) fx.smoke.emit(wx + (Math.random() - .5) * .3, y + .15, wz + (Math.random() - .5) * .3, this.vx * .3 + (Math.random() - .5) * 1.5, .6 + Math.random() * 1.1, this.vz * .3 + (Math.random() - .5) * 1.5, 1.5 + Math.random() * 1.3, .8, 3.8, .88, .89, .93, .3 * inten);
         const l = [wx + cs * .15, y + .06, wz - sn * .15], r = [wx - cs * .15, y + .06, wz + sn * .15], last = this.lastSk[i - 2];
         if (last && (last[0][0] - l[0]) ** 2 + (last[0][2] - l[2]) ** 2 < 9) fx.skids.quad(last[0], last[1], l, r);
         this.lastSk[i - 2] = [l, r];
@@ -350,6 +372,7 @@ export class Car {
     }
     if (this.wspinF > .15) for (let i = 0; i < 2; i++) { const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; for (let k = 0; k < n; k++) if (Math.random() < .6) fx.smoke.emit(wx, this.y + .15, wz, (Math.random() - .5) * 2, .8 + Math.random(), (Math.random() - .5) * 2, 1, .8, 3, .93, .93, .95, .28); }
     if (this.burn) for (let i = 2; i < 4; i++) { const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; for (let k = 0; k < n * 2; k++) fx.smoke.emit(wx + (Math.random() - .5) * .5, this.y + .2, wz + (Math.random() - .5) * .5, -sn * 2 + (Math.random() - .5) * 3, 1 + Math.random() * 2, -cs * 2 + (Math.random() - .5) * 3, 1.6 + Math.random(), 1.1, 4.2, .96, .96, .97, .4); }
+    if (this.gear !== this._g) { if (this._g && sp > 6) { const ex = this.x - sn * (this.zr + .15), ez = this.z - cs * (this.zr + .15); for (let k = 0; k < 4; k++) fx.smoke.emit(ex, this.y + .4, ez, this.vx * .5 - sn * 2, .4 + Math.random(), this.vz * .5 - cs * 2, .5, .35, 2.2, .35, .35, .37, .3); } this._g = this.gear; }   // a puff from the exhaust on each gear change
     if (this.backfire > 0 && Math.random() < .5) { const ex = this.x - sn * (this.zr + .15), ez = this.z - cs * (this.zr + .15); fx.glow.emit(ex, this.y + .4, ez, this.vx - sn * 5, .5, this.vz - cs * 5, .1, .45, -2, 1, .55, .15, 1); }
     const wet = track.wet || 0;
     if (wet > .15 && sp > 8) for (let i = 2; i < 4; i++) {                 // spray off wet tarmac
