@@ -631,7 +631,7 @@ function updateRace(dt) {
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
     audio.rivals(near.map(({ c, d }) => ({ snd: c.spec.snd, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
   audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 });
-  audio.drive({ rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
+  audio.drive({ rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
   adaptQuality(dt);
 }
 
@@ -1035,9 +1035,9 @@ let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)) * (save.dev ? save.devScale || 1 : 1); last = now;
+  if (auOn && !racing()) auTick();
   if (R) { if (!paused) { try { updateRace(dt); } catch (e) { if (!window.__errOnce) { window.__errOnce = 1; console.error('RACE ERROR ' + e.message + ' cars=' + R.cars.length + ' t=' + R.t + ' state=' + R.state + ' mode=' + R.mode + ' attract=' + R.attract + ' keys=' + Object.keys(R).slice(0, 12)); } } } }
   else if (box.on) boxTick(dt);
-  if (auOn && !racing()) auTick();
   else if (garageCar) {
     garageSpin += dt * .35; garageCar.root.rotation.y = garageSpin;
     const narrow = innerWidth < 820; camera.fov = 38; camera.updateProjectionMatrix();
@@ -1051,5 +1051,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get R() { return R; }, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get R() { return R; }, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

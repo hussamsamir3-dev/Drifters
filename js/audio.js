@@ -35,7 +35,10 @@ export class GameAudio {
     this.meterNode = c.createAnalyser(); this.meterNode.fftSize = 1024; this.master.connect(this.meterNode);
     const nb = c.createBuffer(1, c.sampleRate * 3, c.sampleRate), d = nb.getChannelData(0); let last = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; last = (last + .04 * w) / 1.04; d[i] = w * .5 + last * 6; } this.noiseBuf = nb;
     const bed = (type, f, q, out = this.sfx) => { const s = c.createBufferSource(); s.buffer = nb; s.loop = true; s.playbackRate.value = .8 + Math.random() * .4; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(out); s.start(); return { g, fl }; };
-    this.wind = bed('lowpass', 500, .5); this.roll = bed('lowpass', 260, .7); this.skid = bed('bandpass', 850, 1.6); this.skidHi = bed('bandpass', 2100, 3); this.dirt = bed('lowpass', 420, .8); this.nitro = bed('bandpass', 1600, .7); this.brake = bed('bandpass', 3100, 5); this.rain = bed('highpass', 2600, .4); this.crowd = bed('bandpass', 950, .5);
+    this.wind = bed('lowpass', 500, .5); this.roll = bed('lowpass', 260, .7); this.skid = bed('bandpass', 520, .9); this.skidHi = bed('highpass', 3200, .5);            // tyre scrub (rubber working) and wet hiss
+    // tyre squeal: noise through three narrow resonances that wander slightly, so it howls like rubber instead of hissing
+    { const src = c.createBufferSource(); src.buffer = nb; src.loop = true; const out = c.createGain(); out.gain.value = 0; out.connect(this.sfx); const lfo = c.createOscillator(); lfo.frequency.value = 4.3; const lg = c.createGain(); lg.gain.value = 45; lfo.connect(lg); lfo.start();
+      this.sq = { g: out, f: [1, 1.52, 2.31].map((m, i) => { const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 18 - i * 3; f.frequency.value = 700 * m; const g = c.createGain(); g.gain.value = [1, .55, .3][i]; src.connect(f); f.connect(g); g.connect(out); lg.connect(f.detune); f.mult = m; return f; }) }; src.start(); } this.dirt = bed('lowpass', 420, .8); this.nitro = bed('bandpass', 1600, .7); this.brake = bed('bandpass', 3100, 5); this.rain = bed('highpass', 2600, .4); this.crowd = bed('bandpass', 950, .5);
     this.spool = bed('bandpass', 2600, 2.2, this.engBus);                     // turbo: filtered air noise, never a pure tone
     this.voice = new EngineVoice(this); this.rivV = [0, 1, 2].map(() => new EngineVoice(this)); this.audV = new EngineVoice(this);
     document.addEventListener('visibilitychange', () => { if (!this.ctx) return; if (document.hidden) this.ctx.suspend(); else { this.ctx.resume(); this.lastLoad = 0; } });   // on return the next frame simply sets current rpm and load; nothing missed is replayed
@@ -74,7 +77,13 @@ export class GameAudio {
     }
     this.wind.g.gain.setTargetAtTime(k * k * .22, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
     this.roll.g.gain.setTargetAtTime(Math.min(.16, k * .3) * (1 - s.dirt), t, .15);
-    this.skid.g.gain.setTargetAtTime(s.skid * .2, t, .09); this.skid.fl.frequency.setTargetAtTime(700 + s.skid * 350, t, .15); this.skidHi.g.gain.setTargetAtTime(s.skid * s.skid * .05, t, .12);
+    // Tyres. Scrub: a low rubbery roar that rises as the tyres are loaded up, before they let go, so you can hear the grip being used.
+    // Squeal: comes in once they slide, higher with speed and when a wheel locks, lower and rougher with wheelspin. In the wet it turns to hiss.
+    const g = Math.max(0, Math.min(1, ((s.grip || 0) - .5) / .5)), dry = 1 - (s.wet || 0) * .85, sl = s.skid || 0, sp2 = Math.min(1, s.speed / 30);
+    this.skid.g.gain.setTargetAtTime((g * .1 + sl * .12) * sp2 * (1 - s.dirt), t, .08); this.skid.fl.frequency.setTargetAtTime(380 + g * 260 + sl * 240, t, .12);
+    const base = 620 + Math.min(s.speed, 60) * 7 + (s.lock || 0) * 260 - (s.spin || 0) * 170; for (const f of this.sq.f) f.frequency.setTargetAtTime(base * f.mult, t, .09);
+    this.sq.g.gain.setTargetAtTime(Math.max(sl, (s.lock || 0) * .6) * (.35 + .65 * sp2) * dry * (1 - s.dirt) * .5, t, sl > .05 ? .06 : .14);
+    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * (s.wet || 0) * sp2 * .09, t, .12);
     this.dirt.g.gain.setTargetAtTime(s.dirt * .35, t, .1); this.brake.g.gain.setTargetAtTime(s.brake * Math.min(1, s.speed / 25) * .018, t, .05);
     this.nitro.g.gain.setTargetAtTime(s.nitro ? .16 : 0, t, .1); this.rain.g.gain.setTargetAtTime((s.rain || 0) * .1, t, .5);
   }
@@ -94,7 +103,7 @@ export class GameAudio {
     if (!this.ctx || this.quiet || this.state !== 'ready') return;
     this.rivV.forEach((v, i) => { const r = list[i]; if (!r || r.dist > 60) { if (v.cur) v.fadeOut(.4); return; } if (v.name !== r.snd) v.start(r.snd, r.rpm / REF_RPM); const a = clamp(1 - r.dist / 60, 0, 1); v.set(r.rpm, r.load, a * a * .5); });
   }
-  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); if (this.voice.cur) this.voice.fadeOut(.3); for (const v of this.rivV) if (v.cur) v.fadeOut(.3); }
+  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); if (this.voice.cur) this.voice.fadeOut(.3); for (const v of this.rivV) if (v.cur) v.fadeOut(.3); }
   ambient(dt, o) { if (this.ctx) this.crowd.g.gain.setTargetAtTime(o.on ? .028 : 0, this.ctx.currentTime, .6); }
 
   // ---- developer audition: hear any engine at any rpm and load, fire shifts and pops, read the output level
