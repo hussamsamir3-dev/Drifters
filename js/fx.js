@@ -1,6 +1,9 @@
 // Particles (smoke, dirt, sparks, nitro flame) and tyre skid marks.
 import * as THREE from 'three';
 
+// Up to four spot lights (car headlights) that smoke, dust and rain can catch. main fills these in every frame.
+export const LIGHTS = { p: [0, 1, 2, 3].map(() => new THREE.Vector3(0, -999, 0)), d: [0, 1, 2, 3].map(() => new THREE.Vector3(0, 0, 1)), c: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) };
+const LIT = 'uniform vec3 uLP[4]; uniform vec3 uLD[4]; uniform vec4 uLC[4]; vec3 beams(vec3 w){ vec3 l=vec3(0.); for(int i=0;i<4;i++){ vec3 d=w-uLP[i]; float dist=length(d)+.001; float c=dot(d/dist,uLD[i]); l+=uLC[i].rgb*uLC[i].a*smoothstep(.88,.975,c)*max(0.,1.-dist/48.)*min(1.,dist*.5); } return l; }';
 export class Particles {
   constructor(scene, max = 1800, additive = false) {
     this.max = max; this.cur = 0;
@@ -13,9 +16,9 @@ export class Particles {
     g.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1));
     this.mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
-      uniforms: { uScale: { value: 600 } },
-      vertexShader: 'attribute vec4 aColor; attribute float aSize; varying vec4 vC; uniform float uScale; void main(){ vC=aColor; vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*uScale/max(-mv.z,.1); }',
-      fragmentShader: 'varying vec4 vC; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,.12,d)*vC.a; if(a<.01) discard; gl_FragColor=vec4(vC.rgb,a); }',
+      uniforms: { uScale: { value: 600 }, uLP: { value: LIGHTS.p }, uLD: { value: LIGHTS.d }, uLC: { value: LIGHTS.c } },
+      vertexShader: LIT + 'attribute vec4 aColor; attribute float aSize; varying vec4 vC; varying vec3 vL; uniform float uScale; void main(){ vC=aColor; vL=beams(position); vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*uScale/max(-mv.z,.1); }',
+      fragmentShader: 'varying vec4 vC; varying vec3 vL; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,.12,d)*vC.a; if(a<.01) discard; gl_FragColor=vec4(vC.rgb+vL*.85, min(1., a*(1.+dot(vL,vec3(.5))))); }',   // smoke and dust inside a headlight beam glow
     });
     this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; this.points.renderOrder = 5;
     scene.add(this.points); this.geo = g;
@@ -72,9 +75,9 @@ export class Ambient {
     };
     const wrap = 'vec3 p=position+uVel*uTime; p=mod(p-uCam+vec3(B*.5,B*.25,B*.5), vec3(B,B*.5,B))-vec3(B*.5,B*.25,B*.5)+uCam;';
     this.dust = new THREE.Points(mk(500, 70), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uVel: { value: new THREE.Vector3(.5, .12, .3) }, uCol: { value: new THREE.Color(1, .95, .8) }, uA: { value: .5 }, uScale: { value: 600 } },
-      vertexShader: `uniform float uTime,uScale; uniform vec3 uCam,uVel; attribute float tip; varying float vF; const float B=70.; void main(){ ${wrap} p.y+=sin(uTime*.6+position.x)*.4; vec4 mv=modelViewMatrix*vec4(p,1.); gl_Position=projectionMatrix*mv; gl_PointSize=.09*uScale/max(-mv.z,.5); vF=smoothstep(35.,22.,length(p-uCam))*smoothstep(1.,4.,-mv.z); }`,
-      fragmentShader: 'uniform vec3 uCol; uniform float uA; varying float vF; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,.0,d)*uA*vF; if(a<.01) discard; gl_FragColor=vec4(uCol,a); }' }));
+      uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uVel: { value: new THREE.Vector3(.5, .12, .3) }, uCol: { value: new THREE.Color(1, .95, .8) }, uA: { value: .5 }, uScale: { value: 600 }, uLP: { value: LIGHTS.p }, uLD: { value: LIGHTS.d }, uLC: { value: LIGHTS.c } },
+      vertexShader: LIT + `uniform float uTime,uScale; uniform vec3 uCam,uVel; attribute float tip; varying float vF; varying float vL; const float B=70.; void main(){ ${wrap} p.y+=sin(uTime*.6+position.x)*.4; vec4 mv=modelViewMatrix*vec4(p,1.); gl_Position=projectionMatrix*mv; gl_PointSize=.09*uScale/max(-mv.z,.5); vF=smoothstep(35.,22.,length(p-uCam))*smoothstep(1.,4.,-mv.z); vL=dot(beams(p),vec3(.34)); gl_PointSize*=1.+min(vL,1.5)*1.6; }`,
+      fragmentShader: 'uniform vec3 uCol; uniform float uA; varying float vF; varying float vL; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,.0,d)*(uA+vL*1.4)*vF; if(a<.01) discard; gl_FragColor=vec4(mix(uCol,vec3(1.,.96,.84),min(1.,vL)),min(1.,a)); }' }));
     this.rain = new THREE.LineSegments(mk(1600, 50, true), new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
       uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uVel: { value: new THREE.Vector3(2, -26, 1) }, uA: { value: 0 } },
       vertexShader: `uniform float uTime; uniform vec3 uCam,uVel; attribute float tip; varying float vT; const float B=50.; void main(){ ${wrap} p+=normalize(uVel)*tip*-.9; vT=tip; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.); }`,

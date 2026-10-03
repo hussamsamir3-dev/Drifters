@@ -262,7 +262,15 @@ export class Car {
     part = 'scoop'; if (L.scoop) { const ry = top(-.5, .3, maxX * .45); add(.36, .09, .52, dark, 0, ry + .035, -.12); add(.3, .05, .06, this.m.paint, 0, ry + .06, .15); }
     part = 'pipe'; if (L.pipe) { const chrome = new THREE.MeshStandardMaterial({ color: 0xd8dade, metalness: 1, roughness: .2 }), y = low(minZ, minZ + .3); for (const sx of [-.24, -.16, .16, .24]) add(.075, .075, .2, chrome, sx * W, y + .13, minZ - .03); }
     part = 'glow';
-    if (L.glow) { const g = new THREE.Mesh(new THREE.PlaneGeometry(W * .92, (maxZ - minZ) * .82), new THREE.MeshBasicMaterial({ color: new THREE.Color(GLOWS[L.glow]).multiplyScalar(1.8), transparent: true, opacity: .6, depthWrite: false, side: THREE.DoubleSide })); g.rotation.x = -Math.PI / 2; g.position.set(0, low(minZ, maxZ) + .03, (minZ + maxZ) / 2); A.add(g); }
+    if (L.glow) {        // underglow: light tubes under the sills and a soft pool of colour that spills out past the car onto the road
+      if (!LAMP.glowTex) { const c = document.createElement('canvas'); c.width = c.height = 128; const k = c.getContext('2d'), g = k.createRadialGradient(64, 64, 6, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,.55)'); g.addColorStop(.42, 'rgba(255,255,255,.95)'); g.addColorStop(.7, 'rgba(255,255,255,.3)'); g.addColorStop(1, 'rgba(255,255,255,0)'); k.fillStyle = g; k.fillRect(0, 0, 128, 128); LAMP.glowTex = new THREE.CanvasTexture(c); }
+      const col = new THREE.Color(GLOWS[L.glow]), y0 = low(minZ, maxZ), len = maxZ - minZ;
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(W * 2.5, len * 1.45), new THREE.MeshBasicMaterial({ map: LAMP.glowTex, color: col, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7, fog: false }));
+      pool.rotation.x = -Math.PI / 2; pool.position.set(0, .03 - this.rideY / TUNE.toy.h, (minZ + maxZ) / 2); pool.userData.part = 'glow'; A.add(pool); this.glowPool = pool;
+      const tube = new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(2.2) });
+      for (const sx of [-1, 1]) { const t = new THREE.Mesh(new THREE.BoxGeometry(.035, .035, len * .6), tube); t.position.set(sx * (maxX - .08), y0 + .03, (minZ + maxZ) / 2); t.userData.part = 'glow'; A.add(t); }
+      for (const sz of [minZ + .25, maxZ - .3]) { const t = new THREE.Mesh(new THREE.BoxGeometry(W * .7, .035, .035), tube); t.position.set(0, y0 + .03, sz); t.userData.part = 'glow'; A.add(t); }
+    } else this.glowPool = null;
     const rimM = L.rim ? new THREE.MeshStandardMaterial({ color: RIMS[L.rim], metalness: .9, roughness: .26 }) : null;
     for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
     const winM = L.tint ? new THREE.MeshPhysicalMaterial({ color: TINTS[L.tint], roughness: .08, metalness: .9, clearcoat: 1 }) : this.m.window;
@@ -272,9 +280,11 @@ export class Car {
   // Headlights: a lens, a low beam and a pool of light on the road for each side. A front hit breaks the lamp on that side.
   makeLamps() {
     if (!LAMP.cone) { LAMP.cone = new THREE.ConeGeometry(2.1, 13, 16, 1, true).translate(0, -6.5, 0).rotateX(-Math.PI / 2).scale(1, .3, 1);
-      LAMP.coneM = new THREE.MeshBasicMaterial({ color: 0xfff0cc, transparent: true, opacity: .03, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      LAMP.coneM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { uCol: { value: new THREE.Color(0xfff0cc) } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+        fragmentShader: 'uniform vec3 uCol; varying vec2 vUv; void main(){ gl_FragColor=vec4(uCol, .2*pow(vUv.y,2.4)+.012*vUv.y); }' });   // brightest at the lamp, fading to nothing at the far end
       const c = document.createElement('canvas'); c.width = c.height = 128; const k = c.getContext('2d'), g = k.createRadialGradient(64, 64, 4, 64, 64, 64); g.addColorStop(0, 'rgba(255,244,214,1)'); g.addColorStop(.5, 'rgba(255,240,200,.45)'); g.addColorStop(1, 'rgba(255,240,200,0)'); k.fillStyle = g; k.fillRect(0, 0, 128, 128);
-      LAMP.poolM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8, fog: false });
+      LAMP.poolM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: .2, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8, fog: false });
       LAMP.pool = new THREE.PlaneGeometry(4.6, 10); LAMP.lens = new THREE.SphereGeometry(.085, 8, 6); LAMP.lensM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4d6).multiplyScalar(2.5) }); }
     const mk = sx => { const g = new THREE.Group(); g.position.set(sx * this.hw0 * .64, .56, this.zf0 - .04);
       const cone = new THREE.Mesh(LAMP.cone, LAMP.coneM); cone.rotation.x = .05; const pool = new THREE.Mesh(LAMP.pool, LAMP.poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(-sx * .2, -.5, 6.2);

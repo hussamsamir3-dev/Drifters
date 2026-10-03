@@ -3,9 +3,10 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS } from './tracks.js';
 import { TUNE } from './config.js';
-import { CARS, PAINTS, RIMS, TINTS, GLOWS, Car, loadCars, aiDrive } from './car.js';
+import { CARS, PAINTS, RIMS, TINTS, Car, loadCars, aiDrive } from './car.js';
 import { AR } from './lang.js';
-import { Particles, Skids, Ambient, Debris } from './fx.js';
+import { Particles, Skids, Ambient, Debris, LIGHTS } from './fx.js';
+import { GLOWS } from './car.js';
 import { Post } from './post.js';
 import { GameAudio } from './audio.js';
 import { Room, hasSupabase, submitLap, topLaps } from './net.js';
@@ -157,7 +158,7 @@ const show = (id, on) => { $(id).hidden = !on; };
 // ---------------- race state ----------------
 let R = null, paused = false, camMode = 0, shake = 0, acc = 0;
 const CAMS = [{ name: 'Circuit', fixed: true, d: 43, h: 48, fov: 30 }];   // one camera: the far, fixed-heading race view
-let hitPulse = 0, fovPunch = 0;
+let hitPulse = 0, fovPunch = 0; const ambAt = { position: new THREE.Vector3() };
 const cam = { yaw: 0, pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 55 };
 const H = 1 / 120;
 const NAMES = ['Omar', 'Youssef', 'Karim', 'Nour', 'Laila', 'Tarek', 'Mona', 'Ziad', 'Hana', 'Sherif', 'Salma', 'Hassan', 'Farida', 'Adel'];
@@ -223,6 +224,7 @@ function endRace() {
   if (!R) return;
   for (const c of R.cars) { scene.remove(c.root); c.dispose(); }
   for (const p of [R.fx.smoke, R.fx.glow]) { scene.remove(p.points); p.geo.dispose(); p.mat.dispose(); }
+  for (const L of [...(R.spots || []), ...(R.glows || [])]) { scene.remove(L); if (L.target) scene.remove(L.target); L.dispose(); }
   scene.remove(R.fx.skids.mesh); R.fx.skids.geo.dispose(); R.ambient.dispose(); R.debris.dispose();
   scene.remove(R.track.group); R.track.dispose(); R = null; audio.silence();
   show('hud', false); show('pause', false); show('results', false); $('lights').classList.remove('show'); $('msg').className = '';
@@ -277,7 +279,7 @@ function impact(car, power, wall) {
   const me = R.player, near = (car.x - me.x) ** 2 + (car.z - me.z) ** 2 < 3600;
   if (power < 4) { if (car === me && Math.random() < .2) { audio.scrape(power); car.impactFX(R.fx, R.track, power * .4); } return; }
   const amt = car.damage(power, !wall);
-  if (car.glass) { car.glass = false; if (near) for (let i = 0; i < 18; i++) R.fx.glow.emit(car.hitX, car.y + .6, car.hitZ, car.vx * .5 + (Math.random() - .5) * 8, 1 + Math.random() * 4, car.vz * .5 + (Math.random() - .5) * 8, .5 + Math.random() * .4, .09, 0, .85, .95, 1, 1, 14); if (car === me) me.spotK = me.lamps.filter(l => l.ok).length / 2; }   // headlight glass
+  if (car.glass) { car.glass = false; if (near) for (let i = 0; i < 18; i++) R.fx.glow.emit(car.hitX, car.y + .6, car.hitZ, car.vx * .5 + (Math.random() - .5) * 8, 1 + Math.random() * 4, car.vz * .5 + (Math.random() - .5) * 8, .5 + Math.random() * .4, .09, 0, .85, .95, 1, 1, 14); }   // headlight glass
   if (car === me) { if (power > 8) R.crashes++; if (amt > 0 && R.mode === 'online' && room) room.send({ k: 'd', l: me.hitL, n: me.hitN, p: +power.toFixed(1) }); }
   if (near) car.impactFX(R.fx, R.track, power);
   if (car.lost.length || amt > .06) {
@@ -406,6 +408,30 @@ function liveEvents(dt) {
   } else if (R.t > E.next && !me.finished) startEvent();
 }
 
+// ---------------- car lighting ----------------
+// Real lights are expensive, so a small pool of them is handed to the cars nearest the action every frame: headlights are
+// true spot lights that fall on the road, barriers, people and other cars ahead (the player's also casts shadows on High),
+// and underglow is a coloured point light under the floor. Cars further away keep the cheaper painted beams.
+function setupLights() {
+  const nS = gfx === 'high' ? 4 : gfx === 'medium' ? 2 : 1, nG = gfx === 'high' ? 3 : gfx === 'medium' ? 2 : 1; R.spots = []; R.glows = [];
+  for (let i = 0; i < nS; i++) { const L = new THREE.SpotLight(0xfff0d2, 0, 62, .44, .7, 1.25); if (i === 0 && gfx === 'high') { L.castShadow = true; L.shadow.mapSize.set(1024, 1024); L.shadow.camera.near = .6; L.shadow.camera.far = 62; L.shadow.bias = -.0015; L.shadow.normalBias = .05; } scene.add(L, L.target); R.spots.push(L); }
+  for (let i = 0; i < nG; i++) { const L = new THREE.PointLight(0xffffff, 0, 9, 1.5); scene.add(L); R.glows.push(L); }
+  for (let i = 0; i < 4; i++) LIGHTS.c[i].set(0, 0, 0, 0);
+}
+function updateLights(dt) {
+  const me = R.player, ref = R.attract ? R.cars[(Math.floor(Math.max(0, R.t) / 7) * 3) % R.cars.length] : me, dark = R.track.theme.night ? 1 : R.track.def.theme === 'coast' ? .75 : .45 + .3 * R.wet;
+  const near = R.cars.filter(c => !c.out).sort((a, b) => (a === ref ? -1 : b === ref ? 1 : 0) || ((a.x - ref.x) ** 2 + (a.z - ref.z) ** 2) - ((b.x - ref.x) ** 2 + (b.z - ref.z) ** 2));
+  const lit = near.filter(c => c.lightsOn && c.lamps.some(l => l.ok)), k = Math.min(1, dt * 10);
+  R.spots.forEach((L, i) => { const c = lit[i];
+    if (!c) { L.intensity += (0 - L.intensity) * k; LIGHTS.c[i].w = 0; return; }
+    const th = c.root.rotation.y, sn = Math.sin(th), cs = Math.cos(th), okL = c.lamps[0].ok, okR = c.lamps[1].ok, side = okL && okR ? 0 : okL ? .5 : -.5, x = c.root.position.x + sn * (c.zf + .1) + cs * side, z = c.root.position.z + cs * (c.zf + .1) - sn * side;   // one lamp out: the beam moves to the side that still works
+    L.position.set(x, c.y + .62, z); L.target.position.set(x + sn * 22, c.y - .9, z + cs * 22); L.intensity += ((okL && okR ? 150 : 80) * dark - L.intensity) * k;
+    LIGHTS.p[i].copy(L.position); LIGHTS.d[i].set(sn, -.07, cs).normalize(); LIGHTS.c[i].set(1, .93, .78, (okL && okR ? 1 : .55) * dark); });
+  const glo = near.filter(c => c.look && c.look.glow && c.glowPool);
+  R.glows.forEach((L, i) => { const c = glo[i]; if (!c) { L.intensity += (0 - L.intensity) * k; return; } L.color.setHex(GLOWS[c.look.glow]); L.position.set(c.root.position.x, c.y + .28, c.root.position.z); L.intensity += ((R.track.theme.night ? 9 : 4) - L.intensity) * k; });
+  const pulse = .68 + .1 * Math.sin(performance.now() / 420); for (const c of R.cars) if (c.glowPool) c.glowPool.material.opacity = pulse * (R.track.theme.night ? 1 : .6);
+}
+
 // ---------------- pit box, pickups, weather ----------------
 function setupExtras() {
   const tr = R.track, n = tr.n, G = tr.group, def = tr.def, me = R.player;
@@ -472,7 +498,7 @@ function setupExtras() {
   if (tr.theme.night) for (const sx of [-1, 1]) { const p0 = tr.path[0], gl = new THREE.SpotLight(0xcfe0ff, 220, 70, .75, .6, 1.4); gl.position.set(p0.x + p0.tz * sx * 5, tr.height(p0.x, p0.z) + 9, p0.z - p0.tx * sx * 5); gl.target.position.set(p0.x - p0.tx * 22 + p0.tz * sx * 3, 0, p0.z - p0.tz * 22 - p0.tx * sx * 3); G.add(gl, gl.target); }
   R.rainAt = R.rainAt != null ? R.rainAt : w === 'rain' ? 6 : w === 'storm' ? 0 : (w === 'random' && def.theme !== 'desert' && !def.dev && Math.random() < .3) ? 18 + Math.random() * 30 : Infinity;
   R.roadMats = []; G.traverse(o => { if (o.isMesh && o.material && /racetrack|conc_plates/.test(o.material.name || '')) R.roadMats.push([o.material, o.material.roughness, o.material.metalness]); });
-  if (tr.theme.night) { const sl = new THREE.SpotLight(0xfff1d6, 90, 70, .5, .7, 1.4); sl.position.set(0, .75, 1.7); sl.target.position.set(0, -.6, 16); me.root.add(sl, sl.target); me.spot = sl; me.spotK = 1; }
+  setupLights();
   R.lit = !!tr.theme.night || def.theme === 'coast'; for (const c of R.cars) c.setLights(R.lit);
 }
 function raceExtras(dt) {
@@ -520,12 +546,12 @@ function raceExtras(dt) {
     scene.fog.density = baseFog * (1 + .5 * R.wet); sun.intensity = baseSun * (1 - .35 * R.wet); hemi.intensity = baseHemi * (1 - .2 * R.wet); }
   R.haze += ((R.ev.cur && R.ev.cur.type === 'haze' ? 1 : 0) - R.haze) * Math.min(1, dt * .8); scene.fog.density = baseFog * (1 + .5 * R.wet) * (1 + 4.5 * R.haze);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
-  R.ambient.update(dt, camera, R.wet, sc);
+  ambAt.position.set(R.attract ? camera.position.x : cam.look.x, (R.attract ? camera.position.y : cam.look.y + 7), R.attract ? camera.position.z : cam.look.z); R.ambient.update(dt, ambAt, R.wet, sc);   // dust and rain live around the cars, where the beams are
   // --- sun disc + post-processing drivers
   const d = THEMES[tr.def.theme].sunDir, l = Math.hypot(d[0], d[1], d[2]);
   if (sunDisc) { sunDisc.position.set(camera.position.x + d[0] / l * 3400, camera.position.y + d[1] / l * 3400, camera.position.z + d[2] / l * 3400); sunDisc.lookAt(camera.position); sunDisc.visible = R.wet < .5; }
   if (!R.lit && R.wet > .3) { R.lit = true; for (const c of R.cars) c.setLights(true); }      // lights come on in the rain
-  if (me.spot) me.spot.intensity = 90 * (me.spotK ?? 1);
+  updateLights(dt);
   if (tr.cullables.length) { const D = (gfx === 'high' ? 340 : gfx === 'medium' ? 250 : 180), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) c.m.visible = (c.x - cx) ** 2 + (c.z - cz) ** 2 < D * D; }   // draw distance
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
