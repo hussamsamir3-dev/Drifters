@@ -337,3 +337,6 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 
 .left{padding-bottom:76px}
 #menu[dir=rtl] .garage{justify-self:start}
+
+#modeSeg{grid-template-columns:repeat(3,1fr)}#modeSeg button{padding:8px 4px}
+#hTow{font-weight:900;letter-spacing:.04em}

@@ -18,6 +18,8 @@ export const AR = {
   'Paused': 'إيقاف مؤقت', 'Resume': 'استمر', 'Restart': 'أعد', 'Back to menu': 'القائمة', 'Menu': 'القائمة', 'Race again': 'سباق آخر', 'Next round': 'الجولة التالية', 'Finish': 'إنهاء',
   'Winner': 'الفائز', 'Standings': 'الترتيب', 'Grand Prix champion': 'بطل الجائزة الكبرى', 'Grand Prix finished': 'انتهت الجائزة الكبرى',
   'Four rounds, eight drivers, points for every finish. The third round is wet.': 'أربع جولات وثمانية سائقين ونقاط لكل مركز. الجولة الثالثة تحت المطر.',
+  'Knockout': 'الإقصاء', 'Endurance': 'التحمل', 'Start knockout': 'ابدأ الإقصاء', 'Start endurance': 'ابدأ التحمل', 'is out': 'خرج', 'Knocked out': 'تم إقصاؤك', 'Side skirts': 'جوانب', 'Roof scoop': 'فتحة السقف', 'Exhaust tips': 'عوادم', 'Traction control': 'منع الانزلاق', 'Steering': 'التوجيه', 'Calm': 'هادئ', 'Sharp': 'حاد',
+  'Burnout': 'حرق إطارات', 'Wheelspin': 'دوران العجلات', 'Oversteer': 'انزلاق خلفي', 'Understeer': 'انزلاق أمامي', 'Slipstream': 'سحب هوائي',
   'Go': 'انطلق', 'Final lap': 'اللفة الأخيرة', 'Wrong way': 'اتجاه خاطئ', 'Repaired': 'تم الإصلاح', 'Combo lost': 'ضاعت السلسلة',
   'Lights out. Clean first corner.': 'انطفأت الأضواء. خُذ المنعطف الأول بهدوء.', 'Last lap. Everything you have.': 'اللفة الأخيرة. أعطِ كل ما عندك.',
   'Tyres are nearly gone. Box at the blue pit.': 'الإطارات انتهت تقريباً. ادخل الصيانة.', 'Fuel is low. Box this lap or you will not make it.': 'الوقود قليل. ادخل الصيانة هذه اللفة.',

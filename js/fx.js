@@ -89,3 +89,21 @@ export class Ambient {
   }
   dispose() { for (const o of [this.dust, this.rain]) { this.scene.remove(o); o.geometry.dispose(); o.material.dispose(); } }
 }
+
+// Parts knocked off a car: they tumble, bounce, come to rest on the track and stay there for a while.
+export class Debris {
+  constructor(scene, max = 40) { this.scene = scene; this.items = []; this.max = max; }
+  spawn(geo, mat, pos, quat, scale, vel) {
+    if (this.items.length >= this.max) this.scene.remove(this.items.shift().m);
+    const m = new THREE.Mesh(geo, mat); m.position.copy(pos); if (quat) m.quaternion.copy(quat); if (scale) m.scale.copy(scale); m.castShadow = true; this.scene.add(m);
+    this.items.push({ m, v: vel, w: new THREE.Vector3((Math.random() - .5) * 12, (Math.random() - .5) * 12, (Math.random() - .5) * 12), life: 35, rest: false });
+  }
+  update(dt, track) {
+    for (let i = this.items.length - 1; i >= 0; i--) { const it = this.items[i], m = it.m;
+      if (!it.rest) { it.v.y -= 22 * dt; m.position.addScaledVector(it.v, dt); m.rotation.x += it.w.x * dt; m.rotation.y += it.w.y * dt; m.rotation.z += it.w.z * dt;
+        const g = track.height(m.position.x, m.position.z) + .07;
+        if (m.position.y < g) { m.position.y = g; if (Math.abs(it.v.y) < 2) { it.rest = true; m.rotation.x = Math.round(m.rotation.x / Math.PI) * Math.PI; m.rotation.z = Math.round(m.rotation.z / Math.PI) * Math.PI; } else { it.v.y *= -.36; it.v.x *= .62; it.v.z *= .62; it.w.multiplyScalar(.55); } } }
+      it.life -= dt; if (it.life < 0) { this.scene.remove(m); this.items.splice(i, 1); } }
+  }
+  dispose() { for (const it of this.items) this.scene.remove(it.m); this.items = []; }
+}

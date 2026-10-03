@@ -48,7 +48,7 @@ function mats(color) {
 export class Car {
   constructor(spec, color = spec.color, name = 'Driver', up, look, tune) {
     this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
-    this.fuel = 1; this.burn = 1; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
+    this.fuel = 1; this.fuelK = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
     this.dirt = 0; this.dirtShown = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
     const proto = protos[spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
@@ -105,11 +105,11 @@ export class Car {
     const beta = speed > 4 && vf > 0 ? Math.atan2(vl, vf) : 0;
     let target = inp.steer * TUNE.steer.lock / (1 + speed * TUNE.steer.speedK);
     const ab = Math.abs(beta);
-    const K = this.assistK;
+    this.shock = Math.max(0, this.shock - dt); const K = this.shock > 0 ? 0 : this.assistK;   // a big hit knocks the aids out for a moment
     if (K > 0 && vf > 5) { target = target * (1 - K * clamp((ab - .3) * 1.6, 0, .8)) + K * clamp(beta * .75, -.5, .5); }
     if (speed > 3) target += (D.left - D.right) * .05 + D.front * .02 * Math.sin(this.x * .7 + this.z * .9);   // bent suspension pulls and shimmies
     target = clamp(target, -.62, .62);
-    const sr = (inp.steer === 0 ? TUNE.steer.returnRate : TUNE.steer.rate / (1 + speed * TUNE.steer.rateSpeedK)) * dt;
+    const sr = (inp.steer === 0 ? TUNE.steer.returnRate : TUNE.steer.rate * this.steerK / (1 + speed * TUNE.steer.rateSpeedK)) * dt;
     this.steer += clamp(target - this.steer, -sr, sr);
 
     // axle loads with longitudinal weight transfer + downforce
@@ -121,6 +121,7 @@ export class Car {
     // engine, brakes, reverse
     let thr = live ? inp.throttle : 0, brk = live ? inp.brake : 1;
     if (this.fuel <= 0) thr = 0;
+    const burn = this.burn = live && thr > .8 && brk > .5 && speed < 5 && s.drive !== 'fwd';     // brake + throttle from rest: a burnout
     if (this.inPit) { const lim = TUNE.pit.limit; if (vf > lim + .5) { thr = 0; brk = Math.max(brk, .55); } else if (vf > lim - 1.2) thr = Math.min(thr, .12); }   // pit-lane speed limiter
     const rev = live && brk > 0 && thr === 0 && vf < 1.2;
     const nit = this.nitroOn = !!(inp.nitro && !this.noNitro && this.nitro > 0 && thr > 0 && live && vf > 3);
@@ -128,25 +129,30 @@ export class Car {
     const vmax = s.top * TN.top * (1 + .04 * U.eng) * (nit ? 1.16 : 1) * (gr > .5 ? .55 : 1) * (1 - .1 * (D.front + D.rear));
     if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));     // drift-angle hold: ease the power before a slide becomes a spin
     let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * (1 - .4 * D.front) * (nit ? 1.5 : 1) * Math.min(1, 16 / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 2, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
+    Fdrive *= TUNE.enginePower; if (burn) Fdrive *= .3;
+    if (this._thr > .7 && thr < .1 && this.rpm > .55) this.backfire = .14; this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
     const bf = rev ? 0 : Math.min(brk * s.brake * m * g, m * Math.abs(vf) / dt);
     this.braking = brk > .1 && !rev;
     const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? .42 : 0;
     const capF = muF * gripK * Nf * ltF, capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR;
+    this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
     const vden = Math.max(Math.abs(vf), 3), vlr = vl - b * this.r;
     const aF = Math.atan2(vl + a * this.r, vden) - this.steer * sg;
-    const FyF = -Math.sqrt(Math.max(capF * capF - (FxF > 0 ? FxF * TY.driveShare : FxF * TY.brakeShare) ** 2, capF * capF * .15)) * Math.sin(TY.frontC * Math.atan(TY.frontB * aF));
+    const FyF = -Math.sqrt(Math.max(capF * capF - (FxF > 0 ? FxF * TY.driveShare : FxF * (this.abs ? TY.brakeShare : 1.12)) ** 2, capF * capF * .15)) * Math.sin(TY.frontC * Math.atan(TY.frontB * aF));
     let FyR; this.wspin = 0; this.locked = false;
     if (inp.hand && live && speed > 1) {          // handbrake: locked rears slide with kinetic friction
       const vm = Math.hypot(vf, vlr) || 1, fk = capR * .7;
       FxR = -fk * vf / vm; FyR = -fk * vlr / vm; this.locked = true; this.slipR = 1;
     } else {
+      if (this.tc && !burn && FxR > capR * .96) FxR = capR * .96;                 // traction control trims the power to what the tyres can use
       if (Math.abs(FxR) > capR) { this.wspin = (Math.abs(FxR) - capR) / capR; FxR = Math.sign(FxR) * capR; }
       const aR = Math.atan2(vlr, vden);
-      FyR = -Math.sqrt(Math.max(capR * capR - FxR * FxR * s.loose * TUNE.powerSlide, capR * capR * .12)) * Math.sin(TY.rearC * Math.atan(TY.rearB * aR));
+      FyR = -Math.sqrt(Math.max(capR * capR - FxR * FxR * s.loose * TUNE.powerSlide * (this.tc ? .45 : 1), capR * capR * .12)) * Math.sin(TY.rearC * Math.atan(TY.rearB * aR));
       this.slipR = Math.abs(aR);
     }
+    if (burn) { this.wspin = Math.max(this.wspin, 1.2); FyR *= .3; }
     this.aF = aF; this.useF = Math.hypot(FxF, FyF) / (capF || 1); this.useR = Math.hypot(FxR, FyR) / (capR || 1);
     const cd = Math.cos(this.steer), sd = Math.sin(this.steer);
     const ax = (FxR + FxF * cd - FyF * sd - .25 * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.03 + gr * TUNE.surface.grassDrag) * vf - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
@@ -158,7 +164,7 @@ export class Car {
     if (!live) { this.vx = this.vz = this.r = 0; }
     this.th += this.r * dt; this.x += this.vx * dt; this.z += this.vz * dt;
     this.axS += (ax - this.axS) * Math.min(1, dt * 8); this.ayS += (ay - this.ayS) * Math.min(1, dt * 8);
-    if (live) this.fuel = Math.max(0, this.fuel - dt * this.burn * (TUNE.fuel.idle + thr * (.35 + .65 * this.rpm)) / TUNE.fuel.fullThrottleSeconds);
+    if (live) this.fuel = Math.max(0, this.fuel - dt * this.fuelK * (TUNE.fuel.idle + thr * (.35 + .65 * this.rpm)) / TUNE.fuel.fullThrottleSeconds);
     if (live) this.tyre = Math.max(0, this.tyre - dt * this.wear * (TY.wear.base * Math.min(1, speed / 25) + Math.min(this.slipR, .8) * .011 + this.wspin * .008 + (this.locked ? .03 : 0) + gr * .002));
     if (!nit && live) this.nitro = Math.min(1, this.nitro + dt * (.018 + (this.drifting ? .09 : 0)));
     this.drifting = Math.abs(this.beta) > .22 && speed > 9 && vf > 0 && gr < .6;
@@ -217,8 +223,8 @@ export class Car {
       if (!kin) { o.x -= nx * pen * ia / (ia + ib); o.z -= nz * pen * ia / (ia + ib); }
       const vn = (this.vx - o.vx) * nx + (this.vz - o.vz) * nz; if (vn >= 0) continue;
       const j = -1.08 * vn / (ia + ib);
-      this.vx += j * nx * ia; this.vz += j * nz * ia; this.r += (Math.cos(this.th) * za * nx - Math.sin(this.th) * za * nz) * j * .35 / this.I;
-      if (!kin) { o.vx -= j * nx * ib; o.vz -= j * nz * ib; o.r -= (Math.cos(o.th) * zb * nx - Math.sin(o.th) * zb * nz) * j * .35 / o.I; }
+      this.vx += j * nx * ia; this.vz += j * nz * ia; this.r += (Math.cos(this.th) * za * nx - Math.sin(this.th) * za * nz) * j * 1.1 / this.I;
+      if (!kin) { o.vx -= j * nx * ib; o.vz -= j * nz * ib; o.r -= (Math.cos(o.th) * zb * nx - Math.sin(o.th) * zb * nz) * j * 1.1 / o.I; }
       if (-vn > hit) { hit = -vn; this.hitX = (ax + bx) / 2; this.hitZ = (az + bz) / 2; this.hitL = this.toLocal(this.hitX, this.hitZ); this.hitN = [nx, nz]; o.hitX = this.hitX; o.hitZ = this.hitZ; o.hitL = o.toLocal(this.hitX, this.hitZ); o.hitN = [-nx, -nz]; }
     }
     return hit;
@@ -227,14 +233,14 @@ export class Car {
   // Bodywork options. Every part is positioned from the car's own geometry (rear deck height, nose height, body width),
   // so a wing sits on the boot lid and a splitter sits under the bumper whatever the model.
   dress(look) {
-    const L = this.look = Object.assign({ wing: 0, split: 0, rim: 0, tint: 0, glow: 0 }, look || {}), ch = this.chassis;
+    const L = this.look = Object.assign({ wing: 0, split: 0, rim: 0, tint: 0, glow: 0, skirt: 0, scoop: 0, pipe: 0 }, look || {}), ch = this.chassis; let part = 'wing';
     if (this.addons) ch.remove(this.addons); const A = this.addons = new THREE.Group(); ch.add(A);
     let minZ = 1e9, maxZ = -1e9, maxX = 0; const V = [];
     for (const m of this.bodyMeshes) { const o = m.userData.orig; for (let i = 0; i < o.length; i += 3) { V.push(o[i], o[i + 1], o[i + 2]); if (o[i + 2] < minZ) minZ = o[i + 2]; if (o[i + 2] > maxZ) maxZ = o[i + 2]; if (o[i] > maxX) maxX = o[i]; } }
     const top = (z0, z1, xr) => { let y = 0; for (let i = 0; i < V.length; i += 3) if (V[i + 2] >= z0 && V[i + 2] <= z1 && Math.abs(V[i]) < xr && V[i + 1] > y) y = V[i + 1]; return y; };
     const low = (z0, z1) => { let y = 9; for (let i = 0; i < V.length; i += 3) if (V[i + 2] >= z0 && V[i + 2] <= z1 && V[i + 1] < y) y = V[i + 1]; return y; };
     const dark = new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: .45, metalness: .5 }), W = maxX * 2;
-    const add = (w, h, d, mat, x, y, z) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); me.position.set(x, y, z); me.castShadow = true; A.add(me); return me; };
+    const add = (w, h, d, mat, x, y, z) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); me.position.set(x, y, z); me.castShadow = true; me.userData.part = part; A.add(me); return me; };
     if (L.wing) {
       const deck = top(minZ + .08, minZ + .5, maxX * .75), z = minZ + .26;
       if (L.wing === 1) add(W * .8, .06, .2, this.m.paint, 0, deck + .02, minZ + .14).rotation.x = .25;                  // ducktail lip on the boot edge
@@ -243,7 +249,12 @@ export class Car {
         for (const sx of [-.27, .27]) add(.04, hi, .11, dark, sx * W, deck + hi / 2, z + .03);
         for (const sx of [-.5, .5]) add(.025, L.wing === 2 ? .15 : .24, dep + .06, dark, sx * wd, deck + hi + .02, z); }
     }
+    part = 'split';
     if (L.split) { const y = low(maxZ - .3, maxZ); add(W * .88, .03, .34, dark, 0, y + .015, maxZ - .1); for (const sx of [-.46, .46]) add(.03, .09, .2, dark, sx * W * .88, y + .05, maxZ - .14); }
+    part = 'skirt'; if (L.skirt) { const y = low(minZ + .8, maxZ - .8); for (const sx of [-1, 1]) add(.07, .1, (maxZ - minZ) * .46, dark, sx * (maxX - .02), y + .07, (minZ + maxZ) / 2); }
+    part = 'scoop'; if (L.scoop) { const ry = top(-.5, .3, maxX * .45); add(.36, .09, .52, dark, 0, ry + .035, -.12); add(.3, .05, .06, this.m.paint, 0, ry + .06, .15); }
+    part = 'pipe'; if (L.pipe) { const chrome = new THREE.MeshStandardMaterial({ color: 0xd8dade, metalness: 1, roughness: .2 }), y = low(minZ, minZ + .3); for (const sx of [-.24, -.16, .16, .24]) add(.075, .075, .2, chrome, sx * W, y + .13, minZ - .03); }
+    part = 'glow';
     if (L.glow) { const g = new THREE.Mesh(new THREE.PlaneGeometry(W * .92, (maxZ - minZ) * .82), new THREE.MeshBasicMaterial({ color: new THREE.Color(GLOWS[L.glow]).multiplyScalar(1.8), transparent: true, opacity: .6, depthWrite: false, side: THREE.DoubleSide })); g.rotation.x = -Math.PI / 2; g.position.set(0, low(minZ, maxZ) + .03, (minZ + maxZ) / 2); A.add(g); }
     const rimM = L.rim ? new THREE.MeshStandardMaterial({ color: RIMS[L.rim], metalness: .9, roughness: .26 }) : null;
     for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
@@ -256,8 +267,11 @@ export class Car {
   // ---- damage: zone health + real dents in the bodywork around the point of impact
   damage(power) {
     const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale; if (amt <= 0 || !this.hitL) return 0;
+    if (power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
     D[zone] = Math.min(1, D[zone] + amt);
+    // parts tear off: a rear hit takes the wing and exhaust tips, a front hit the splitter, a side hit the skirts
+    if (amt > .07 && this.addons) { const want = zone === 'rear' ? ['wing', 'pipe'] : zone === 'front' ? ['split'] : ['skirt']; for (const c of this.addons.children) if (want.includes(c.userData.part) && !c.userData.gone) { c.userData.gone = true; this.lost.push(c); } }
     const sn = Math.sin(this.th), cs = Math.cos(this.th), n = this.hitN, dx = n[0] * cs - n[1] * sn, dz = n[0] * sn + n[1] * cs, R = 1.25, depth = Math.min(.3, amt * 2.4);
     for (const mesh of this.bodyMeshes) {
       const a = mesh.geometry.attributes.position, p = a.array, o = mesh.userData.orig; let touched = false;
@@ -275,7 +289,7 @@ export class Car {
   }
   get health() { const D = this.dmg; return 1 - (D.front + D.rear + D.left + D.right) / 4; }
   repair() {
-    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0;
+    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.dress(this.look);
     for (const mesh of this.bodyMeshes) { mesh.geometry.attributes.position.array.set(mesh.userData.orig); mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.computeVertexNormals(); }
   }
 
@@ -334,6 +348,9 @@ export class Car {
       const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x;
       if (Math.random() < .35 * n) fx.smoke.emit(wx, this.y + .15, wz, this.vx * .3, .6 + Math.random(), this.vz * .3, .6, .6, 2.6, .93, .93, .95, .16);
     }
+    if (this.wspinF > .15) for (let i = 0; i < 2; i++) { const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; for (let k = 0; k < n; k++) if (Math.random() < .6) fx.smoke.emit(wx, this.y + .15, wz, (Math.random() - .5) * 2, .8 + Math.random(), (Math.random() - .5) * 2, 1, .8, 3, .93, .93, .95, .28); }
+    if (this.burn) for (let i = 2; i < 4; i++) { const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; for (let k = 0; k < n * 2; k++) fx.smoke.emit(wx + (Math.random() - .5) * .5, this.y + .2, wz + (Math.random() - .5) * .5, -sn * 2 + (Math.random() - .5) * 3, 1 + Math.random() * 2, -cs * 2 + (Math.random() - .5) * 3, 1.6 + Math.random(), 1.1, 4.2, .96, .96, .97, .4); }
+    if (this.backfire > 0 && Math.random() < .5) { const ex = this.x - sn * (this.zr + .15), ez = this.z - cs * (this.zr + .15); fx.glow.emit(ex, this.y + .4, ez, this.vx - sn * 5, .5, this.vz - cs * 5, .1, .45, -2, 1, .55, .15, 1); }
     const wet = track.wet || 0;
     if (wet > .15 && sp > 8) for (let i = 2; i < 4; i++) {                 // spray off wet tarmac
       const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x;

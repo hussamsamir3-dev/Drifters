@@ -28,7 +28,7 @@
   <section class="left">
     <div id="tabCareer" hidden><button id="chPrev"></button><button id="chNext"></button><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p><ol id="events"></ol></div>
     <div id="tabQuick">
-      <div class="seg wide four" id="modeSeg"><button data-mode="race" data-t>Race</button><button data-mode="gp" data-t>Grand Prix</button><button data-mode="trial" data-t>Time trial</button><button data-mode="drift" data-t>Drift</button></div>
+      <div class="seg wide" id="modeSeg"><button data-mode="race" data-t>Race</button><button data-mode="gp" data-t>Grand Prix</button><button data-mode="elim" data-t>Knockout</button><button data-mode="endu" data-t>Endurance</button><button data-mode="trial" data-t>Time trial</button><button data-mode="drift" data-t>Drift</button></div>
       <div class="seg wide two" id="rulesSeg"><button data-r="circuit" data-t>Circuit rules</button><button data-r="arcade" data-t>Arcade rules</button></div>
       <button id="daily" class="daily"><small data-t>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button>
       <div id="gpBox" class="card gp" hidden></div>
@@ -48,7 +48,7 @@
       <label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label>
       <label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label>
       <label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label>
-      <div class="row chips"><button id="assistBtn" class="chip">Assist</button><button id="gfxBtn" class="chip">Graphics</button><button id="gasBtn" class="chip" hidden>Auto gas</button><button id="muteBtn" class="chip">Sound on</button><button id="resetBtn" class="chip danger" data-t>Reset progress</button></div>
+      <div class="row chips"><button id="assistBtn" class="chip">Assist</button><button id="tcBtn" class="chip">TC</button><button id="absBtn" class="chip">ABS</button><button id="sensBtn" class="chip">Steering</button><button id="gfxBtn" class="chip">Graphics</button><button id="gasBtn" class="chip" hidden>Auto gas</button><button id="muteBtn" class="chip">Sound on</button><button id="resetBtn" class="chip danger" data-t>Reset progress</button></div>
     </div>
 
     <div class="card track">
