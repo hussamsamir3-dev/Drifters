@@ -6,21 +6,32 @@ import { getAsset } from './assets.js';
 const REF_RPM = 3000;
 // Loader is layered on purpose: an engine is a list of loops with the rpm they were made at. Today each has one loop;
 // real idle / mid / high-rpm or on-load / off-load recordings can be added here later without touching the mixer.
-export const ENGINE_SETS = Object.fromEntries(['01_Turbo_Inline4', '02_Boxer_Flat4', '03_Race_Inline6', '04_Crossplane_V8', '05_Race_V10'].map(n => [n, { label: n.slice(3).replace(/_/g, ' '), trim: 1, loops: [{ file: n + '_Loop.wav', rpm: REF_RPM }] }]));
+const one = n => ({ label: n.slice(3).replace(/_/g, ' '), trim: 1, loops: [{ file: n + '_Loop.wav', rpm: REF_RPM }] });
+const four = (n, trim) => ({ label: n.slice(3).replace(/_/g, ' ') + ' (4 rpm layers)', trim, loops: [1200, 2400, 4200, 6400].map(rpm => ({ file: n + '_' + rpm + '.wav', rpm })) });
+export const ENGINE_SETS = { '01_Turbo_Inline4': one('01_Turbo_Inline4'), '02_Boxer_Flat4': one('02_Boxer_Flat4'), '03_Race_Inline6': one('03_Race_Inline6'), '04_Crossplane_V8': one('04_Crossplane_V8'),
+  '05_FlatPlane_V8': four('05_FlatPlane_V8', 1.5), '06_Race_V12': four('06_Race_V12', 1.55), '07_TwinTurbo_V6': four('07_TwinTurbo_V6', 1.45) };
+const TYRES = { squeal: 'tyre_squeal.wav', scrub: 'tyre_scrub.wav', grass: 'surface_grass.wav', gravel: 'surface_gravel.wav', kerb: 'kerb_rumble.wav' };
 const SHOTS = { pop: '06_Shift_Exhaust_SinglePop.wav', crackle: '07_Shift_Exhaust_CrackleBurst.wav' };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
-class EngineVoice {                       // looping source -> its own fade gain -> voice level -> low-pass -> engine bus
+// One voice = every rpm layer of one engine, all looping together from the moment the engine starts. Engine speed moves the
+// playback rate of each layer and cross-fades between the two layers nearest the current rpm, so no layer is ever stretched far
+// from the speed it was made at. Nothing is restarted for throttle, rpm or gear changes.
+class EngineVoice {
   constructor(au) { this.au = au; const c = au.ctx; this.level = c.createGain(); this.level.gain.value = 0; this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 1500; this.lp.Q.value = .5; this.level.connect(this.lp); this.lp.connect(au.engBus); this.cur = null; this.name = ''; }
-  start(name, rate = .4) {                // crossfades from whatever was playing over ~200 ms
-    const au = this.au, c = au.ctx, buf = au.buf[ENGINE_SETS[name].loops[0].file]; if (!buf) return false; this.fadeOut(.2);
-    const src = c.createBufferSource(), g = c.createGain(), t = c.currentTime; src.buffer = buf; src.loop = true; src.loopStart = 0; src.loopEnd = buf.duration; src.playbackRate.value = rate;
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(ENGINE_SETS[name].trim, t + .2); src.connect(g); g.connect(this.level); src.start(t, Math.random() * buf.duration);
-    this.cur = { src, g }; this.name = name; au.stats.starts++; au.stats.live++; return true;
+  start(name, rate = .4) {
+    const au = this.au, c = au.ctx, set = ENGINE_SETS[name]; if (!set || !set.loops.every(l => au.buf[l.file])) return false; this.fadeOut(.2);
+    const fade = c.createGain(), t = c.currentTime; fade.gain.setValueAtTime(0, t); fade.gain.linearRampToValueAtTime(set.trim, t + .2); fade.connect(this.level);
+    const layers = set.loops.map((l, i) => { const buf = au.buf[l.file], src = c.createBufferSource(), g = c.createGain(); src.buffer = buf; src.loop = true; src.loopStart = 0; src.loopEnd = buf.duration; g.gain.value = i ? 0 : 1; src.connect(g); g.connect(fade); src.start(t, Math.random() * buf.duration); au.stats.live++; return { src, g, rpm: l.rpm }; });
+    this.cur = { layers, fade }; this.name = name; au.stats.starts++; return true;
   }
-  fadeOut(sec = .25) { const k = this.cur; if (!k) return; const t = this.au.ctx.currentTime; k.g.gain.cancelScheduledValues(t); k.g.gain.setValueAtTime(k.g.gain.value, t); k.g.gain.linearRampToValueAtTime(0, t + sec); k.src.stop(t + sec + .05); k.src.onended = () => { k.src.disconnect(); k.g.disconnect(); this.au.stats.live--; }; this.cur = null; this.name = ''; }
-  // rpm sets pitch only; load sets loudness and brightness only
-  set(rpm, load, vol) { if (!this.cur) return; const t = this.au.ctx.currentTime, rate = clamp(rpm / REF_RPM, .25, 3.4); this.cur.src.playbackRate.setTargetAtTime(rate, t, .035); this.level.gain.setTargetAtTime(vol * (.16 + .39 * load), t, .06); this.lp.frequency.setTargetAtTime(1200 + load * 3800 + Math.min(rate, 2.5) * 400, t, .07); }
+  fadeOut(sec = .25) { const k = this.cur; if (!k) return; const t = this.au.ctx.currentTime; k.fade.gain.cancelScheduledValues(t); k.fade.gain.setValueAtTime(k.fade.gain.value, t); k.fade.gain.linearRampToValueAtTime(0, t + sec); for (const l of k.layers) { l.src.stop(t + sec + .05); l.src.onended = () => { l.src.disconnect(); l.g.disconnect(); this.au.stats.live--; }; } setTimeout(() => k.fade.disconnect(), (sec + .2) * 1000); this.cur = null; this.name = ''; }
+  set(rpm, load, vol) {      // rpm sets pitch (and which layers are heard); load sets loudness and brightness only
+    if (!this.cur) return; const t = this.au.ctx.currentTime, L = this.cur.layers, n = L.length; let a = 0; while (a < n - 2 && rpm > L[a + 1].rpm) a++;
+    const u = n > 1 ? clamp(Math.log(rpm / L[a].rpm) / Math.log(L[a + 1].rpm / L[a].rpm), 0, 1) : 0;
+    L.forEach((l, i) => { l.src.playbackRate.setTargetAtTime(clamp(rpm / l.rpm, n > 1 ? .45 : .25, n > 1 ? 2.4 : 3.4), t, .035); l.g.gain.setTargetAtTime(n === 1 ? 1 : i === a ? Math.cos(u * 1.5708) : i === a + 1 ? Math.sin(u * 1.5708) : 0, t, .03); });
+    this.level.gain.setTargetAtTime(vol * (.16 + .39 * load), t, .06); this.lp.frequency.setTargetAtTime(1300 + load * 4200 + clamp(rpm / 3000, 0, 2.5) * 500, t, .07);
+  }
 }
 
 export class GameAudio {
@@ -46,8 +57,10 @@ export class GameAudio {
   }
   async load() {
     this.state = 'loading';
-    try { const files = [...Object.values(ENGINE_SETS).flatMap(s => s.loops.map(l => l.file)), ...Object.values(SHOTS)];
-      await Promise.all(files.map(async f => { this.buf[f] = await this.ctx.decodeAudioData(await getAsset('audio/' + f)); })); this.state = 'ready'; }
+    try { const files = [...Object.values(ENGINE_SETS).flatMap(s => s.loops.map(l => l.file)), ...Object.values(SHOTS), ...Object.values(TYRES)];
+      await Promise.all(files.map(async f => { this.buf[f] = await this.ctx.decodeAudioData(await getAsset('audio/' + f)); })); this.state = 'ready';
+      // tyre and surface loops: always running, silent until the tyres or the surface give them something to do
+      this.ty = {}; for (const k in TYRES) { const src = this.ctx.createBufferSource(), g = this.ctx.createGain(); src.buffer = this.buf[TYRES[k]]; src.loop = true; g.gain.value = 0; src.connect(g); g.connect(this.sfx); src.start(0, Math.random()); this.ty[k] = { src, g }; } }
     catch (e) { console.warn('engine audio failed to load', e); this.state = 'error'; }
   }
   setMuted(m) { this.on = !m; if (this.el) this.music(this.musicOn); if (this.master) this.master.gain.setTargetAtTime(this.on ? .8 : 0, this.ctx.currentTime, .05); }
@@ -77,14 +90,18 @@ export class GameAudio {
     }
     this.wind.g.gain.setTargetAtTime(k * k * .22, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
     this.roll.g.gain.setTargetAtTime(Math.min(.16, k * .3) * (1 - s.dirt), t, .15);
-    // Tyres. Scrub: a low rubbery roar that rises as the tyres are loaded up, before they let go, so you can hear the grip being used.
-    // Squeal: comes in once they slide, higher with speed and when a wheel locks, lower and rougher with wheelspin. In the wet it turns to hiss.
-    const g = Math.max(0, Math.min(1, ((s.grip || 0) - .5) / .5)), dry = 1 - (s.wet || 0) * .85, sl = s.skid || 0, sp2 = Math.min(1, s.speed / 30);
-    this.skid.g.gain.setTargetAtTime((g * .1 + sl * .12) * sp2 * (1 - s.dirt), t, .08); this.skid.fl.frequency.setTargetAtTime(380 + g * 260 + sl * 240, t, .12);
-    const base = 620 + Math.min(s.speed, 60) * 7 + (s.lock || 0) * 260 - (s.spin || 0) * 170; for (const f of this.sq.f) f.frequency.setTargetAtTime(base * f.mult, t, .09);
-    this.sq.g.gain.setTargetAtTime(Math.max(sl, (s.lock || 0) * .6) * (.35 + .65 * sp2) * dry * (1 - s.dirt) * .5, t, sl > .05 ? .06 : .14);
-    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * (s.wet || 0) * sp2 * .09, t, .12);
-    this.dirt.g.gain.setTargetAtTime(s.dirt * .35, t, .1); this.brake.g.gain.setTargetAtTime(s.brake * Math.min(1, s.speed / 25) * .018, t, .05);
+    // Tyres and surfaces (sample loops). Scrub rises as the tyres are loaded, before they let go. Squeal comes in when they slide:
+    // higher with speed and a locked wheel, lower with wheelspin, mostly hiss in the wet. Grass, sand/gravel and kerbs have their own sounds.
+    const g = Math.max(0, Math.min(1, ((s.grip || 0) - .5) / .5)), dry = 1 - (s.wet || 0) * .85, sl = s.skid || 0, sp2 = Math.min(1, s.speed / 30), T = this.ty, road = 1 - s.dirt;
+    const set = (v, gain, rate, tc = .08) => { v.g.gain.setTargetAtTime(gain, t, tc); if (rate) v.src.playbackRate.setTargetAtTime(rate, t, .1); };
+    if (T) {
+      set(T.scrub, (g * .5 + sl * .35 + k * .12) * sp2 * road, .75 + k * .7 + g * .15);
+      set(T.squeal, Math.max(sl, (s.lock || 0) * .6) * (.35 + .65 * sp2) * dry * road * .34, .82 + Math.min(s.speed, 60) / 60 * .45 + (s.lock || 0) * .22 - (s.spin || 0) * .16, sl > .05 ? .06 : .14);
+      set(T.grass, s.sand ? 0 : s.dirt * (.25 + .75 * sp2) * 1.1, .8 + k * .9); set(T.gravel, (s.sand ? s.dirt : s.dirt * .25) * (.25 + .75 * sp2) * 1.6, .8 + k * .8);
+      set(T.kerb, (s.kerb || 0) * Math.min(1, s.speed / 12) * 1.6, Math.max(.4, s.speed / 13));
+      this.skid.g.gain.setTargetAtTime(0, t, .1); this.dirt.g.gain.setTargetAtTime(0, t, .1); this.sq.g.gain.setTargetAtTime(0, t, .1);
+    } else { this.skid.g.gain.setTargetAtTime((g * .1 + sl * .12) * sp2 * road, t, .08); this.dirt.g.gain.setTargetAtTime(s.dirt * .35, t, .1); this.sq.g.gain.setTargetAtTime(sl * dry * road * .4, t, .08); }   // until the samples have loaded
+    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * (s.wet || 0) * sp2 * .09, t, .12); this.brake.g.gain.setTargetAtTime(s.brake * Math.min(1, s.speed / 25) * .018, t, .05);
     this.nitro.g.gain.setTargetAtTime(s.nitro ? .16 : 0, t, .1); this.rain.g.gain.setTargetAtTime((s.rain || 0) * .1, t, .5);
   }
   // The single entry point for a completed gear change. dir +1 up, -1 down.
@@ -103,7 +120,7 @@ export class GameAudio {
     if (!this.ctx || this.quiet || this.state !== 'ready') return;
     this.rivV.forEach((v, i) => { const r = list[i]; if (!r || r.dist > 60) { if (v.cur) v.fadeOut(.4); return; } if (v.name !== r.snd) v.start(r.snd, r.rpm / REF_RPM); const a = clamp(1 - r.dist / 60, 0, 1); v.set(r.rpm, r.load, a * a * .5); });
   }
-  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); if (this.voice.cur) this.voice.fadeOut(.3); for (const v of this.rivV) if (v.cur) v.fadeOut(.3); }
+  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); if (this.ty) for (const k in this.ty) this.ty[k].g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); if (this.voice.cur) this.voice.fadeOut(.3); for (const v of this.rivV) if (v.cur) v.fadeOut(.3); }
   ambient(dt, o) { if (this.ctx) this.crowd.g.gain.setTargetAtTime(o.on ? .028 : 0, this.ctx.currentTime, .6); }
 
   // ---- developer audition: hear any engine at any rpm and load, fire shifts and pops, read the output level

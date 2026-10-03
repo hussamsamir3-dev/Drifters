@@ -61,7 +61,9 @@ function setGfx(g) {
   if (g === 'high' && !post) { try { post = new Post(renderer, scene, camera); } catch (e) { console.warn(e); gfx = 'medium'; } }
   resize();
 }
-function draw(dt) { if (gfx === 'high' && post) post.render(dt); else renderer.render(scene, camera); }
+let frameN = 0;
+function draw(dt) { frameN++; if (gfx !== 'high') { renderer.shadowMap.autoUpdate = false; if (frameN & 1) renderer.shadowMap.needsUpdate = true; } else renderer.shadowMap.autoUpdate = true;   // Medium refreshes shadows every other frame
+  if (gfx === 'high' && post) post.render(dt); else renderer.render(scene, camera); }
 addEventListener('resize', resize); setGfx(gfx);
 
 let sky = null, sunDisc = null, baseFog = 0, baseSun = 1, baseHemi = 1;
@@ -567,7 +569,7 @@ function raceExtras(dt) {
   if (sunDisc) { sunDisc.position.set(camera.position.x + d[0] / l * 3400, camera.position.y + d[1] / l * 3400, camera.position.z + d[2] / l * 3400); sunDisc.lookAt(camera.position); sunDisc.visible = R.wet < .5; }
   if (!R.lit && R.wet > .3) { R.lit = true; for (const c of R.cars) c.setLights(true); }      // lights come on in the rain
   updateLights(dt);
-  if (tr.cullables.length) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 8100 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
+  if (tr.cullables.length && frameN % 3 === 0) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 8100 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
     const u = post.u; u.tilt.value = R.attract ? .7 : CAMS[camMode].fixed ? 1 : 0; u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
@@ -590,7 +592,7 @@ function updateRace(dt) {
   setTxt('hTyreLbl', tx(me.wetTyres ? 'Wets' : 'Tyres'));
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
-    car.held = R.t < (car.holdT || 0); aiDrive(car, tr, ai, R.cars, dt);
+    car.held = !live || R.t < (car.holdT || 0); aiDrive(car, tr, ai, R.cars, dt);
     if (car !== me) ai.boost = R.rules === 'arcade' ? ((me.prog - car.prog) * tr.spacing > 50 ? 1.08 : (me.prog - car.prog) * tr.spacing < -70 ? .93 : 1) : 1;   // Arcade keeps the pack together; Professional never touches the cars
     if (car !== me && live) aiPit(car, ai, dt);
     if (car.finished) { ai.inp.throttle *= .5; }
@@ -631,7 +633,7 @@ function updateRace(dt) {
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
     audio.rivals(near.map(({ c, d }) => ({ snd: c.spec.snd, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
   audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 });
-  audio.drive({ rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
+  audio.drive({ rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, sand: tr.def.theme === 'desert', kerb: me.speed > 2 && me.wsurf.includes(1) ? 1 : 0, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
   adaptQuality(dt);
 }
 
@@ -715,6 +717,7 @@ function updateHUD(dt) {
   // leader plus the cars either side of the player
   const rows = [...new Set([0, pos - 2, pos - 1, pos].filter(i => i >= 0 && i < order.length))], key = rows.map(i => i + order[i].name).join();
   if (key !== R.orderKey && R.cars.length > 1) { R.orderKey = key; $('order').innerHTML = rows.map((i, q) => { const c = order[i]; return `<li class="${c === me ? 'me' : ''}${q && rows[q - 1] !== i - 1 ? ' gap' : ''}" style="border-left-color:${hex(c.color)}"><span>${i + 1}</span>${c.name}</li>`; }).join(''); }
+  if (frameN & 1) return;                 // the map redraws every other frame
   const c = mini.ctx; c.clearRect(0, 0, 180, 180); c.drawImage(mini.bg, 0, 0);
   c.fillStyle = '#19a7ce'; c.fillRect(R.pit.x * mini.s + mini.ox - 3.5, R.pit.z * mini.s + mini.oz - 3.5, 7, 7);
   for (const car of R.cars) { if (car === me) continue; c.fillStyle = hex(car.color); c.strokeStyle = '#17181c'; c.lineWidth = 1.5; c.beginPath(); c.arc(car.x * mini.s + mini.ox, car.z * mini.s + mini.oz, 4.5, 0, 7); c.fill(); c.stroke(); }
@@ -1031,9 +1034,12 @@ $('joinRoom').onclick = () => joinRoom($('roomCode').value.trim().toUpperCase())
 $('leaveRoom').onclick = () => leaveRoom('');
 
 // ---------------- main loop ----------------
-let last = performance.now();
+let last = performance.now(), ftAvg = 1 / 60, drsT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  // dynamic resolution: if frames are taking too long the picture is rendered slightly smaller, and it sharpens again when there is headroom
+  { const raw = Math.min(.1, Math.max(0, (now - last) / 1000)); ftAvg += (raw - ftAvg) * .04; drsT += raw;
+    if (drsT > 1.2 && gfx !== 'low') { drsT = 0; const cap = Math.min(devicePixelRatio || 1, 1.5), lo = Math.max(.6, cap * .55); if (ftAvg > 1 / 50 && pixelRatio > lo) { pixelRatio = Math.max(lo, pixelRatio - .12); resize(); } else if (ftAvg < 1 / 58 && pixelRatio < cap) { pixelRatio = Math.min(cap, pixelRatio + .06); resize(); } } }
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)) * (save.dev ? save.devScale || 1 : 1); last = now;
   if (auOn && !racing()) auTick();
   if (R) { if (!paused) { try { updateRace(dt); } catch (e) { if (!window.__errOnce) { window.__errOnce = 1; console.error('RACE ERROR ' + e.message + ' cars=' + R.cars.length + ' t=' + R.t + ' state=' + R.state + ' mode=' + R.mode + ' attract=' + R.attract + ' keys=' + Object.keys(R).slice(0, 12)); } } } }

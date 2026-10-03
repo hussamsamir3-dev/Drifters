@@ -1,51 +1,193 @@
 {
-  "origin": "Original procedural synthesis; not vehicle recordings or brand-accurate samples.",
-  "format": "Mono PCM16 WAV, 32000 Hz. WAV payloads are uncompressed; ZIP provides lossless delivery compression.",
-  "base_rpm": 3000,
-  "loop_start_seconds": 0,
-  "loop_end_seconds": 6,
+ "origin": "Original procedural synthesis; not vehicle recordings or brand-accurate samples.",
+ "format": "Mono PCM16 WAV, 32000 Hz. WAV payloads are uncompressed; ZIP provides lossless delivery compression.",
+ "base_rpm": 3000,
+ "loop_start_seconds": 0,
+ "loop_end_seconds": 6,
+ "files": [
+  {
+   "file": "01_Turbo_Inline4_Loop.wav",
+   "duration_seconds": 6.0,
+   "peak_dbfs": -2.05,
+   "rms_dbfs": -7.76
+  },
+  {
+   "file": "02_Boxer_Flat4_Loop.wav",
+   "duration_seconds": 6.0,
+   "peak_dbfs": -2.05,
+   "rms_dbfs": -8.58
+  },
+  {
+   "file": "03_Race_Inline6_Loop.wav",
+   "duration_seconds": 6.0,
+   "peak_dbfs": -2.05,
+   "rms_dbfs": -7.63
+  },
+  {
+   "file": "04_Crossplane_V8_Loop.wav",
+   "duration_seconds": 6.0,
+   "peak_dbfs": -2.05,
+   "rms_dbfs": -8.26
+  },
+  {
+   "file": "06_Shift_Exhaust_SinglePop.wav",
+   "duration_seconds": 0.85,
+   "peak_dbfs": -2.05,
+   "rms_dbfs": -20.82
+  },
+  {
+   "file": "07_Shift_Exhaust_CrackleBurst.wav",
+   "duration_seconds": 1.1,
+   "peak_dbfs": -2.05,
+   "rms_dbfs": -18.7
+  }
+ ],
+ "generated": {
+  "origin": "Procedural synthesis written for this game (synth_audio.py). Not recordings of real cars.",
+  "format": "Mono PCM16 WAV, 32000 Hz, seamless loops",
+  "engine_layers_rpm": [
+   1200,
+   2400,
+   4200,
+   6400
+  ],
   "files": [
-    {
-      "file": "01_Turbo_Inline4_Loop.wav",
-      "duration_seconds": 6.0,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -7.76
-    },
-    {
-      "file": "02_Boxer_Flat4_Loop.wav",
-      "duration_seconds": 6.0,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -8.58
-    },
-    {
-      "file": "03_Race_Inline6_Loop.wav",
-      "duration_seconds": 6.0,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -7.63
-    },
-    {
-      "file": "04_Crossplane_V8_Loop.wav",
-      "duration_seconds": 6.0,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -8.26
-    },
-    {
-      "file": "05_Race_V10_Loop.wav",
-      "duration_seconds": 6.0,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -7.18
-    },
-    {
-      "file": "06_Shift_Exhaust_SinglePop.wav",
-      "duration_seconds": 0.85,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -20.82
-    },
-    {
-      "file": "07_Shift_Exhaust_CrackleBurst.wav",
-      "duration_seconds": 1.1,
-      "peak_dbfs": -2.05,
-      "rms_dbfs": -18.7
-    }
+   {
+    "file": "05_FlatPlane_V8_1200.wav",
+    "duration_seconds": 6.0,
+    "rpm": 1200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -12.88,
+    "note": "engine layer"
+   },
+   {
+    "file": "05_FlatPlane_V8_2400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 2400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.79,
+    "note": "engine layer"
+   },
+   {
+    "file": "05_FlatPlane_V8_4200.wav",
+    "duration_seconds": 3.0,
+    "rpm": 4200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.06,
+    "note": "engine layer"
+   },
+   {
+    "file": "05_FlatPlane_V8_6400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 6400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -9.15,
+    "note": "engine layer"
+   },
+   {
+    "file": "06_Race_V12_1200.wav",
+    "duration_seconds": 6.0,
+    "rpm": 1200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -13.07,
+    "note": "engine layer"
+   },
+   {
+    "file": "06_Race_V12_2400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 2400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.83,
+    "note": "engine layer"
+   },
+   {
+    "file": "06_Race_V12_4200.wav",
+    "duration_seconds": 3.0,
+    "rpm": 4200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.42,
+    "note": "engine layer"
+   },
+   {
+    "file": "06_Race_V12_6400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 6400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -9.89,
+    "note": "engine layer"
+   },
+   {
+    "file": "07_TwinTurbo_V6_1200.wav",
+    "duration_seconds": 6.0,
+    "rpm": 1200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -12.28,
+    "note": "engine layer"
+   },
+   {
+    "file": "07_TwinTurbo_V6_2400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 2400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.24,
+    "note": "engine layer"
+   },
+   {
+    "file": "07_TwinTurbo_V6_4200.wav",
+    "duration_seconds": 3.0,
+    "rpm": 4200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -10.05,
+    "note": "engine layer"
+   },
+   {
+    "file": "07_TwinTurbo_V6_6400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 6400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -8.76,
+    "note": "engine layer"
+   },
+   {
+    "file": "tyre_squeal.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -7.72,
+    "note": "tyre sliding on asphalt"
+   },
+   {
+    "file": "tyre_scrub.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -15.86,
+    "note": "loaded tyre / rolling on asphalt"
+   },
+   {
+    "file": "surface_grass.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -22.03,
+    "note": "tyres on grass"
+   },
+   {
+    "file": "surface_gravel.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -31.05,
+    "note": "tyres on sand or gravel"
+   },
+   {
+    "file": "kerb_rumble.wav",
+    "duration_seconds": 1.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -28.05,
+    "note": "kerb serrations; play faster with speed"
+   }
   ]
+ }
 }

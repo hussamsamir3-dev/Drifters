@@ -155,6 +155,9 @@ function addStart(track) {
   });
   const beam = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 3, 1.3, .5), [steel, steel, steel, steel, new THREE.MeshStandardMaterial({ map: sign, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: track.theme.night ? .9 : .15 }), new THREE.MeshStandardMaterial({ map: sign })]);
   beam.position.y = 7.3; beam.castShadow = true; g.add(beam);
+  // painted grid boxes for the first twelve starting slots
+  const gm = new THREE.MeshBasicMaterial({ color: 0xf2f2f2, transparent: true, opacity: .8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  for (let k = 0; k < 12; k++) { const sl = track.gridSlot(k), fx = Math.sin(sl.th), fz = Math.cos(sl.th), yy = track.height(sl.x, sl.z) + .05; for (const [w, d, ox, oz] of [[2.5, .16, 0, 2.7], [.16, 1.1, 1.17, 2.2], [.16, 1.1, -1.17, 2.2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), gm); m.rotation.set(-Math.PI / 2, 0, -sl.th); m.position.set(sl.x + fx * oz + fz * ox, yy, sl.z + fz * oz - fx * ox); track.group.add(m); } }
   track.group.add(g);
 }
 
@@ -328,12 +331,13 @@ function buildProc(track) {
 
   // -- ground
   const night = th.night, desert = def.theme === 'desert', day = def.theme === 'day';
-  const gtex = canvasTex(256, 256, (k, W, H) => noise(k, W, H, desert ? '#d8b26c' : night ? '#2a2d31' : day ? '#55a83a' : '#4f8a3c', .1, 5000), 220, 220);
+  const gtex = canvasTex(256, 256, (k, W, H) => { noise(k, W, H, desert ? '#d8b26c' : night ? '#2a2d31' : day ? '#55a83a' : '#4f8a3c', .1, 5000); if (day) { k.fillStyle = 'rgba(255,255,255,.055)'; k.fillRect(0, 0, W / 2, H); k.fillStyle = 'rgba(0,40,0,.05)'; k.fillRect(W / 2, 0, W / 2, H); } }, 220, 220);   // mowing stripes
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.02, cz); ground.receiveShadow = true; G.add(ground);
 
   // -- road, lines, kerbs
-  const atex = canvasTex(256, 256, (k, W, H) => { noise(k, W, H, night ? '#26272c' : '#51475f', .1, 9000); if (night) { k.fillStyle = 'rgba(255,255,255,.75)'; k.fillRect(W / 2 - 2, 0, 4, H * .45); } }, 1, 1);
+  const atex = canvasTex(256, 256, (k, W, H) => { noise(k, W, H, night ? '#26272c' : '#51475f', .1, 9000); { const g = k.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(255,255,255,.07)'); g.addColorStop(.3, 'rgba(0,0,0,.1)'); g.addColorStop(.5, 'rgba(0,0,0,.16)'); g.addColorStop(.7, 'rgba(0,0,0,.1)'); g.addColorStop(1, 'rgba(255,255,255,.07)'); k.fillStyle = g; k.fillRect(0, 0, W, H); }   // a darker rubbered-in groove down the middle
+    if (night) { k.fillStyle = 'rgba(255,255,255,.75)'; k.fillRect(W / 2 - 2, 0, 4, H * .45); } }, 1, 1);
   const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 12), new THREE.MeshStandardMaterial({ map: atex, roughness: .85 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
   const white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .7 });
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
