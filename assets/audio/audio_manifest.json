@@ -283,6 +283,42 @@
     "peak_dbfs": -2.05,
     "rms_dbfs": -27.13,
     "note": "kerb serrations; play faster with speed"
+   },
+   {
+    "file": "exhaust_bang_1.wav",
+    "duration_seconds": 0.7,
+    "rms_dbfs": -11.36,
+    "note": "exhaust bang on a hard upshift: deep"
+   },
+   {
+    "file": "exhaust_bang_2.wav",
+    "duration_seconds": 0.6,
+    "rms_dbfs": -14.54,
+    "note": "exhaust bang: sharper crack"
+   },
+   {
+    "file": "exhaust_bang_3.wav",
+    "duration_seconds": 0.9,
+    "rms_dbfs": -14.64,
+    "note": "exhaust bang with a run of after-pops"
+   },
+   {
+    "file": "turbo_blowoff_1.wav",
+    "duration_seconds": 0.55,
+    "rms_dbfs": -16.87,
+    "note": "turbo blow-off: clean whoosh"
+   },
+   {
+    "file": "turbo_blowoff_2.wav",
+    "duration_seconds": 0.8,
+    "rms_dbfs": -19.32,
+    "note": "turbo blow-off with compressor flutter"
+   },
+   {
+    "file": "turbo_spool.wav",
+    "duration_seconds": 3.0,
+    "rms_dbfs": -14.52,
+    "note": "turbo spool: compressor whistle and rushing air; pitch follows boost"
    }
   ]
  }

@@ -10,8 +10,8 @@ const one = n => ({ label: n.slice(3).replace(/_/g, ' '), trim: 1, loops: [{ fil
 const four = (n, trim) => ({ label: n.slice(3).replace(/_/g, ' ') + ' (4 rpm layers)', trim, loops: [1200, 2400, 4200, 6400].map(rpm => ({ file: n + '_' + rpm + '.wav', rpm })) });
 export const ENGINE_SETS = { '01_Turbo_Inline4': one('01_Turbo_Inline4'), '02_Boxer_Flat4': one('02_Boxer_Flat4'), '03_Race_Inline6': one('03_Race_Inline6'), '04_Crossplane_V8': one('04_Crossplane_V8'),
   '05_FlatPlane_V8': four('05_FlatPlane_V8', 1.5), '06_Race_V12': four('06_Race_V12', 1.55), '07_TwinTurbo_V6': four('07_TwinTurbo_V6', 1.45), '08_Race_V10': four('08_Race_V10', 1.5), '09_Rally_Inline5': four('09_Rally_Inline5', 1.5) };
-const TYRES = { sqLow: 'tyre_squeal_low.wav', sqMid: 'tyre_squeal_mid.wav', sqHigh: 'tyre_squeal_high.wav', whine: 'gear_whine.wav', limiter: 'rev_limiter.wav', scrub: 'tyre_scrub.wav', grass: 'surface_grass.wav', gravel: 'surface_gravel.wav', kerb: 'kerb_rumble.wav' };
-const SHOTS = { pop: '06_Shift_Exhaust_SinglePop.wav', crackle: '07_Shift_Exhaust_CrackleBurst.wav' };
+const TYRES = { sqLow: 'tyre_squeal_low.wav', sqMid: 'tyre_squeal_mid.wav', sqHigh: 'tyre_squeal_high.wav', whine: 'gear_whine.wav', limiter: 'rev_limiter.wav', spool: 'turbo_spool.wav', scrub: 'tyre_scrub.wav', grass: 'surface_grass.wav', gravel: 'surface_gravel.wav', kerb: 'kerb_rumble.wav' };
+const SHOTS = { pop: '06_Shift_Exhaust_SinglePop.wav', crackle: '07_Shift_Exhaust_CrackleBurst.wav', bang1: 'exhaust_bang_1.wav', bang2: 'exhaust_bang_2.wav', bang3: 'exhaust_bang_3.wav', bov1: 'turbo_blowoff_1.wav', bov2: 'turbo_blowoff_2.wav' };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
 // One voice = every rpm layer of one engine, all looping together from the moment the engine starts. Engine speed moves the
@@ -82,10 +82,14 @@ export class GameAudio {
         let vol = 1; if (t < (this.dipUntil || 0)) vol = .42;                                              // gear change: drive is cut, the note drops back, then returns
         if (s.limiter) vol *= .7 + .3 * (Math.floor(t * 22) % 2);                                           // rev limiter: a soft stutter while the cut is active
         this.voice.set(s.rpm, s.load, vol);
-        const tb = s.turbo || 0; this.spool.g.gain.setTargetAtTime(tb * s.load * s.rpmN * .035, t, .15); this.spool.fl.frequency.setTargetAtTime(1800 + s.rpmN * 3600, t, .2);
-        if (this.lastLoad > .6 && s.load < .15 && s.rpmN > .5 && t - (this.liftT || 0) > 1.3) { this.liftT = t;
-          if (tb) this.burst('highpass', 3000, .5, .28, .035 + tb * .012, 1.3, this.engBus);                // turbo: air release hiss
-          else if (sp.pops === 'crackle' && Math.random() < .6) this.shot('crackle', .5); }                  // lively exhaust: crackle on the overrun
+        // Turbo. Boost builds with load and revs and lags behind the throttle like a real compressor. The spool is a whistle whose pitch
+        // follows boost; lifting off while on boost dumps it through the blow-off valve (with flutter if you lift at high revs).
+        const tb = s.turbo || 0, want = tb ? Math.min(1, s.load * (.25 + s.rpmN * 1.1)) : 0; this.boost = (this.boost || 0) + (want - (this.boost || 0)) * (want > (this.boost || 0) ? .045 : .12);
+        if (this.ty) { this.ty.spool.g.gain.setTargetAtTime(Math.min(1, tb) * this.boost * this.boost * .2, t, .08); this.ty.spool.src.playbackRate.setTargetAtTime(.45 + this.boost * .75 + s.rpmN * .2, t, .1); }
+        this.spool.g.gain.setTargetAtTime(0, t, .1);
+        if (this.lastLoad > .6 && s.load < .15 && t - (this.liftT || 0) > .9) { this.liftT = t;
+          if (tb && this.boost > .35) { this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .3 + this.boost * .35, true); this.boost *= .2; }
+          else if (!tb && s.rpmN > .5 && sp.pops === 'crackle' && Math.random() < .6) this.shot('crackle', .5); }
         this.lastLoad += (s.load - this.lastLoad) * .5; }
     }
     this.wind.g.gain.setTargetAtTime(k * k * .3, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
@@ -111,10 +115,10 @@ export class GameAudio {
   // The single entry point for a completed gear change. dir +1 up, -1 down.
   shift(dir, load, rpmN, pops) {
     if (!this.ctx || this.quiet) return; const t = this.ctx.currentTime; this.dipUntil = t + (dir > 0 ? .13 : .09);
-    if (dir > 0 && load > .6 && rpmN > .5 && pops) this.shot(pops === 'crackle' && Math.random() < .4 ? 'crackle' : 'pop', .55);   // only on a hard, high-rpm upshift
+    if (dir > 0 && load > .6 && rpmN > .5 && pops) { this.shot('bang' + (pops === 'crackle' ? 1 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0)), .5 + rpmN * .25); if (pops === 'crackle' && Math.random() < .5) setTimeout(() => this.shot('crackle', .3, true), 120); }   // a hard, high-rev upshift lights the exhaust: a bang, and on lively cars a crackle after it   // only on a hard, high-rpm upshift
   }
-  shot(kind, vol = .5) {                   // one-shot exhaust pop: fresh source each time, cooldown, voice cap, small pitch and level variation
-    const c = this.ctx, buf = this.buf[SHOTS[kind]], t = c.currentTime; if (!buf || t - (this.shotT || 0) < .22 || this.stats.liveShots >= 3) return; this.shotT = t;
+  shot(kind, vol = .5, force = false) {                   // one-shot exhaust pop: fresh source each time, cooldown, voice cap, small pitch and level variation
+    const c = this.ctx, buf = this.buf[SHOTS[kind]], t = c.currentTime; if (!buf || (!force && t - (this.shotT || 0) < .22) || this.stats.liveShots >= 4) return; if (!force) this.shotT = t;
     const s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; s.playbackRate.value = 1 + (Math.random() - .5) * .08; const v = vol * (1 + (Math.random() - .5) * .2);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .006); g.gain.setValueAtTime(v, t + buf.duration * .7); g.gain.linearRampToValueAtTime(0, t + buf.duration); s.connect(g); g.connect(this.engBus);
     this.stats.shots++; this.stats.liveShots++; s.onended = () => { s.disconnect(); g.disconnect(); this.stats.liveShots--; }; s.start(t);
@@ -147,6 +151,6 @@ export class GameAudio {
   pickup(nitro) { if (nitro) { this.tone(520, .12, .12); this.tone(780, .2, .1); } else { this.tone(1320, .09, .08); this.tone(1760, .16, .07); } }
   wrench() { for (let i = 0; i < 5; i++) setTimeout(() => this.burst('bandpass', 3200, 6, .05, .12, 2), i * 55); }
   horn() { this.tone(392, .4, .1, 'square'); this.tone(494, .4, .08, 'square'); }
-  turboDemo() { this.burst('bandpass', 2400, 2, .8, .08, 1.2); setTimeout(() => this.burst('highpass', 3000, .5, .3, .07, 1.3), 760); }
+  turboDemo() { if (this.ty) { const t = this.ctx.currentTime, v = this.ty.spool; v.g.gain.setTargetAtTime(.2, t, .2); v.src.playbackRate.setTargetAtTime(1.2, t, .3); v.g.gain.setTargetAtTime(0, t + .8, .05); } setTimeout(() => this.shot('bov2', .6, true), 820); }
 }
 const t0 = au => au.ctx.currentTime;
