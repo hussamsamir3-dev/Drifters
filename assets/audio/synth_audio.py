@@ -32,6 +32,8 @@ ENG={
  '06_Race_V12':dict(fire=[i/12 for i in range(12)],amp=[1,.95,.98,.93,.99,.94],jit=.003,fc=1500,order=1.3,floor=.04,form=[(250,80,1.0),(640,200,.9),(1500,480,.65),(3100,1000,.32),(5200,1500,.15)],envfc=380,nf=3000,nbw=1800,noise=.2,drive=.6),
  '07_TwinTurbo_V6':dict(fire=[0,.155,.333,.49,.667,.822],amp=[1,.86,.96,.84,.98,.88],jit=.005,fc=760,order=1.25,floor=.05,form=[(150,55,1.0),(350,110,.85),(800,280,.55),(1750,600,.28),(3300,1100,.12)],envfc=200,nf=2200,nbw=1500,noise=.34,drive=.8,whine=.035,whf=6100),
 }
+ENG['08_Race_V10']=dict(fire=[i/10 for i in range(10)],amp=[1,.93,.98,.9,.96],jit=.003,fc=1400,order=1.2,floor=.045,form=[(215,70,1.0),(540,170,.95),(1250,400,.7),(2700,900,.38),(4700,1400,.18)],envfc=330,nf=2900,nbw=1700,noise=.24,drive=.7)
+ENG['09_Rally_Inline5']=dict(fire=[0,.2,.4,.6,.8],amp=[1,.8,.97,.74,.9],jit=.006,fc=820,order=1.2,floor=.05,form=[(130,50,1.0),(320,100,.9),(700,240,.6),(1500,520,.3),(2900,1000,.14)],envfc=180,nf=2100,nbw=1400,noise=.33,drive=.85,whine=.03,whf=5600)
 LAY=[(1200,60),(2400,60),(4200,105),(6400,160)]
 for name,P in ENG.items():
     for li,(rpm,cyc) in enumerate(LAY): save('%s_%d.wav'%(name,rpm),engine(rpm,cyc,P,hash(name)%1000+li),rpm,'engine layer')
@@ -39,7 +41,33 @@ for name,P in ENG.items():
 N=3*FS; f=np.fft.rfftfreq(N,1/FS); rng=np.random.default_rng(7); t=np.arange(N)/N
 def band(shape): z=np.fft.rfft(rng.normal(0,1,N))*shape; y=np.fft.irfft(z,N); return y/np.std(y)
 def slow(nb,depth): z=np.fft.rfft(rng.normal(0,1,N)); z[nb:]=0; z[0]=0; y=np.fft.irfft(z,N); return 1+depth*y/np.max(np.abs(y))
-sq=sum(g*band(1/(1+((f-f0)/bw)**2)**2)*slow(40,.5) for f0,bw,g in [(820,22,1),(1245,30,.6),(1900,45,.33),(2700,70,.15)]); save('tyre_squeal.wav',np.tanh(sq*.7)*slow(12,.25),None,'tyre sliding on asphalt')
+def squeal(f0,harm,bw,judder,jdepth,screech,seed):
+    # a sliding tyre sings: a wandering tone with harmonics (stick-slip), roughened by judder, with a second tyre a little off-pitch
+    r=np.random.default_rng(seed); out=np.zeros(N)
+    for det,gv in [(1.0,1.0),(1.067,.7),(.94,.5)]:
+        sh=np.zeros_like(f)
+        for h,g in enumerate(harm,1): sh+=g/(1+((f-f0*det*h)/(bw*h**.5))**2)**2
+        z=np.fft.rfft(r.normal(0,1,N))*sh; y=np.fft.irfft(z,N); out+=gv*y/np.std(y)
+    jz=np.fft.rfft(r.normal(0,1,N)); jz*=1/(1+((f-judder)/(judder*.35))**2); jz[0]=0; jd=np.fft.irfft(jz,N); jd=jd/np.max(np.abs(jd))
+    out=out*(1+jdepth*jd)
+    if screech: z=np.fft.rfft(r.normal(0,1,N))*(1/(1+((f-2600)/260)**2)**2+.5/(1+((f-3900)/420)**2)**2); y=np.fft.irfft(z,N); out+=screech*y/np.std(y)*slow(30,.6)
+    out+=.18*band((f/(f+300))/(1+(f/2500)**2))                      # rubber-on-road hiss underneath
+    return np.tanh(out*.5)*slow(14,.22)
+save('tyre_squeal_low.wav',squeal(430,[1,.55,.3,.14],16,34,.75,0,11),None,'slow slide: low, juddering howl')
+save('tyre_squeal_mid.wav',squeal(640,[1,.7,.42,.22,.1],13,58,.5,.12,12),None,'medium-speed slide')
+save('tyre_squeal_high.wav',squeal(880,[1,.8,.5,.3,.16,.08],11,95,.32,.4,13),None,'fast slide: high, with screech')
+gw=np.zeros(N)
+for h,g in [(1,1),(2,.5),(3,.28),(4,.12)]:
+    b=round(940*h*N/FS); gw+=g*np.sin(2*np.pi*b*np.arange(N)/N+rng.random()*6)*(1+.12*np.sin(2*np.pi*round(23*h*N/FS)*np.arange(N)/N))
+save('gear_whine.wav',gw*slow(8,.1)+.12*band(1/(1+((f-1800)/900)**2)),None,'straight-cut gear whine; pitch follows road speed')
+M2=FS; lim=np.zeros(M2); fl=np.fft.rfftfreq(M2,1/FS); r2=np.random.default_rng(5)
+for c in range(21):                                                  # ignition cut ~21 times a second: each re-fire is a hard exhaust crack
+    p0=int(c*M2/21); 
+    for q in range(4): lim[(p0+int(q*M2/21*.11))%M2]+= (1 if q==0 else .5)*(1+.2*r2.normal())
+body=np.fft.irfft(np.fft.rfft(lim)*((1/(1+((fl-190)/70)**2)+.9/(1+((fl-520)/170)**2)+.6/(1+((fl-1300)/450)**2)+.3/(1+((fl-3000)/1100)**2))*(fl/(fl+35))),M2); body/=np.std(body)
+gate=np.clip(np.fft.irfft(np.fft.rfft(lim)/(1+(fl/60)**2),M2),0,None); gate/=gate.max()
+nzl=np.fft.irfft(np.fft.rfft(r2.normal(0,1,M2))/(1+((fl-2400)/1500)**2),M2); nzl/=np.std(nzl)
+save('rev_limiter.wav',np.tanh((body+.5*nzl*gate)*.8),None,'rev limiter: ignition-cut stutter, loop while the limiter is active')
 scr=band((f/(f+120))/(1+(f/900)**2))*slow(240,.45)+.25*band(1/(1+((f-2400)/1200)**2)); save('tyre_scrub.wav',scr*slow(10,.15),None,'loaded tyre / rolling on asphalt')
 gr=band((f/(f+1500))**2/(1+(f/6500)**4))*np.clip(slow(900,1.6),0,None)**2+.7*band(1/(1+((f-140)/90)**2))*slow(60,.5); save('surface_grass.wav',gr,None,'tyres on grass')
 x=np.zeros(N)
@@ -49,6 +77,8 @@ M=FS; k=np.zeros(M)
 for i in range(10): k[int(i*M/10)]=1+.25*rng.normal()
 fk=np.fft.rfftfreq(M,1/FS); kb=np.fft.irfft(np.fft.rfft(k)*(1/(1+((fk-75)/38)**2)+.35/(1+((fk-240)/120)**2)+.05/(1+(fk/1800)**2)),M); save('kerb_rumble.wav',kb,None,'kerb serrations; play faster with speed')
 for old in ['05_Race_V10_Loop.wav','05_Race_V10_Loop.wav.js']:
+    if os.path.exists(OUT+old): os.remove(OUT+old)
+for old in ['tyre_squeal.wav','tyre_squeal.wav.js']:
     if os.path.exists(OUT+old): os.remove(OUT+old)
 m=json.load(open(OUT+'audio_manifest.json')); m['files']=[x for x in m['files'] if not x['file'].startswith('05_Race_V10')]
 m['generated']={'origin':'Procedural synthesis written for this game (synth_audio.py). Not recordings of real cars.','format':'Mono PCM16 WAV, 32000 Hz, seamless loops','engine_layers_rpm':[r for r,_ in LAY],'files':man}

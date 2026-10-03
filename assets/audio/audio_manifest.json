@@ -57,7 +57,7 @@
     "duration_seconds": 6.0,
     "rpm": 1200,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -12.88,
+    "rms_dbfs": -12.89,
     "note": "engine layer"
    },
    {
@@ -65,7 +65,7 @@
     "duration_seconds": 3.0,
     "rpm": 2400,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -11.79,
+    "rms_dbfs": -11.85,
     "note": "engine layer"
    },
    {
@@ -89,7 +89,7 @@
     "duration_seconds": 6.0,
     "rpm": 1200,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -13.07,
+    "rms_dbfs": -13.05,
     "note": "engine layer"
    },
    {
@@ -97,7 +97,7 @@
     "duration_seconds": 3.0,
     "rpm": 2400,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -11.83,
+    "rms_dbfs": -11.8,
     "note": "engine layer"
    },
    {
@@ -113,7 +113,7 @@
     "duration_seconds": 3.0,
     "rpm": 6400,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -9.89,
+    "rms_dbfs": -9.87,
     "note": "engine layer"
    },
    {
@@ -121,7 +121,7 @@
     "duration_seconds": 6.0,
     "rpm": 1200,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -12.28,
+    "rms_dbfs": -12.24,
     "note": "engine layer"
    },
    {
@@ -129,7 +129,7 @@
     "duration_seconds": 3.0,
     "rpm": 2400,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -11.24,
+    "rms_dbfs": -11.26,
     "note": "engine layer"
    },
    {
@@ -137,7 +137,7 @@
     "duration_seconds": 3.0,
     "rpm": 4200,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -10.05,
+    "rms_dbfs": -9.99,
     "note": "engine layer"
    },
    {
@@ -145,23 +145,119 @@
     "duration_seconds": 3.0,
     "rpm": 6400,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -8.76,
+    "rms_dbfs": -8.79,
     "note": "engine layer"
    },
    {
-    "file": "tyre_squeal.wav",
+    "file": "08_Race_V10_1200.wav",
+    "duration_seconds": 6.0,
+    "rpm": 1200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -13.03,
+    "note": "engine layer"
+   },
+   {
+    "file": "08_Race_V10_2400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 2400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.87,
+    "note": "engine layer"
+   },
+   {
+    "file": "08_Race_V10_4200.wav",
+    "duration_seconds": 3.0,
+    "rpm": 4200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.25,
+    "note": "engine layer"
+   },
+   {
+    "file": "08_Race_V10_6400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 6400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -9.6,
+    "note": "engine layer"
+   },
+   {
+    "file": "09_Rally_Inline5_1200.wav",
+    "duration_seconds": 6.0,
+    "rpm": 1200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -12.79,
+    "note": "engine layer"
+   },
+   {
+    "file": "09_Rally_Inline5_2400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 2400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -11.86,
+    "note": "engine layer"
+   },
+   {
+    "file": "09_Rally_Inline5_4200.wav",
+    "duration_seconds": 3.0,
+    "rpm": 4200,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -10.21,
+    "note": "engine layer"
+   },
+   {
+    "file": "09_Rally_Inline5_6400.wav",
+    "duration_seconds": 3.0,
+    "rpm": 6400,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -9.43,
+    "note": "engine layer"
+   },
+   {
+    "file": "tyre_squeal_low.wav",
     "duration_seconds": 3.0,
     "rpm": null,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -7.72,
-    "note": "tyre sliding on asphalt"
+    "rms_dbfs": -9.05,
+    "note": "slow slide: low, juddering howl"
+   },
+   {
+    "file": "tyre_squeal_mid.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -9.65,
+    "note": "medium-speed slide"
+   },
+   {
+    "file": "tyre_squeal_high.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -9.23,
+    "note": "fast slide: high, with screech"
+   },
+   {
+    "file": "gear_whine.wav",
+    "duration_seconds": 3.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -10.55,
+    "note": "straight-cut gear whine; pitch follows road speed"
+   },
+   {
+    "file": "rev_limiter.wav",
+    "duration_seconds": 1.0,
+    "rpm": null,
+    "peak_dbfs": -2.05,
+    "rms_dbfs": -14.13,
+    "note": "rev limiter: ignition-cut stutter, loop while the limiter is active"
    },
    {
     "file": "tyre_scrub.wav",
     "duration_seconds": 3.0,
     "rpm": null,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -15.86,
+    "rms_dbfs": -16.11,
     "note": "loaded tyre / rolling on asphalt"
    },
    {
@@ -169,7 +265,7 @@
     "duration_seconds": 3.0,
     "rpm": null,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -22.03,
+    "rms_dbfs": -22.97,
     "note": "tyres on grass"
    },
    {
@@ -177,7 +273,7 @@
     "duration_seconds": 3.0,
     "rpm": null,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -31.05,
+    "rms_dbfs": -31.77,
     "note": "tyres on sand or gravel"
    },
    {
@@ -185,7 +281,7 @@
     "duration_seconds": 1.0,
     "rpm": null,
     "peak_dbfs": -2.05,
-    "rms_dbfs": -28.05,
+    "rms_dbfs": -27.13,
     "note": "kerb serrations; play faster with speed"
    }
   ]

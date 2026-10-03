@@ -9,8 +9,8 @@ const REF_RPM = 3000;
 const one = n => ({ label: n.slice(3).replace(/_/g, ' '), trim: 1, loops: [{ file: n + '_Loop.wav', rpm: REF_RPM }] });
 const four = (n, trim) => ({ label: n.slice(3).replace(/_/g, ' ') + ' (4 rpm layers)', trim, loops: [1200, 2400, 4200, 6400].map(rpm => ({ file: n + '_' + rpm + '.wav', rpm })) });
 export const ENGINE_SETS = { '01_Turbo_Inline4': one('01_Turbo_Inline4'), '02_Boxer_Flat4': one('02_Boxer_Flat4'), '03_Race_Inline6': one('03_Race_Inline6'), '04_Crossplane_V8': one('04_Crossplane_V8'),
-  '05_FlatPlane_V8': four('05_FlatPlane_V8', 1.5), '06_Race_V12': four('06_Race_V12', 1.55), '07_TwinTurbo_V6': four('07_TwinTurbo_V6', 1.45) };
-const TYRES = { squeal: 'tyre_squeal.wav', scrub: 'tyre_scrub.wav', grass: 'surface_grass.wav', gravel: 'surface_gravel.wav', kerb: 'kerb_rumble.wav' };
+  '05_FlatPlane_V8': four('05_FlatPlane_V8', 1.5), '06_Race_V12': four('06_Race_V12', 1.55), '07_TwinTurbo_V6': four('07_TwinTurbo_V6', 1.45), '08_Race_V10': four('08_Race_V10', 1.5), '09_Rally_Inline5': four('09_Rally_Inline5', 1.5) };
+const TYRES = { sqLow: 'tyre_squeal_low.wav', sqMid: 'tyre_squeal_mid.wav', sqHigh: 'tyre_squeal_high.wav', whine: 'gear_whine.wav', limiter: 'rev_limiter.wav', scrub: 'tyre_scrub.wav', grass: 'surface_grass.wav', gravel: 'surface_gravel.wav', kerb: 'kerb_rumble.wav' };
 const SHOTS = { pop: '06_Shift_Exhaust_SinglePop.wav', crackle: '07_Shift_Exhaust_CrackleBurst.wav' };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
@@ -88,7 +88,7 @@ export class GameAudio {
           else if (sp.pops === 'crackle' && Math.random() < .6) this.shot('crackle', .5); }                  // lively exhaust: crackle on the overrun
         this.lastLoad += (s.load - this.lastLoad) * .5; }
     }
-    this.wind.g.gain.setTargetAtTime(k * k * .22, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
+    this.wind.g.gain.setTargetAtTime(k * k * .3, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
     this.roll.g.gain.setTargetAtTime(Math.min(.16, k * .3) * (1 - s.dirt), t, .15);
     // Tyres and surfaces (sample loops). Scrub rises as the tyres are loaded, before they let go. Squeal comes in when they slide:
     // higher with speed and a locked wheel, lower with wheelspin, mostly hiss in the wet. Grass, sand/gravel and kerbs have their own sounds.
@@ -96,12 +96,16 @@ export class GameAudio {
     const set = (v, gain, rate, tc = .08) => { v.g.gain.setTargetAtTime(gain, t, tc); if (rate) v.src.playbackRate.setTargetAtTime(rate, t, .1); };
     if (T) {
       set(T.scrub, (g * .5 + sl * .35 + k * .12) * sp2 * road, .75 + k * .7 + g * .15);
-      set(T.squeal, Math.max(sl, (s.lock || 0) * .6) * (.35 + .65 * sp2) * dry * road * .34, .82 + Math.min(s.speed, 60) / 60 * .45 + (s.lock || 0) * .22 - (s.spin || 0) * .16, sl > .05 ? .06 : .14);
+      // squeal follows the speed of the slide: a low juddering howl when slow, a clean howl in the middle, a high screech when fast. Pitch climbs with speed inside each band.
+      { const v = s.speed, amt = Math.max(sl, (s.lock || 0) * .6) * (.4 + .6 * sp2) * dry * road * .36, w0 = 1 - Math.min(1, Math.max(0, (v - 9) / 11)), w2 = Math.min(1, Math.max(0, (v - 24) / 16)), w1 = Math.max(0, 1 - w0 - w2), bend = (s.lock || 0) * .14 - (s.spin || 0) * .12, tc = sl > .05 ? .05 : .16;
+        set(T.sqLow, amt * w0, .8 + v / 30 * .35 + bend, tc); set(T.sqMid, amt * w1, .78 + v / 45 * .4 + bend, tc); set(T.sqHigh, amt * w2 * 1.1, .75 + v / 70 * .45 + bend, tc); }
+      set(T.whine, k * Math.sqrt(k) * .05, .35 + s.speed / 42, .15);                                       // gear whine: pitch is road speed, the sound of going fast
+      set(T.limiter, s.limiter ? .45 : 0, 1, s.limiter ? .01 : .04);                                       // rev limiter: the ignition-cut stutter, for as long as it is cutting
       set(T.grass, s.sand ? 0 : s.dirt * (.25 + .75 * sp2) * 1.1, .8 + k * .9); set(T.gravel, (s.sand ? s.dirt : s.dirt * .25) * (.25 + .75 * sp2) * 1.6, .8 + k * .8);
       set(T.kerb, (s.kerb || 0) * Math.min(1, s.speed / 12) * 1.6, Math.max(.4, s.speed / 13));
       this.skid.g.gain.setTargetAtTime(0, t, .1); this.dirt.g.gain.setTargetAtTime(0, t, .1); this.sq.g.gain.setTargetAtTime(0, t, .1);
     } else { this.skid.g.gain.setTargetAtTime((g * .1 + sl * .12) * sp2 * road, t, .08); this.dirt.g.gain.setTargetAtTime(s.dirt * .35, t, .1); this.sq.g.gain.setTargetAtTime(sl * dry * road * .4, t, .08); }   // until the samples have loaded
-    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * (s.wet || 0) * sp2 * .09, t, .12); this.brake.g.gain.setTargetAtTime(s.brake * Math.min(1, s.speed / 25) * .018, t, .05);
+    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * (s.wet || 0) * sp2 * .09, t, .12); this.brake.g.gain.setTargetAtTime((s.brake || 0) * Math.min(1, s.speed / 25) * .018, t, .05);
     this.nitro.g.gain.setTargetAtTime(s.nitro ? .16 : 0, t, .1); this.rain.g.gain.setTargetAtTime((s.rain || 0) * .1, t, .5);
   }
   // The single entry point for a completed gear change. dir +1 up, -1 down.

@@ -5,6 +5,7 @@ import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS } from './tra
 import { TUNE } from './config.js';
 import { CARS, PAINTS, RIMS, TINTS, Car, loadCars, aiDrive } from './car.js';
 import { AR } from './lang.js';
+import { MenuBg } from './menubg.js';
 import { Particles, Skids, Ambient, Debris, LIGHTS } from './fx.js';
 import { GLOWS } from './car.js';
 import { Post } from './post.js';
@@ -176,7 +177,7 @@ function respawn(car, manual) {
 }
 
 async function startRace(o) {
-  if (R) endRace(); const token = ++raceToken; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
+  menuBg.stop(); if (R) endRace(); const token = ++raceToken; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
   if (!o.attract) { audio.init(); show('menu', false); show('results', false); show('pause', false); show('loading', true); }
   const def = TRACKS.find(t => t.id === o.track);
   $('loadName').textContent = def.name; $('loadBar').style.width = '4%'; $('loadTip').textContent = TIPS[Math.random() * TIPS.length | 0];
@@ -784,12 +785,14 @@ const firstOpen = () => { const i = EVENTS.findIndex(e => !save.story[e.id]); re
 const GP_TRACKS = ['nile', 'luxor', 'hurghada', 'aswan', 'midnight'], GP_PTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0];
 function newGP() { const pool = CARS.filter(c => c.id !== save.car).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5), base = [.80, .89, .97][sel.diff]; save.gp = { round: 0, pts: {}, done: false, rivals: pool.slice(0, 7).map((c, i) => ({ name: names[i], car: c.id, skill: base + (6 - i) * .01, paint: PAINTS[(i * 3 + 2) % PAINTS.length] })) }; persist(); }
 const gpOpts = () => ({ mode: 'race', gp: true, track: GP_TRACKS[save.gp.round], laps: 3, diff: sel.diff, rivals: save.gp.rivals, rules: save.rules, weather: save.gp.round === 2 ? 'rain' : 'clear', nRivals: 7 });
-let menuView = '', attractBusy = false;
-async function setMenuView() {
+let menuView = '';
+const menuBg = new MenuBg($('menuBg'));
+// The menu shows a light 2D scene. The 3D engine is only woken for the garage and tuning tabs, where the car has to be seen.
+function setMenuView() {
   if (racing() || $('menu').hidden || box.on) return; const want = sel.tab === 'garage' || sel.tab === 'tune' ? 'garage' : 'show';
-  if (want === 'garage') { raceToken++; if (R) endRace(); if (menuView !== 'garage') { applyTheme(null); garage.visible = true; } menuView = 'garage'; return; }
-  if (R || attractBusy) return; menuView = 'show'; attractBusy = true; garage.visible = false;
-  try { await startRace({ attract: true, mode: 'race', track: 'midnight', laps: 99, diff: 2, weather: 'clear', nRivals: 5, rules: 'circuit' }); } finally { attractBusy = false; }
+  if (R) { raceToken++; endRace(); }
+  if (want === 'garage') { menuBg.stop(); if (menuView !== 'garage') { applyTheme(null); garage.visible = true; } menuView = 'garage'; }
+  else { menuView = 'show'; menuBg.start(); }
 }
 const sel = { rivals: 5, wx: 'random', tab: 'quick', ev: 0, ch: 0, mode: 'race', track: 0, laps: 3, diff: 1, car: Math.max(0, CARS.findIndex(c => c.id === save.car)) };
 const menuPaths = {};
@@ -934,7 +937,7 @@ function rollBox() {
   const cr = [300, 400, 500, 750, 1000, 1500, 2500][Math.min(6, Math.floor(Math.pow(Math.random(), 1.8) * 7))]; save.credits += cr; return ['Credits', '+' + cr.toLocaleString()];
 }
 function openBox() {
-  if (save.boxDay === today() || box.on) return; audio.init(); if (!box.g) buildBox(); raceToken++; if (R) endRace(); applyTheme(null); garage.visible = true; menuView = 'garage';
+  if (save.boxDay === today() || box.on) return; audio.init(); if (!box.g) buildBox(); menuBg.stop(); raceToken++; if (R) endRace(); applyTheme(null); garage.visible = true; menuView = 'garage';
   if (garageCar) garageCar.root.visible = false; box.g.visible = true; box.on = true; box.t = 0; box.lid.rotation.x = 0; box.reward = null; show('menu', false); for (const b of box.beams) b.material.opacity = 0;
 }
 function boxTick(dt) {
@@ -1050,7 +1053,7 @@ function frame(now) {
     const rs = save.lang === 'ar' ? -1 : 1; camera.position.set(narrow ? 0 : -1.6 * rs, 3.0, narrow ? 13 : 11.5); camera.lookAt(narrow ? 0 : -2.9 * rs, narrow ? 1.8 : -.4, 0);
     sun.position.set(6, 12, 8); sun.target.position.set(0, 0, 0);
   }
-  draw(dt);
+  if (menuBg.on) menuBg.tick(now); else draw(dt);      // while the 2D menu scene is up, nothing is rendered in 3D
 }
 (async function boot() {
   applyTheme(null); audio.mvol = save.mvol; audio.vol = save.svol; audio.evol = save.evol; setMuted(save.muted);

@@ -180,7 +180,7 @@ export class Car {
     const idle = s.idle, red = s.red, wsp = Math.abs(vf) * (1 + Math.min(this.wspin, 1.5) * .5 + this.wspinF * .3), gtop = [0, .24, .42, .6, .8, 1.03].map(k => k * s.top * TN.top);
     let gi = this.gearI; if (!(this.shiftT > 0) && live) { if (gi < 5 && wsp > gtop[gi] * .97) { gi++; this.shiftT = .15; this.shiftEvt = 1; } else if (gi > 1 && wsp < gtop[gi - 1] * .72) { gi--; this.shiftT = .12; this.shiftEvt = -1; } }
     this.gearI = gi; this.gear = rev && vf < -.5 ? 0 : gi; this.shiftT = Math.max(0, this.shiftT - dt);
-    let rt = !live ? idle + inp.throttle * (red * .88 - idle) : rev ? idle + Math.abs(vf) / 12 * (red * .5 - idle) : Math.max(red * wsp / gtop[gi], gi === 1 ? idle + thr * (red * .42 - idle) : idle);
+    let rt = !live ? idle + inp.throttle * (red * 1.04 - idle) : burn ? red * 1.05 : rev ? idle + Math.abs(vf) / 12 * (red * .5 - idle) : Math.max(red * wsp / gtop[gi], gi === 1 ? idle + thr * (red * .42 - idle) : idle);
     this.limiter = rt > red * .995 && (thr > .5 || !live); if (rt > red) rt = red * (this.limiter ? .975 + .025 * Math.sin(performance.now() / 26) : 1);
     { const rate = (rt > this.rpmR ? 8000 : 5500) * dt; this.rpmR += clamp(rt - this.rpmR, -rate, rate); }
     this.rpm = clamp((this.rpmR - idle) / (red - idle), 0, 1.02); this.load = live ? thr * (this.shiftT > 0 ? .2 : 1) : inp.throttle * .45;
