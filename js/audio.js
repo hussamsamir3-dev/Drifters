@@ -2,7 +2,7 @@
 // periodic wave pushed through soft saturation and a throttle-controlled low-pass, layered with
 // wind, road roll and tyre scrub noise, so it reads as a car rather than a beeper.
 export class GameAudio {
-  constructor() { this.on = true; this.ctx = null; this.vol = .7; }
+  constructor() { this.on = true; this.ctx = null; this.vol = .7; this.mvol = .5; this.pitchK = 1; this.birdT = 3; this.lastThr = 0; }
   init() {
     if (this.ctx) { if (this.ctx.state !== 'running') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
@@ -27,17 +27,40 @@ export class GameAudio {
     const bed = (type, f, q) => { const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = .8 + Math.random() * .4; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(this.master); s.start(); return { g, fl }; };
     this.wind = bed('lowpass', 500, .5); this.roll = bed('lowpass', 260, .7); this.skid = bed('bandpass', 850, 1.6); this.skidHi = bed('bandpass', 2100, 3);
     this.dirt = bed('lowpass', 420, .8); this.nitro = bed('bandpass', 1600, .7); this.brake = bed('bandpass', 3100, 5); this.rain = bed('highpass', 2600, .4); this.intake = bed('bandpass', 380, 1.2);
+    // exhaust burble: low noise pulsed at the firing rate, so idle and part-throttle sound like cylinders rather than a hum
+    const bb = bed('bandpass', 170, 1.1); this.burbG = bb.g; this.burbLfo = c.createOscillator(); this.burbLfo.type = 'square'; this.burbLfo.frequency.value = 20; const lg = c.createGain(); lg.gain.value = .03; this.burbLfo.connect(lg); lg.connect(bb.g.gain); this.burbLfo.start();
+    // turbo whistle (only heard on cars with the engine upgrade) and a murmuring crowd
+    this.turboO = c.createOscillator(); this.turboO.type = 'sine'; this.turboG = c.createGain(); this.turboG.gain.value = 0; this.turboO.connect(this.turboG); this.turboG.connect(this.master); this.turboO.start();
+    this.crowd = bed('bandpass', 950, .5); this.wave = wave; this.ctxN = N;
     this.whine = c.createOscillator(); this.whine.type = 'sine'; this.whineG = c.createGain(); this.whineG.gain.value = 0; this.whine.connect(this.whineG); this.whineG.connect(this.master); this.whine.start();
     // ---- calm menu pad
     this.pad = c.createGain(); this.pad.gain.value = 0; const pl = c.createBiquadFilter(); pl.type = 'lowpass'; pl.frequency.value = 900; this.pad.connect(pl); pl.connect(this.master);
     for (const f of [110, 164.81, 220, 246.94, 329.63]) for (const det of [-4, 5]) { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.detune.value = det; const g = c.createGain(); g.gain.value = .05; const l = c.createOscillator(); l.frequency.value = .05 + Math.random() * .12; const lg = c.createGain(); lg.gain.value = .035; l.connect(lg); lg.connect(g.gain); o.connect(g); g.connect(this.pad); o.start(); l.start(); }
   }
-  setMuted(m) { this.on = !m; if (this.master) this.master.gain.setTargetAtTime(this.on ? this.vol : 0, this.ctx.currentTime, .05); }
-  music(on) { if (this.ctx) this.pad.gain.setTargetAtTime(on ? .5 : 0, this.ctx.currentTime, on ? 1.5 : .4); }
+  setMuted(m) { this.on = !m; if (this.el) this.music(this.musicOn); if (this.master) this.master.gain.setTargetAtTime(this.on ? this.vol : 0, this.ctx.currentTime, .05); }
+  // menu music: the bundled track, faded in and out
+  music(on) {
+    if (!this.el) { this.el = new Audio('assets/menu.mp3'); this.el.loop = true; this.el.volume = 0; }
+    this.musicOn = on; const el = this.el; if (on && this.on) el.play().catch(() => {});
+    clearInterval(this.fade); this.fade = setInterval(() => { const tgt = on && this.on ? this.mvol : 0, d = tgt - el.volume; if (Math.abs(d) < .05) { el.volume = tgt; clearInterval(this.fade); if (!tgt) el.pause(); } else el.volume = Math.max(0, Math.min(1, el.volume + Math.sign(d) * .04)); }, 60);
+  }
+  // each engine layout gets its own pitch and harmonic colour: fours buzz, V8s rumble, V10/V12s sing
+  setCar(cyl) {
+    this.pitchK = { 4: 1.16, 6: 1.04, 8: .86, 10: 1.1, 12: 1.2 }[cyl] || 1; if (!this.ctx) return;
+    const N = 24, re = new Float32Array(N), im = new Float32Array(N), h = cyl / 2;
+    for (let n = 1; n < N; n++) im[n] = (n % 2 ? .55 : 1) / Math.pow(n, cyl >= 10 ? 1.3 : 1.1) * (n === h || n === h * 2 ? 1.9 : n === 1 && cyl === 8 ? 1.5 : 1);
+    const w = this.ctx.createPeriodicWave(re, im); for (const o of this.osc) o.setPeriodicWave(w);
+  }
+  // calm background: a breeze of crowd murmur and, by day in the dry, the odd bird
+  ambient(dt, o) {
+    if (!this.ctx) return; this.crowd.g.gain.setTargetAtTime(o.on ? .028 : 0, this.ctx.currentTime, .6);
+    this.birdT -= dt; if (o.on && o.day && !o.rain && this.birdT < 0) { this.birdT = 2 + Math.random() * 6; const base = 2300 + Math.random() * 1600, n = 2 + (Math.random() * 3 | 0); for (let i = 0; i < n; i++) setTimeout(() => this.tone(base * (1 + i * .06), .08, .011, 'sine', 1.22), i * 120); }
+  }
+  turboDemo() { this.tone(1800, .7, .05, 'sine', 3.2); setTimeout(() => { this.burst('highpass', 2600, .6, .35, .12, 1.3); this.tone(2100, .25, .03, 'sine', .4); }, 720); }
 
   // s: { rpm 0..1, throttle 0..1, speed m/s, skid 0..1, dirt 0..1, nitro bool, brake 0..1, rain 0..1 }
   drive(s) {
-    if (!this.ctx) return; const t = this.ctx.currentTime, f = 36 + s.rpm * 118, k = Math.min(1, s.speed / 60);
+    if (!this.ctx) return; if (this.quiet) return this.silence(); const t = this.ctx.currentTime, f = (36 + s.rpm * 118) * this.pitchK, k = Math.min(1, s.speed / 60);
     for (const o of this.osc) o.frequency.setTargetAtTime(f * o.mult, t, .035);
     this.engLP.frequency.setTargetAtTime(180 + s.rpm * 700 + s.throttle * 1100, t, .06);
     this.engGain.gain.setTargetAtTime(.09 + s.throttle * .12 + s.rpm * .04, t, .07);
@@ -49,16 +72,20 @@ export class GameAudio {
     this.brake.g.gain.setTargetAtTime(s.brake * Math.min(1, s.speed / 25) * .018, t, .05);
     this.nitro.g.gain.setTargetAtTime(s.nitro ? .16 : 0, t, .1); this.whine.frequency.setTargetAtTime(900 + s.rpm * 1400, t, .1); this.whineG.gain.setTargetAtTime(s.nitro ? .025 : s.throttle * s.rpm * .006, t, .1);
     this.rain.g.gain.setTargetAtTime((s.rain || 0) * .1, t, .5);
+    this.burbG.gain.setTargetAtTime((.018 + s.throttle * .045) * (1 - s.rpm * .45), t, .08); this.burbLfo.frequency.setTargetAtTime(f * .5, t, .04);
+    const tb = s.turbo || 0; this.turboG.gain.setTargetAtTime(tb * s.throttle * s.rpm * .011, t, .18); this.turboO.frequency.setTargetAtTime(2400 + s.rpm * 5200, t, .22);
+    if (tb && this.lastThr > .6 && s.throttle < .2 && s.rpm > .45 && t - (this.bovT || 0) > 1.2) { this.bovT = t; this.burst('highpass', 2600, .6, .3, .05 + tb * .025, 1.3); this.tone(1900, .2, .012 + tb * .006, 'sine', .45); }   // blow-off valve when you lift
+    this.lastThr = s.throttle;
   }
-  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; for (const g of [this.engGain, this.wind.g, this.roll.g, this.skid.g, this.skidHi.g, this.dirt.g, this.nitro.g, this.brake.g, this.rain.g, this.intake.g, this.whineG]) g.gain.setTargetAtTime(0, t, .12); }
+  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; for (const g of [this.engGain, this.wind.g, this.roll.g, this.skid.g, this.skidHi.g, this.dirt.g, this.nitro.g, this.brake.g, this.rain.g, this.intake.g, this.whineG, this.burbG, this.turboG, this.crowd.g]) g.gain.setTargetAtTime(0, t, .12); }
 
   tone(freq, dur = .2, vol = .2, type = 'sine', slide = 1) {
-    if (!this.ctx) return; const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime; o.type = type; o.frequency.setValueAtTime(freq, t); if (slide !== 1) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
+    if (!this.ctx || this.quiet) return; const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime; o.type = type; o.frequency.setValueAtTime(freq, t); if (slide !== 1) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .012); g.gain.exponentialRampToValueAtTime(.001, t + dur); o.connect(g); g.connect(this.master); o.start(); o.stop(t + dur + .02);
   }
   beep(freq = 440, dur = .18, vol = .16) { this.tone(freq, dur, vol); this.tone(freq * 2, dur * .7, vol * .25); }
   burst(type, f, q, dur, vol, rate = 1) {
-    if (!this.ctx) return; const c = this.ctx, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(), t = c.currentTime;
+    if (!this.ctx || this.quiet) return; const c = this.ctx, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(), t = c.currentTime;
     s.buffer = this.noiseBuf; s.playbackRate.value = rate; fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
     s.connect(fl); fl.connect(g); g.connect(this.master); s.start(t, Math.random() * 2); s.stop(t + dur + .02);
   }

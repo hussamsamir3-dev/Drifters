@@ -215,6 +215,10 @@ function instanced(geo, mat, list, shadow = true) {
 function buildProc(track) {
   const def = track.def, th = track.theme, hw = def.width / 2, B = hw + def.runoff, G = track.group;
   seed = def.id.length * 7919 + 13;
+  // things that move: spectators bounce, flags wave, balloons drift, light beams sweep. main calls track.tick(time) each frame.
+  const uT = track.uTime = { value: 0 }, movers = []; track.fancyLights = []; track.tick = t => { uT.value = t; for (const f of movers) f(t); };
+  const anim = (mat, code) => { mat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + code); }; return mat; };
+  const BOB = 'transformed.y += abs(sin(uTime * 3.4 + instanceMatrix[3][0] * 1.7 + instanceMatrix[3][2] * 2.3)) * .14;';
   const path = resampleClosed(def.pts, 2); track.finishPath(path);
   const n = path.length;
   let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
@@ -337,12 +341,20 @@ function buildProc(track) {
     const roof = new THREE.Mesh(new THREE.BoxGeometry(9.4, .5, (nb + na) * 1.5 + 1), new THREE.MeshStandardMaterial({ color: 0x3f7a5a, roughness: .8 })); roof.position.copy(gar.position); roof.position.y = 4.85; roof.rotation.y = gar.rotation.y; roof.castShadow = true; G.add(roof);
   }
   // -- trackside life: spectators, sponsor boards, hay bales, support vans
-  if (!night && !def.dev) {
+  if (!def.dev) {
     const ppl = [], shirt = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c)), skin = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
-    for (let i = 0; i < n; i++) { if (i % 64 > 24) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 3; r++) { if (rnd() < .3) continue;
+    for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 6; r++) { if (rnd() < .18) continue;
       const p = path[i], off = s * (B + 1.7 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .9 + rnd() * .25, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0] }); } } }
     const body = new THREE.CapsuleGeometry(.28, .7, 3, 8); body.translate(0, .63, 0); const head = new THREE.SphereGeometry(.24, 8, 6); head.translate(0, 1.42, 0);
-    G.add(instanced(body, new THREE.MeshStandardMaterial({ roughness: .9 }), ppl)); G.add(instanced(head, new THREE.MeshStandardMaterial({ roughness: .8 }), ppl.map(q => ({ x: q.x, z: q.z, s: q.s, c: q.k }))));
+    // marshals in orange at every corner, flags along the fences
+    const marsh = [], flags = [], fcol = [0xe3262e, 0xffc21a, 0xf3f4f6, 0x19a7ce, 0x2fb457, 0x111214].map(c => new THREE.Color(c));
+    for (let i = 6; i < n; i += 9) { const p = path[i], side = p.k > 0 ? -1 : 1; if (side > 0 && inPit(i)) continue; const off = side * (B + .9), x = p.x + p.tz * off, z = p.z - p.tx * off; if (!isFree(x, z, .5)) continue;
+      flags.push({ x, z, y: 0, r: Math.atan2(p.tx, p.tz) + (side > 0 ? 0 : Math.PI), c: fcol[rnd() * 6 | 0] }); if (Math.abs(p.k) > 1 / 80) marsh.push({ x: x + p.tx * 1.2, z: z + p.tz * 1.2, c: new THREE.Color(0xff7a1a) }); }
+    const pole = new THREE.CylinderGeometry(.05, .05, 4.4, 5); pole.translate(0, 2.2, 0); G.add(instanced(pole, new THREE.MeshStandardMaterial({ color: 0xd8d8d8 }), flags.map(f => ({ x: f.x, z: f.z })), false));
+    const fg = new THREE.PlaneGeometry(1.7, 1, 8, 1); fg.translate(.85, 3.8, 0);
+    const fm = instanced(fg, anim(new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: .8 }), 'transformed.z += sin(position.x * 3.5 - uTime * 6. + instanceMatrix[3][0]) * .16 * position.x; transformed.y += sin(position.x * 2. - uTime * 4.) * .04 * position.x;'), flags, false); G.add(fm);
+    ppl.push(...marsh.map(m => ({ ...m, s: 1.05, k: skin[1] })));
+    G.add(instanced(body, anim(new THREE.MeshStandardMaterial({ roughness: .9 }), BOB), ppl)); G.add(instanced(head, anim(new THREE.MeshStandardMaterial({ roughness: .8 }), BOB), ppl.map(q => ({ x: q.x, z: q.z, s: q.s, c: q.k }))));
     const brands = [['TAFHEET', '#e3262e', '#fff'], ['EGYSeal', '#f3f4f6', '#1c4ea8'], ['NILE COLA', '#1c4ea8', '#fff'], ['AMM SABER', '#ffc21a', '#17181c'], ['SCARAB OIL', '#f3f4f6', '#e3262e'], ['RA ROSSO', '#e3262e', '#ffc21a'], ['HORUS TYRES', '#17181c', '#ffc21a']];
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a4326, roughness: 1 });
     brands.forEach(([txt, bg, fg], b) => {
@@ -364,6 +376,23 @@ function buildProc(track) {
   const stand = new THREE.Group(); stand.position.set(p0.x - p0.tz * (B + 3), 0, p0.z + p0.tx * (B + 3)); stand.rotation.y = Math.atan2(p0.tx, p0.tz);
   for (let i = 0; i < 5; i++) { const st = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1 * (i + 1), 60), new THREE.MeshStandardMaterial({ map: crowd, emissive: night ? 0x555555 : 0, emissiveMap: night ? crowd : null })); st.position.set(-i * 2.2, .55 * (i + 1), 10); st.castShadow = true; stand.add(st); }
   G.add(stand);
+  { // a full grandstand: people on every step, bouncing
+    const sp = [], ry = stand.rotation.y, cs = Math.cos(ry), sn = Math.sin(ry), cols = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c));
+    for (let i = 0; i < 5; i++) for (let lz = -19; lz < 40; lz += .8) { if (rnd() < .12) continue; const lx = -i * 2.2 + (rnd() - .5) * .9; sp.push({ x: stand.position.x + lx * cs + lz * sn, z: stand.position.z - lx * sn + lz * cs, y: 1.1 * (i + 1), s: .9 + rnd() * .2, c: cols[rnd() * 7 | 0] }); }
+    const b2 = new THREE.CapsuleGeometry(.28, .6, 3, 6); b2.translate(0, .55, 0); const h2 = new THREE.SphereGeometry(.23, 7, 5); h2.translate(0, 1.28, 0);
+    G.add(instanced(b2, anim(new THREE.MeshStandardMaterial({ roughness: .9 }), BOB), sp, false)); G.add(instanced(h2, anim(new THREE.MeshStandardMaterial({ color: 0xd9a577, roughness: .8 }), BOB), sp.map(q => ({ x: q.x, z: q.z, y: q.y, s: q.s })), false));
+    // hot-air balloons drifting beyond the circuit
+    const bc = [[0xe3262e, 0xffc21a], [0x19a7ce, 0xf3f4f6], [0x7b3fe4, 0xff7ab0], [0x2fb457, 0xffc21a]];
+    if (!night) bc.forEach(([c1, c2], i) => { const g = new THREE.Group(), env = new THREE.Mesh(new THREE.SphereGeometry(9, 12, 10), new THREE.MeshStandardMaterial({ color: c1, roughness: .7, flatShading: true })); env.scale.y = 1.2; const band = new THREE.Mesh(new THREE.CylinderGeometry(8.9, 8.9, 3, 12, 1, true), new THREE.MeshStandardMaterial({ color: c2, roughness: .7 })); const bas = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2, 2.4), new THREE.MeshStandardMaterial({ color: 0x7a4326 })); bas.position.y = -14;
+      g.add(env, band, bas); const a = i * 1.7 + .6, R0 = track.bounds + 70 + i * 25, bx = cx + Math.cos(a) * R0, bz = cz + Math.sin(a) * R0, by = 34 + i * 9; g.position.set(bx, by, bz); G.add(g); movers.push(t => { g.position.y = by + Math.sin(t * .25 + i) * 3; g.position.x = bx + Math.sin(t * .05 + i * 2) * 14; }); });
+    // night: coloured stage lights sweep the start straight, with visible beams over the stand
+    if (night) [0xff2bd0, 0x19d3ff, 0xffc21a, 0x7dff9b].forEach((col, i) => {
+      const ox = stand.position.x + (-9) * cs + (i * 16 - 14) * sn, oz = stand.position.z - (-9) * sn + (i * 16 - 14) * cs;
+      const L = new THREE.SpotLight(col, 420, 95, .32, .6, 1.3); L.position.set(ox, 13, oz); G.add(L, L.target); track.fancyLights.push(L);
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(5, 46, 12, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .09, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); beam.geometry.translate(0, -23, 0); beam.geometry.rotateX(Math.PI); beam.position.set(ox, 13, oz); G.add(beam);
+      movers.push(t => { const s = Math.sin(t * .5 + i * 1.6), q = path[((Math.round((s * .5 + .5) * 40) - 20) % n + n) % n]; L.target.position.set(q.x + p0.tz * Math.sin(t * .9 + i) * 5, 0, q.z - p0.tx * Math.sin(t * .9 + i) * 5); beam.rotation.set(Math.sin(t * .7 + i) * .5, 0, Math.cos(t * .45 + i * 2) * .5); });
+    });
+  }
 }
 
 export async function loadTrack(id, onProgress) {

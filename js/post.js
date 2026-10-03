@@ -7,12 +7,15 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const FX = {
-  uniforms: { tDiffuse: { value: null }, sunPos: { value: new THREE.Vector2(.5, .5) }, sunVis: { value: 0 }, rays: { value: .085 }, speed: { value: 0 }, hit: { value: 0 }, vig: { value: .32 }, wet: { value: 0 }, tilt: { value: 0 }, grade: { value: 1 } },
+  uniforms: { tDiffuse: { value: null }, sunPos: { value: new THREE.Vector2(.5, .5) }, sunVis: { value: 0 }, rays: { value: .085 }, speed: { value: 0 }, hit: { value: 0 }, vig: { value: .32 }, wet: { value: 0 }, tilt: { value: 0 }, grade: { value: 1 }, time: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 sunPos; uniform float sunVis, rays, speed, hit, vig, wet, tilt, grade; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec2 sunPos; uniform float sunVis, rays, speed, hit, vig, wet, tilt, grade, time; varying vec2 vUv;
     void main(){
-      vec2 uv=vUv, c=uv-.5; vec3 col;
+      vec2 uv=vUv;
+      if(wet>.05){ vec2 g=uv*vec2(9.,5.5); float hc=fract(sin(floor(g.x)*91.7)*4375.5); g.y+=time*(.05+hc*.12); vec2 id=floor(g), f=fract(g)-.5; float h=fract(sin(dot(id,vec2(127.1,311.7)))*43758.5);
+        if(h>.5){ vec2 o=(vec2(fract(h*17.),fract(h*31.))-.5)*.5; float d=length((f-o)*vec2(1.,.7)); uv+=(f-o)*smoothstep(.05+.1*h,0.,d)*wet*.35; } }   // rain drops on the lens bend the picture as they run down
+      vec2 c=uv-.5; vec3 col;
       if(hit>.01){ vec2 o=c*hit*.014; col=vec3(texture2D(tDiffuse,uv+o).r, texture2D(tDiffuse,uv).g, texture2D(tDiffuse,uv-o).b); }
       else col=texture2D(tDiffuse,uv).rgb;
       if(speed>.01){ float m=smoothstep(.12,.62,length(c)); vec3 a=col; for(int i=1;i<8;i++) a+=texture2D(tDiffuse,uv-c*speed*.045*m*float(i)/8.).rgb; col=a/8.; }
@@ -20,7 +23,7 @@ const FX = {
       if(tilt>.01){ float b=tilt*smoothstep(.17,.5,abs(uv.y-.54)); if(b>.02){ vec2 p=vec2(.0034,.0058)*b; vec3 a=col*.2;
         a+=(texture2D(tDiffuse,uv+p).rgb+texture2D(tDiffuse,uv-p).rgb+texture2D(tDiffuse,uv+vec2(p.x,-p.y)).rgb+texture2D(tDiffuse,uv+vec2(-p.x,p.y)).rgb)*.12;
         a+=(texture2D(tDiffuse,uv+vec2(p.x*1.6,0.)).rgb+texture2D(tDiffuse,uv-vec2(p.x*1.6,0.)).rgb+texture2D(tDiffuse,uv+vec2(0.,p.y*1.6)).rgb+texture2D(tDiffuse,uv-vec2(0.,p.y*1.6)).rgb)*.08; col=a; } }   // tilt-shift: soft top and bottom for the miniature look
-      col=mix(vec3(dot(col,vec3(.299,.587,.114))), col, 1.+.2*grade); col*=mix(vec3(1.), vec3(1.05,1.,.93), grade);
+      col=mix(vec3(dot(col,vec3(.299,.587,.114))), col, 1.+.42*grade); col*=mix(vec3(1.), vec3(1.05,1.,.93), grade);
       col=mix(col, col*vec3(.86,.93,1.04), wet*.6);
       col*=1.-vig*smoothstep(.42,1.,length(c)*1.22);
       gl_FragColor=vec4(col,1.);

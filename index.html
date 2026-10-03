@@ -17,90 +17,86 @@
 <div id="menu" class="screen">
   <header class="top">
     <div class="logo"><span lang="ar" dir="rtl">تفحيط</span><b>Tafheet</b></div>
-    <nav class="tabs" id="tabs"><button data-tab="career">Career</button><button data-tab="quick">Quick play</button><button data-tab="online">Online</button><button data-tab="trophies">Trophies</button></nav>
+    <nav class="tabs" id="tabs">
+      <button data-tab="quick" data-t>Play</button><button data-tab="garage" data-t>Garage</button><button data-tab="tune" data-t>Tuning</button>
+      <button data-tab="online" data-t>Online</button><button data-tab="trophies" data-t>Trophies</button><button data-tab="settings" data-t>Settings</button>
+    </nav>
     <div class="level" title="Driver level"><b id="lvl">1</b><div><i id="xpBar"></i></div></div>
-    <div class="credits" title="Credits"><span id="credits">0</span> <small>credits</small></div>
-    <button id="assistBtn" class="chip" title="Stability assist strength">Assist</button>
-    <button id="gfxBtn" class="chip">Graphics</button>
-    <button id="gasBtn" class="chip" hidden>Auto gas</button>
-    <button id="muteBtn" class="chip" aria-label="Toggle sound">Sound on</button>
+    <div class="credits" title="Credits"><span id="credits">0</span> <small data-t>credits</small></div>
   </header>
 
   <section class="left">
-    <div id="tabCareer">
-      <div class="card chapter">
-        <button class="arrow" id="chPrev" aria-label="Previous chapter">‹</button>
-        <div><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p></div>
-        <button class="arrow" id="chNext" aria-label="Next chapter">›</button>
-      </div>
-      <ol id="events" class="events"></ol>
-    </div>
+    <div id="tabCareer" hidden><button id="chPrev"></button><button id="chNext"></button><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p><ol id="events"></ol></div>
     <div id="tabQuick">
-      <button id="daily" class="daily"><small>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button>
-      <div class="seg wide" id="modeSeg"><button data-mode="race">Race</button><button data-mode="trial">Time trial</button><button data-mode="drift">Drift attack</button></div>
-      <div class="seg wide two" id="rulesSeg"><button data-r="circuit">Circuit rules</button><button data-r="arcade">Arcade rules</button></div>
+      <div class="seg wide four" id="modeSeg"><button data-mode="race" data-t>Race</button><button data-mode="gp" data-t>Grand Prix</button><button data-mode="trial" data-t>Time trial</button><button data-mode="drift" data-t>Drift</button></div>
+      <div class="seg wide two" id="rulesSeg"><button data-r="circuit" data-t>Circuit rules</button><button data-r="arcade" data-t>Arcade rules</button></div>
+      <button id="daily" class="daily"><small data-t>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button>
+      <div id="gpBox" class="card gp" hidden></div>
+    </div>
+    <div id="tabGarage" hidden>
+      <h3 data-t>Paint</h3><div id="paints" class="paints"></div>
+      <div id="lookRows"></div>
+      <h3 data-t>Upgrades</h3><div id="ups" class="ups"></div>
+      <button id="buyBtn" class="btn" hidden></button>
+    </div>
+    <div id="tabTune" hidden><h3 data-t>Car set-up</h3><div id="tuneRows"></div></div>
+    <div id="tabTrophies" hidden><ul id="trophies" class="trophies"></ul></div>
+    <div id="tabSettings" hidden class="settings">
+      <label><span data-t>Language</span><div class="seg" id="langSeg"><button data-l="en">English</button><button data-l="ar">العربية</button></div></label>
+      <label><span data-t>Driver name</span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
+      <label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1" data-t>Close</button><button data-z="1.25" data-t>Normal</button><button data-z="1.5" data-t>Far</button><button data-z="1.9" data-t>Very far</button></div></label>
+      <label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label>
+      <label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label>
+      <label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label>
+      <div class="row chips"><button id="assistBtn" class="chip">Assist</button><button id="gfxBtn" class="chip">Graphics</button><button id="gasBtn" class="chip" hidden>Auto gas</button><button id="muteBtn" class="chip">Sound on</button><button id="resetBtn" class="chip danger" data-t>Reset progress</button></div>
     </div>
 
-    <div id="tabTrophies" hidden><ul id="trophies" class="trophies"></ul></div>
     <div class="card track">
       <button class="arrow" id="trkPrev" aria-label="Previous track">‹</button>
       <div class="mid">
         <canvas id="trkMap" width="120" height="90"></canvas>
-        <div>
-          <h2 id="trkName"></h2>
-          <p id="trkBlurb"></p>
-          <p class="meta"><span id="trkLen"></span><span id="trkBest"></span></p>
-        </div>
+        <div><h2 id="trkName"></h2><p id="trkBlurb"></p><p class="meta"><span id="trkLen"></span><span id="trkBest"></span></p></div>
       </div>
       <button class="arrow" id="trkNext" aria-label="Next track">›</button>
     </div>
-
-    <div class="row opts" id="optsRow">
-      <div class="stepper"><span>Laps</span><button id="lapMinus">−</button><b id="laps">3</b><button id="lapPlus">+</button></div>
-      <div class="seg" id="diff"><button data-d="0">Easy</button><button data-d="1" class="on">Medium</button><button data-d="2">Hard</button></div>
+    <div class="opts2" id="optsRow">
+      <div class="stepper"><span data-t>Laps</span><button id="lapMinus">−</button><b id="laps">3</b><button id="lapPlus">+</button></div>
+      <div class="stepper"><span data-t>Rivals</span><button id="rivMinus">−</button><b id="rivals">5</b><button id="rivPlus">+</button></div>
+      <div class="seg" id="diff"><button data-d="0" data-t>Easy</button><button data-d="1" class="on" data-t>Medium</button><button data-d="2" data-t>Hard</button></div>
+      <div class="seg" id="wxSeg"><button data-w="clear" data-t>Dry</button><button data-w="random" data-t>Changeable</button><button data-w="rain" data-t>Rain</button></div>
     </div>
 
     <div id="onlineBox" class="card online" hidden>
       <div id="onlineJoin">
-        <button id="createRoom" class="btn">Create room</button>
-        <span class="or">or</span>
+        <button id="createRoom" class="btn" data-t>Create room</button>
+        <span class="or" data-t>or</span>
         <input id="roomCode" maxlength="5" placeholder="Code" autocomplete="off" spellcheck="false">
-        <button id="joinRoom" class="btn ghost">Join</button>
+        <button id="joinRoom" class="btn ghost" data-t>Join</button>
       </div>
       <div id="lobby" hidden>
-        <p>Room <b id="lobbyCode"></b> <button id="copyLink" class="link">copy invite link</button> <button id="leaveRoom" class="link">leave</button></p>
+        <p><span data-t>Room</span> <b id="lobbyCode"></b> <button id="copyLink" class="link" data-t>copy invite link</button> <button id="leaveRoom" class="link" data-t>leave</button></p>
         <ul id="lobbyList"></ul>
       </div>
       <p id="onlineMsg" class="note"></p>
     </div>
-
     <ol id="board" class="board" hidden></ol>
-
     <button id="startBtn" class="start">Start race</button>
-    <p class="keys">Arrows / WASD drive · Space handbrake · Shift nitro · R reset · C camera · Esc pause</p>
   </section>
 
   <section class="garage">
-    <label class="driver">Driver <input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
     <div class="carpick">
       <button class="arrow" id="carPrev" aria-label="Previous car">‹</button>
-      <div>
-        <h2 id="carName"></h2>
-        <p id="carBlurb"></p>
-      </div>
+      <div><h2 id="carName"></h2><p id="carBlurb"></p></div>
       <button class="arrow" id="carNext" aria-label="Next car">›</button>
     </div>
     <dl class="stats">
-      <dt>Speed</dt><dd><i id="stSpeed"></i></dd>
-      <dt>Launch</dt><dd><i id="stAcc"></i></dd>
-      <dt>Grip</dt><dd><i id="stGrip"></i></dd>
-      <dt>Drift</dt><dd><i id="stDrift"></i></dd>
+      <dt data-t>Speed</dt><dd><i id="stSpeed"></i></dd>
+      <dt data-t>Launch</dt><dd><i id="stAcc"></i></dd>
+      <dt data-t>Grip</dt><dd><i id="stGrip"></i></dd>
+      <dt data-t>Drift</dt><dd><i id="stDrift"></i></dd>
     </dl>
-    <div id="ups" class="ups"></div>
-    <div id="paints" class="paints"></div>
-    <button id="buyBtn" class="btn" hidden></button>
   </section>
-  <footer class="credit">Track: “Karting Club Lider” by Nikita Teploukhov (CC BY-NC 4.0) · Cars: “Ultimate Low-Poly Car Pack” by ProbablyNotG (CC BY 4.0) · EGYSeal</footer>
+  <footer class="credit">Track: “Karting Club Lider” by Nikita Teploukhov (CC BY-NC 4.0) · Cars: “Ultimate Low-Poly Car Pack” 1 &amp; 2 by ProbablyNotG (CC BY 4.0) · EGYSeal</footer>
 </div>
 
 <!-- ============ LOADING ============ -->
@@ -113,21 +109,21 @@
 <!-- ============ HUD ============ -->
 <div id="hud" hidden>
   <div class="hp">
-    <div class="big" id="hPosBox"><b id="hPos">1</b><span><small>Pos</small><i id="hPosOf">/6</i></span></div>
+    <div class="big" id="hPosBox"><b id="hPos">1</b><span><small data-t>Pos</small><i id="hPosOf">/6</i></span></div>
     <ol id="order"></ol>
   </div>
   <div class="ht">
-    <div class="big"><b id="hLapN">1</b><span><small>Lap</small><i id="hLapOf">/3</i></span></div>
-    <div class="trow"><span>Best</span><b id="hBest">—</b></div>
-    <div class="trow"><span>Lap</span><b id="hTime">0:00.00</b></div>
+    <div class="big"><b id="hLapN">1</b><span><small data-t>Lap</small><i id="hLapOf">/3</i></span></div>
+    <div class="trow"><span data-t>Best</span><b id="hBest">—</b></div>
+    <div class="trow"><span data-t>Lap</span><b id="hTime">0:00.00</b></div>
     <div class="trow sec"><b id="hSec"></b></div>
     <div class="trow" id="hPingRow" hidden><span>Ping</span><b id="hPing">…</b></div>
   </div>
   <div class="hg">
-    <div class="ring" id="gBody"><b id="hBody">100</b><small>Car</small></div>
-    <div class="ring" id="gFuel"><b id="hFuel">100</b><small>Fuel</small></div>
+    <div class="ring" id="gBody"><b id="hBody">100</b><small data-t>Car</small></div>
+    <div class="ring" id="gFuel"><b id="hFuel">100</b><small data-t>Fuel</small></div>
     <div class="ring" id="gTyre"><b id="hTyre">100</b><small id="hTyreLbl">Tyres</small></div>
-    <div class="spd"><b id="hSpeed">0</b><span>km/h</span><em id="hGear">1</em></div>
+    <div class="spd"><b id="hSpeed">0</b><span id="hUnit">km/h</span><em id="hGear">1</em></div>
   </div>
   <div class="hx" id="hArc" hidden>
     <div class="nitro"><i id="hNitro"></i></div>
@@ -141,7 +137,7 @@
   <div id="lights"><i></i><i></i><i></i><i></i><i></i></div>
   <div id="msg"></div>
   <div id="touch" hidden>
-    <button data-k="left" class="t l">◀</button><button data-k="right" class="t r">▶</button>
+    <div id="steer" aria-label="Steering: slide left or right"><span>◀</span><i></i><span>▶</span></div>
     <button data-k="nitro" class="t n">N₂O</button><button data-k="hand" class="t h">Drift</button>
     <button data-k="brake" class="t b">Brake</button><button data-k="gas" class="t g">Gas</button>
   </div>
@@ -150,10 +146,10 @@
 
 <!-- ============ PAUSE / RESULTS ============ -->
 <div id="pause" class="screen center dim" hidden>
-  <h2>Paused</h2>
-  <button class="start" id="resumeBtn">Resume</button>
-  <button class="btn" id="restartBtn">Restart</button>
-  <button class="btn ghost" id="quitBtn">Back to menu</button>
+  <h2 data-t>Paused</h2>
+  <button class="start" id="resumeBtn" data-t>Resume</button>
+  <button class="btn" id="restartBtn" data-t>Restart</button>
+  <button class="btn ghost" id="quitBtn" data-t>Back to menu</button>
 </div>
 <div id="results" class="screen center dim" hidden>
   <div id="resStars" class="stars"></div>
@@ -161,7 +157,7 @@
   <p id="resSub"></p>
   <table id="resTable"></table>
   <p id="resReward" class="reward"></p>
-  <div class="row"><button class="start" id="againBtn">Race again</button><button class="btn ghost" id="menuBtn">Menu</button></div>
+  <div class="row"><button class="start" id="againBtn">Race again</button><button class="btn ghost" id="menuBtn" data-t>Menu</button></div>
 </div>
 <div id="story" class="screen dim" hidden>
   <div class="dialog">

@@ -285,3 +285,55 @@ h1 b{font-size:clamp(20px,2.4vw,30px);letter-spacing:.32em;text-transform:upperc
   body.touch #touch .h{right:148px;bottom:calc(144px + env(safe-area-inset-bottom))}body.touch #touch .n{right:34px;bottom:calc(156px + env(safe-area-inset-bottom))}
   body.touch #tele{bottom:110px}
 }
+
+/* ---------- touch controls v2: steering slider on the left, pedals on the right ---------- */
+#touch,#touch *{-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+body.touch #steer{position:absolute;pointer-events:auto;left:calc(16px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));width:210px;height:92px;border-radius:46px;background:rgba(23,24,28,.42);border:2px solid rgba(243,244,246,.35);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-style:normal;font-size:20px;color:rgba(243,244,246,.6);touch-action:none}
+body.touch #steer i{position:absolute;left:50%;top:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;background:rgba(243,244,246,.85);box-shadow:0 3px 0 rgba(0,0,0,.35);transition:transform .08s}
+body.touch #steer.on{border-color:var(--yellow)}body.touch #steer.on i{background:var(--yellow);transition:none}
+body.touch #touch .t{position:absolute;pointer-events:auto;left:auto;font-style:normal;font-weight:700;font-size:15px;color:#fff;background:rgba(23,24,28,.45);border:2px solid rgba(243,244,246,.4);touch-action:none}
+body.touch #touch .g{right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:88px;height:128px;border-radius:20px;border-color:rgba(47,180,87,.9);background:rgba(47,180,87,.28)}
+body.touch #touch .b{right:calc(112px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:88px;height:98px;border-radius:20px;border-color:rgba(227,38,46,.9);background:rgba(227,38,46,.26)}
+body.touch #touch .h{right:calc(124px + env(safe-area-inset-right));bottom:calc(124px + env(safe-area-inset-bottom));width:64px;height:64px;border-radius:50%}
+body.touch #touch .n{right:calc(28px + env(safe-area-inset-right));bottom:calc(154px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;border-color:var(--blue)}
+body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow)}
+@media (min-width:901px) and (min-height:481px){
+  body.touch #steer{width:280px;height:116px;border-radius:58px;left:28px;bottom:36px}body.touch #steer i{width:86px;height:86px;margin:-43px 0 0 -43px}
+  body.touch #touch .g{right:28px;bottom:36px;width:112px;height:160px;font-size:18px}body.touch #touch .b{right:156px;bottom:36px;width:112px;height:124px;font-size:18px}
+  body.touch #touch .h{right:176px;bottom:176px;width:78px;height:78px}body.touch #touch .n{right:46px;bottom:214px;width:72px;height:72px}
+}
+
+/* ---------- v6 menu: showcase behind, six tabs, garage, tuning, settings ---------- */
+#menu{background:linear-gradient(90deg,rgba(15,16,19,.9) 0,rgba(15,16,19,.72) 30%,rgba(15,16,19,.12) 58%,rgba(15,16,19,0) 100%)}
+.tabs button{padding:9px 14px;font-size:15px}
+.left h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--yellow);font-weight:700;margin:10px 0 5px}
+.left h3:first-child{margin-top:0}
+.seg.wide.four{grid-template-columns:repeat(4,1fr)}.seg.wide button{font-size:13.5px}
+#tabQuick{display:flex;flex-direction:column;gap:8px}#tabQuick .daily{margin:0}#tabQuick .seg.two{margin:0}
+.opts2{display:grid;grid-template-columns:auto auto;gap:8px 14px;align-items:center;justify-content:space-between}
+.opts2 .seg button{padding:6px 10px;font-size:13px}
+.gp h2{font-size:20px;font-style:italic;font-weight:900}.gp p{font-size:13px;color:var(--dim);margin:4px 0}.gp .meta{color:var(--chalk)}
+.gp ol{margin:6px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.gp li{padding:6px 10px;background:var(--asphalt);border-left:3px solid var(--line);font-size:13px}.gp li.on{border-left-color:var(--red);font-weight:700}.gp li.done{opacity:.5;text-decoration:line-through}
+#lookRows .paints,#tabGarage .paints{justify-content:flex-start}
+.paints button{font-size:14px;color:var(--dim);line-height:1}
+.trow2{display:grid;grid-template-columns:86px 62px 28px 1fr 28px 62px;gap:6px;align-items:center;margin-bottom:7px;font-size:12px;color:var(--dim)}
+.trow2 b{color:var(--chalk);font-size:13.5px}.trow2 span:last-child{text-align:right}
+.trow2 button{height:28px;background:var(--tarmac);border:1px solid var(--line);font-size:16px}
+.trow2 i{display:flex;gap:4px;justify-content:center}.trow2 u{width:100%;height:8px;background:var(--tarmac);transform:skewX(-20deg)}.trow2 u.on{background:var(--yellow)}
+.settings{display:flex;flex-direction:column;gap:10px}
+.settings label{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center;font-size:14px;color:var(--dim)}
+.settings input:not([type=range]){background:var(--tarmac);border:1px solid var(--line);border-radius:4px;padding:7px 10px;color:var(--chalk);font-weight:700;-webkit-user-select:text;user-select:text;min-width:0}
+.settings input[type=range]{accent-color:var(--yellow);width:100%}
+.settings .seg button{flex:1}
+.chips{justify-content:flex-start;gap:8px;margin-top:4px}.chip.danger{border-color:var(--red);color:#ff8f95}
+.garage[hidden]{display:none}
+#menu[dir=rtl] .logo{flex-direction:row}#menu[dir=rtl] .level{margin-left:0;margin-right:auto}
+#menu[dir=rtl] .modes button,#menu[dir=rtl] .events li,#menu[dir=rtl] .trophies li,#menu[dir=rtl] .gp li{border-left:0;border-right:4px solid var(--line)}
+#menu[dir=rtl]{background:linear-gradient(270deg,rgba(15,16,19,.9) 0,rgba(15,16,19,.72) 30%,rgba(15,16,19,.12) 58%,rgba(15,16,19,0) 100%)}
+#menu[dir=rtl] .start,#menu[dir=rtl] .btn{transform:skewX(10deg)}
+[dir=rtl] *{letter-spacing:0!important}
+@media (max-width:900px),(max-height:480px){.tabs button{padding:7px 8px;font-size:13px}.settings label{grid-template-columns:100px 1fr}.trow2{grid-template-columns:70px 50px 26px 1fr 26px 50px}}
+
+.left{padding-bottom:76px}
+#menu[dir=rtl] .garage{justify-self:start}

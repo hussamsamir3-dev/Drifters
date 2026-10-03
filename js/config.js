@@ -7,15 +7,15 @@ export const TUNE = {
   tyre: {
     // lateral force curve: force = cap * sin(C * atan(B * slip)). Fronts peak near 11° and fall away ~25% when over-driven
     // (that is the understeer you feel); rears are stiffer and hold their force deep into a slide, which keeps slides catchable.
-    frontB: 10, frontC: 1.45,
-    rearB: 12, rearC: 1.3,
+    frontB: 12, frontC: 1.45,
+    rearB: 7.5, rearC: 1.3,
     driveShare: .45, brakeShare: .6,    // braking uses only part of the grip budget too, so you can brake and turn                    // how much of the drive force competes with cornering in the tyre's grip budget
     loadSens: .5,                       // how much an axle loses when cornering load shifts to the outside tyres
     wornGrip: .72,                      // grip multiplier of a fully worn tyre (fresh = 1)
     wear: { base: .0011, slip: .011, spin: .008, lock: .03, offroad: .002 },   // per second, scaled by what the tyre is doing
     wetLossSlick: .27, wetLossWet: .07, dryLossWet: .07,
   },
-  steer: { lock: .58, speedK: .055, rate: 3.4, rateSpeedK: .03, returnRate: 4.6, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
+  steer: { lock: .58, speedK: .055, rate: 4.4, rateSpeedK: .025, returnRate: 5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
   // Stability assist. `counter` adds automatic counter-steer in a slide, `power` eases the throttle as the slide angle grows.
   assist: { off: 0, low: .5, full: 1 },
   surface: { kerbGrip: .95, grassDrag: .15, roadDrag: .03, airDrag: .25 },
@@ -24,17 +24,19 @@ export const TUNE = {
   damage: { threshold: 3.5, scale: 34, enginePowerLoss: .4, steerPull: .05 },
   // ---- easy-to-drive set-up ----
   gripScale: 1.3,                       // overall tyre grip. Raise for a more planted car, lower for a looser one
-  rearBias: 1.22,                       // rear grip relative to front. Higher = safer, more understeer
+  rearBias: 1.16,                       // rear grip relative to front. Higher = safer, more understeer
   powerSlide: .45,                      // how much full throttle loosens the rear (0 = never, 1 = a lot)
-  slideAid: 2.4,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
-  assistYawDamp: 1.1,                   // extra rotation damping at Assist Full
+  slideAid: .3,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
+  assistYawDamp: .35,                   // extra rotation damping at Assist Full
   wall: { bounce: .04, spin: .35, friction: .22, yawKeep: .97 },   // barrier contact: restitution, share of impulse that may rotate the car, wall friction
-  yawDamp: .6, yawDampSpeed: .012,       // yaw damping (1/s), rising with speed for high-speed stability
+  yawDamp: .45, yawDampSpeed: .01,       // yaw damping (1/s), rising with speed for high-speed stability
   // Online sync. hz = state messages per second from each player. The free Supabase plan allows 100 messages/s for the
   // whole project, so 24 keeps a duel safely under it; on a paid plan 30-40 is fine. minBuffer/maxBuffer bound how far in
   // the past the rival is drawn (ms): lower = more immediate, higher = smoother on a poor connection.
   net: { hz: 24, minBuffer: 45, maxBuffer: 300, intervalK: 1.2, jitterK: 2.6 },
   reset: { penalty: 2 },                // seconds held stationary after pressing reset
+  // garage tuning: effect of one click (each setting runs from -2 to +2)
+  setup: { gearAcc: .04, gearTop: .035, aeroDown: .35, aeroTop: .02, biasStep: .05, rollStep: .03, compound: { soft: [1.04, 1.6], medium: [1, 1], hard: [.97, .6] } },
   toy: { w: 1.08, h: 1.16, l: .88, wheel: 1.12 },   // visual proportions only: short, tall, big-wheeled miniature cars
 };
 
@@ -43,11 +45,18 @@ export const TUNE = {
 // brake = peak braking in g · aero = downforce coefficient · rollF = share of roll stiffness on the front axle
 // (higher = more understeer at the limit) · yawK = yaw inertia factor (higher = lazier to rotate, slower to recover)
 export const CARS = [
-  { id: 'Ford',      name: 'Scarab RS',  ar: 'الجعران',  cls: 'Compact · FWD', price: 0,    color: 0x1f6feb, top: 50, acc: 8.6,  grip: 1.22, rear: 1.04, loose: .3,  off: .62, mass: 1180, drive: 'fwd', brake: 1.25, aero: .5,  rollF: .60, yawK: 1.12, blurb: 'Front-drive hot hatch. Safe understeer, lift to tuck the nose in. The beginner\u2019s car.' },
-  { id: 'Sterrato',  name: 'Sandstorm',  ar: 'العاصفة',  cls: 'Rally · AWD',   price: 0,    color: 0xe8a21c, top: 53, acc: 9.4,  grip: 1.18, rear: 1.0,  loose: .5,  off: .8,  mass: 1350, drive: 'awd', brake: 1.25, aero: .7,  rollF: .54, yawK: 1.25, blurb: 'All-wheel drive. Huge traction out of corners and barely notices the grass.' },
-  { id: 'Mercedes',  name: 'Pharaoh',    ar: 'الفرعون',  cls: 'Touring · RWD', price: 1500, color: 0x1c1f26, top: 56, acc: 9.8,  grip: 1.15, rear: .96,  loose: .8,  off: .55, mass: 1650, drive: 'rwd', brake: 1.2,  aero: .6,  rollF: .50, yawK: 1.4,  blurb: 'Heavy rear-drive saloon. Long braking, and the tail steps out under power.' },
-  { id: 'LandRover', name: 'Sphinx 4x4', ar: 'أبو الهول', cls: 'Truck · AWD',   price: 2500, color: 0x2f7d4f, top: 49, acc: 9.0,  grip: 1.12, rear: 1.03, loose: .4,  off: .9,  mass: 2100, drive: 'awd', brake: 1.05, aero: .3,  rollF: .57, yawK: 1.6,  blurb: 'Two tonnes. Slow to turn, slow to stop, wins every shoving match.' },
-  { id: 'Artura',    name: 'Cobra',      ar: 'الكوبرا',  cls: 'GT · RWD',      price: 4000, color: 0xff6a13, top: 60, acc: 11.0, grip: 1.32, rear: .99,  loose: .6,  off: .5,  mass: 1400, drive: 'rwd', brake: 1.4,  aero: 1.2, rollF: .52, yawK: 1.1,  blurb: 'Mid-engine GT. Sharp turn-in, strong brakes, needs a smooth right foot.' },
-  { id: 'Ferrari',   name: 'Ra Rosso',   ar: 'رع',       cls: 'GT · RWD',      price: 6500, color: 0xd81e2c, top: 64, acc: 11.8, grip: 1.36, rear: .97,  loose: .7,  off: .5,  mass: 1450, drive: 'rwd', brake: 1.45, aero: 1.4, rollF: .50, yawK: 1.1,  blurb: 'V8 GT. Faster everywhere than the Cobra and less forgiving about it.' },
-  { id: 'Zenvo',     name: 'Horus GT',   ar: 'حورس',     cls: 'Hyper · RWD',   price: 9500, color: 0x1436a8, top: 69, acc: 12.8, grip: 1.42, rear: .98,  loose: .75, off: .45, mass: 1500, drive: 'rwd', brake: 1.5,  aero: 2.3, rollF: .50, yawK: 1.05, blurb: 'Downforce car: the faster you go, the harder it grips. Brutal on cold nerves.' },
+  { id: 'Ford', cyl: 4,      name: 'Scarab RS',  ar: 'الجعران',  cls: 'Compact · FWD', price: 0,    color: 0x1f6feb, top: 50, acc: 8.6,  grip: 1.22, rear: 1.04, loose: .3,  off: .62, mass: 1180, drive: 'fwd', brake: 1.25, aero: .5,  rollF: .60, yawK: 1.12, blurb: 'Front-drive hot hatch. Safe understeer, lift to tuck the nose in. The beginner\u2019s car.' },
+  { id: 'Sterrato', cyl: 10,  name: 'Sandstorm',  ar: 'العاصفة',  cls: 'Rally · AWD',   price: 0,    color: 0xe8a21c, top: 53, acc: 9.4,  grip: 1.18, rear: 1.0,  loose: .5,  off: .8,  mass: 1350, drive: 'awd', brake: 1.25, aero: .7,  rollF: .54, yawK: 1.25, blurb: 'All-wheel drive. Huge traction out of corners and barely notices the grass.' },
+  { id: 'Mercedes', cyl: 8,  name: 'Pharaoh',    ar: 'الفرعون',  cls: 'Touring · RWD', price: 1500, color: 0x1c1f26, top: 56, acc: 9.8,  grip: 1.15, rear: .96,  loose: .8,  off: .55, mass: 1650, drive: 'rwd', brake: 1.2,  aero: .6,  rollF: .50, yawK: 1.4,  blurb: 'Heavy rear-drive saloon. Long braking, and the tail steps out under power.' },
+  { id: 'LandRover', cyl: 8, name: 'Sphinx 4x4', ar: 'أبو الهول', cls: 'Truck · AWD',   price: 2500, color: 0x2f7d4f, top: 49, acc: 9.0,  grip: 1.12, rear: 1.03, loose: .4,  off: .9,  mass: 2100, drive: 'awd', brake: 1.05, aero: .3,  rollF: .57, yawK: 1.6,  blurb: 'Two tonnes. Slow to turn, slow to stop, wins every shoving match.' },
+  { id: 'Artura', cyl: 6,    name: 'Cobra',      ar: 'الكوبرا',  cls: 'GT · RWD',      price: 4000, color: 0xff6a13, top: 60, acc: 11.0, grip: 1.32, rear: .99,  loose: .6,  off: .5,  mass: 1400, drive: 'rwd', brake: 1.4,  aero: 1.2, rollF: .52, yawK: 1.1,  blurb: 'Mid-engine GT. Sharp turn-in, strong brakes, needs a smooth right foot.' },
+  { id: 'Ferrari', cyl: 8,   name: 'Ra Rosso',   ar: 'رع',       cls: 'GT · RWD',      price: 6500, color: 0xd81e2c, top: 64, acc: 11.8, grip: 1.36, rear: .97,  loose: .7,  off: .5,  mass: 1450, drive: 'rwd', brake: 1.45, aero: 1.4, rollF: .50, yawK: 1.1,  blurb: 'V8 GT. Faster everywhere than the Cobra and less forgiving about it.' },
+  { id: 'Zenvo', cyl: 8,     name: 'Horus GT',   ar: 'حورس',     cls: 'Hyper · RWD',   price: 9500, color: 0x1436a8, top: 69, acc: 12.8, grip: 1.42, rear: .98,  loose: .75, off: .45, mass: 1500, drive: 'rwd', brake: 1.5,  aero: 2.3, rollF: .50, yawK: 1.05, blurb: 'Downforce car: the faster you go, the harder it grips. Brutal on cold nerves.' },
+  { id: 'Mustang',  cyl: 8,  name: 'Khamsin',    ar: 'الخماسين', cls: 'Muscle · RWD',  price: 2000, color: 0xf2c200, top: 58, acc: 10.6, grip: 1.14, rear: .94,  loose: .9,  off: .5,  mass: 1700, drive: 'rwd', brake: 1.15, aero: .5,  rollF: .48, yawK: 1.35, blurb: 'Big V8 muscle. Loud, fast in a straight line, and happy to go sideways.' },
+  { id: 'M8',       cyl: 8,  name: 'Anubis M',   ar: 'أنوبيس',   cls: 'Touring · RWD', price: 3500, color: 0x0f5c4a, top: 62, acc: 11.0, grip: 1.28, rear: .97,  loose: .7,  off: .5,  mass: 1750, drive: 'rwd', brake: 1.35, aero: .9,  rollF: .52, yawK: 1.3,  blurb: 'Grand tourer. Heavy but composed, with long legs on the straights.' },
+  { id: 'Urus',     cyl: 8,  name: 'Bastet SUV', ar: 'باستيت',   cls: 'Super SUV · AWD', price: 4500, color: 0xf3f4f6, top: 60, acc: 11.2, grip: 1.2,  rear: 1.02, loose: .45, off: .82, mass: 2200, drive: 'awd', brake: 1.2,  aero: .6,  rollF: .56, yawK: 1.55, blurb: 'A fast SUV. Launches hard on four driven wheels, leans on its brakes.' },
+  { id: 'Porsche',  cyl: 8,  name: 'Nefertiti S', ar: 'نفرتيتي',  cls: 'Sports saloon · AWD', price: 5000, color: 0x7b3fe4, top: 61, acc: 11.4, grip: 1.3,  rear: 1.0,  loose: .5,  off: .6,  mass: 1900, drive: 'awd', brake: 1.35, aero: 1.0, rollF: .53, yawK: 1.35, blurb: 'All-wheel-drive saloon. Stable, quick, and easy to trust in the rain.' },
+  { id: 'AMG',      cyl: 8,  name: 'Osiris GT',  ar: 'أوزيريس',  cls: 'GT · RWD',      price: 6000, color: 0x2fb457, top: 63, acc: 11.6, grip: 1.33, rear: .97,  loose: .7,  off: .5,  mass: 1600, drive: 'rwd', brake: 1.4,  aero: 1.3, rollF: .5,  yawK: 1.15, blurb: 'Front-engine GT with a long bonnet. Balanced, and rewards trail braking.' },
+  { id: 'GTR',      cyl: 6,  name: 'Sobek R',    ar: 'سوبك',     cls: 'GT · AWD',      price: 7000, color: 0x19a7ce, top: 64, acc: 12.4, grip: 1.34, rear: 1.0,  loose: .5,  off: .6,  mass: 1750, drive: 'awd', brake: 1.4,  aero: 1.3, rollF: .54, yawK: 1.25, blurb: 'Twin-turbo all-wheel drive. Monstrous traction out of slow corners.' },
+  { id: 'P1GTR',    cyl: 8,  name: 'Seth GTR',   ar: 'ست',       cls: 'Track hyper · RWD', price: 12000, color: 0xff6a13, top: 70, acc: 13.2, grip: 1.48, rear: .99,  loose: .7,  off: .42, mass: 1400, drive: 'rwd', brake: 1.55, aero: 2.9, rollF: .5,  yawK: 1.0,  blurb: 'Track-only hypercar. Enormous downforce; the fastest car in the game.' },
 ];
