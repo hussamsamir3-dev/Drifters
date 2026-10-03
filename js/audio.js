@@ -47,7 +47,7 @@ export class GameAudio {
     // a very short, dark tail, as if heard from the trackside. That shared space is what makes a bang belong to the car.
     { const len = Math.floor(c.sampleRate * .32), ir = c.createBuffer(1, len, c.sampleRate), d = ir.getChannelData(0); for (let i = 0; i < len; i++) { const tt = i / c.sampleRate; d[i] = (Math.random() * 2 - 1) * Math.exp(-tt / .07) * (tt < .004 ? 0 : 1); } for (const ms of [11, 23, 37, 58]) d[Math.floor(ms / 1000 * c.sampleRate)] += .5;
       const cv = c.createConvolver(); cv.buffer = ir; const wl = c.createBiquadFilter(); wl.type = 'lowpass'; wl.frequency.value = 2600; const wg = c.createGain(); wg.gain.value = .22; this.engBus.connect(cv); cv.connect(wl); wl.connect(wg); wg.connect(this.master); }
-    this.shotLP = c.createBiquadFilter(); this.shotLP.type = 'lowpass'; this.shotLP.frequency.value = 3400; this.shotLP.Q.value = .4; this.shotLP.connect(this.engBus);     // bangs come from the tailpipe, behind and below: slightly muffled
+    this.shotLP = c.createBiquadFilter(); this.shotLP.type = 'lowpass'; this.shotLP.frequency.value = 5200; this.shotLP.Q.value = .4; this.shotLP.connect(this.engBus);     // bangs come from the tailpipe, behind and below: slightly muffled
     this.airLP = c.createBiquadFilter(); this.airLP.type = 'lowpass'; this.airLP.frequency.value = 5200; this.airLP.connect(this.engBus);                                    // turbo air: brighter, but still through the car
     this.sfx = c.createGain(); this.sfx.gain.value = this.vol; this.sfx.connect(this.master);
     this.meterNode = c.createAnalyser(); this.meterNode.fftSize = 1024; this.master.connect(this.meterNode);
@@ -92,10 +92,10 @@ export class GameAudio {
         // Turbo. Boost builds with load and revs and lags behind the throttle like a real compressor. The spool is a whistle whose pitch
         // follows boost; lifting off while on boost dumps it through the blow-off valve (with flutter if you lift at high revs).
         const tb = s.turbo || 0, want = tb ? Math.min(1, s.load * (.25 + s.rpmN * 1.1)) : 0; this.boost = (this.boost || 0) + (want - (this.boost || 0)) * (want > (this.boost || 0) ? .045 : .12);
-        if (this.ty) { this.ty.spool.g.gain.setTargetAtTime(Math.min(1, tb) * this.boost * this.boost * .085, t, .1); this.ty.spool.src.playbackRate.setTargetAtTime(.45 + this.boost * .75 + s.rpmN * .2, t, .1); }
+        if (this.ty) { this.ty.spool.g.gain.setTargetAtTime(Math.min(1, tb) * this.boost * this.boost * .12, t, .1); this.ty.spool.src.playbackRate.setTargetAtTime(.45 + this.boost * .75 + s.rpmN * .2, t, .1); }
         this.spool.g.gain.setTargetAtTime(0, t, .1);
         if (this.lastLoad > .6 && s.load < .15 && t - (this.liftT || 0) > .9) { this.liftT = t;
-          if (tb && this.boost > .35) { this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .11 + this.boost * .1, true); this.boost *= .2; }
+          if (tb && this.boost > .35) { this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .36 + this.boost * .24, true); this.boost *= .2; }
           else if (!tb && s.rpmN > .5 && sp.pops === 'crackle' && Math.random() < .6) this.shot('crackle', .5); }
         this.lastLoad += (s.load - this.lastLoad) * .5; }
     }
@@ -122,7 +122,7 @@ export class GameAudio {
   // The single entry point for a completed gear change. dir +1 up, -1 down.
   shift(dir, load, rpmN, pops) {
     if (!this.ctx || this.quiet) return; const t = this.ctx.currentTime; this.dipUntil = t + (dir > 0 ? .13 : .09);
-    if (dir > 0 && load > .6 && rpmN > .5 && pops) { this.shot('bang' + (pops === 'crackle' ? 1 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0)), .2 + rpmN * .12); if (pops === 'crackle' && Math.random() < .5) setTimeout(() => this.shot('crackle', .16, true), 120); }   // a hard, high-rev upshift lights the exhaust: a bang, and on lively cars a crackle after it   // only on a hard, high-rpm upshift
+    if (dir > 0 && load > .6 && rpmN > .5 && pops) { this.shot('bang' + (pops === 'crackle' ? 1 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0)), .85 + rpmN * .25); if (pops === 'crackle' && Math.random() < .5) setTimeout(() => this.shot('crackle', .28, true), 120); }   // a hard, high-rev upshift lights the exhaust: a bang, and on lively cars a crackle after it   // only on a hard, high-rpm upshift
   }
   shot(kind, vol = .5, force = false) {                   // one-shot exhaust pop: fresh source each time, cooldown, voice cap, small pitch and level variation
     const c = this.ctx, buf = this.buf[SHOTS[kind]], t = c.currentTime; if (!buf || (!force && t - (this.shotT || 0) < .22) || this.stats.liveShots >= 4) return; if (!force) this.shotT = t;
