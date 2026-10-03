@@ -21,11 +21,12 @@ const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
 // ---------------- save game ----------------
 const KEY = 'tafheet.v1';
-const save = { lang: 'en', zoom: 1.5, units: 'kmh', mvol: .5, svol: .7, look: {}, tune: {}, gp: null, v5: 0, assist: 'full', rules: 'circuit', sectors: {}, up: {}, stats: {}, trophies: {}, gfx: 'auto', autoGas: false, story: {}, xp: 0, daily: '', streak: 0, credits: 0, owned: ['Ford', 'Sterrato'], car: 'Ford', paint: {}, name: '', best: {}, bestDrift: {}, muted: false };
+const save = { v7: 0, lang: 'en', zoom: 2.25, units: 'kmh', mvol: .5, svol: .7, look: {}, tune: {}, gp: null, v5: 0, assist: 'full', rules: 'circuit', sectors: {}, up: {}, stats: {}, trophies: {}, gfx: 'auto', autoGas: false, story: {}, xp: 0, daily: '', streak: 0, credits: 0, owned: ['Ford', 'Sterrato'], car: 'Ford', paint: {}, name: '', best: {}, bestDrift: {}, muted: false };
 try { Object.assign(save, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
 if (!save.name) save.name = 'Driver' + (100 + Math.random() * 900 | 0);
 { const q = new URLSearchParams(location.search).get('gfx'); if (['auto', 'high', 'medium', 'low'].includes(q)) save.gfx = q; }   // e.g. index.html?gfx=low
-if (!save.v5) { save.autoGas = false; save.v5 = 1; }   // automatic gas is now off unless switched on in the menu
+if (!save.v5) { save.autoGas = false; save.v5 = 1; }
+if (!save.v7) { save.zoom = 2.25; save.v7 = 1; }   // automatic gas is now off unless switched on in the menu
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
 const tx = s => save.lang === 'ar' && AR[s] != null ? AR[s] : s;
 const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 });
@@ -46,7 +47,7 @@ const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(55, 1, .3,
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1), sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; sun.shadow.normalBias = .04;
-Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 320 });
+Object.assign(sun.shadow.camera, { left: -95, right: 95, top: 95, bottom: -95, near: 1, far: 360 }); sun.shadow.mapSize.set(4096, 4096);
 scene.add(hemi, sun, sun.target);
 let post = null;
 function resize() { const w = innerWidth, h = innerHeight; renderer.setPixelRatio(pixelRatio); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (post) post.setSize(w, h, pixelRatio); }
@@ -161,7 +162,7 @@ function respawn(car, manual) {
 }
 
 async function startRace(o) {
-  if (R) endRace(); const token = ++raceToken;
+  if (R) endRace(); const token = ++raceToken; window.__crowdK = gfx === 'high' ? .85 : gfx === 'medium' ? .5 : .3;
   if (!o.attract) { audio.init(); show('menu', false); show('results', false); show('pause', false); show('loading', true); }
   const def = TRACKS.find(t => t.id === o.track);
   $('loadName').textContent = def.name; $('loadBar').style.width = '4%'; $('loadTip').textContent = TIPS[Math.random() * TIPS.length | 0];
@@ -525,7 +526,7 @@ function updateCamera(dt) {
   if (R.marker) { R.marker.position.y = me.top + 1.5 + Math.sin(R.t * 4) * .12; R.marker.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
-    const yaw = tr.def.camYaw ?? .65, la = clamp(sp * .36, 0, 10), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5);
+    const yaw = tr.def.camYaw ?? .65, la = clamp(sp * .6, 0, 22) * Math.min(1, (save.zoom || 2.25) / 2.25), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 2.25);
     cam.look.x += (lx - cam.look.x) * k; cam.look.z += (lz - cam.look.z) * k; cam.look.y += (me.y - cam.look.y) * k;
     camera.position.set(cam.look.x - Math.sin(yaw) * m.d * z, cam.look.y + m.h * z, cam.look.z - Math.cos(yaw) * m.d * z); camera.lookAt(cam.look); cam.pos.copy(camera.position); cam.yaw = yaw;
     if (Math.abs(camera.fov - m.fov) > .05) { camera.fov = cam.fov = m.fov; camera.updateProjectionMatrix(); }
@@ -551,7 +552,7 @@ function updateCamera(dt) {
   if (Math.abs(camera.fov - cam.fov) > .05) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
 }
 // Menu showcase: a live AI race filmed by a director that cuts between an orbit, a crane, a low chase and a flyover.
-const tr2Tick = t => { if (t.tick) t.tick(performance.now() / 1000); };
+const tr2Tick = t => { if (!t.tick) return; const a = R.attract ? R.cars[(Math.floor(R.t / 7) * 3) % R.cars.length] : R.player, b = rank()[0]; t.tick(performance.now() / 1000, a.x, a.z, b.x, b.z); };
 let shotId = -1;
 function attractCam(dt) {
   const T = R.t, n = Math.floor(T / 7), k = n % 4, u = (T % 7) / 7, c = R.cars[(n * 3) % R.cars.length], X = c.rx ?? c.x, Z = c.rz ?? c.z, sn = Math.sin(c.th), cs = Math.cos(c.th);

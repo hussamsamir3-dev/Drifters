@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { getAsset, getJSON } from './assets.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4;
 
@@ -216,8 +217,52 @@ function buildProc(track) {
   const def = track.def, th = track.theme, hw = def.width / 2, B = hw + def.runoff, G = track.group;
   seed = def.id.length * 7919 + 13;
   // things that move: spectators bounce, flags wave, balloons drift, light beams sweep. main calls track.tick(time) each frame.
-  const uT = track.uTime = { value: 0 }, movers = []; track.fancyLights = []; track.tick = t => { uT.value = t; for (const f of movers) f(t); };
+  const uT = track.uTime = { value: 0 }, movers = []; track.fancyLights = [];
   const anim = (mat, code) => { mat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + code); }; return mat; };
+  // ---- people: jointed figures (legs, arms, head) animated on the graphics card. Behaviours: 0 = standing and chatting,
+  // 1 = fan (arms up, jumping, wilder as a car comes past), 2 = walking a beat back and forth. Everyone cheers when a car is close.
+  const CK = window.__crowdK || 1, uCar = { value: new THREE.Vector3(1e6, 0, 0) }, uCar2 = { value: new THREE.Vector3(1e6, 0, 0) };
+  track.tick = (t, x, z, x2, z2) => { uT.value = t; if (x != null) { uCar.value.set(x, 0, z); uCar2.value.set(x2 ?? x, 0, z2 ?? z); } for (const f of movers) f(t); };
+  const personGeo = (() => {
+    const tag = (g, part, limb) => { const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(part), 1)); g.setAttribute('aLimb', new THREE.BufferAttribute(new Float32Array(n).fill(limb), 1)); return g; };
+    const box = (w, h, d, x, y, z, part, limb) => tag(new THREE.BoxGeometry(w, h, d).translate(x, y, z), part, limb);
+    const torso = tag(new THREE.CylinderGeometry(.2, .16, .56, 8).scale(1, 1, .68).translate(0, 1.06, 0), 0, 0);
+    const head = tag(new THREE.SphereGeometry(.155, 8, 6).translate(0, 1.52, 0), 1, 5), hair = tag(new THREE.SphereGeometry(.166, 8, 4, 0, 6.2832, 0, 1.45).translate(0, 1.545, -.018), 3, 5);
+    return mergeGeometries([torso, box(.3, .14, .2, 0, .8, 0, 2, 0), box(.13, .78, .16, .085, .39, 0, 2, 3), box(.13, .78, .16, -.085, .39, 0, 2, 4), box(.1, .5, .11, .26, 1.06, 0, 0, 1), box(.1, .5, .11, -.26, 1.06, 0, 0, 2), box(.09, .1, .1, .26, .76, 0, 1, 1), box(.09, .1, .1, -.26, .76, 0, 1, 2), head, hair]);
+  })();
+  const personMat = new THREE.MeshStandardMaterial({ roughness: .85 });
+  personMat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.uniforms.uCar = uCar; sh.uniforms.uCar2 = uCar2;
+    sh.vertexShader = 'uniform float uTime; uniform vec3 uCar, uCar2; attribute float aPart, aLimb, aBeh, aPh, aWalk; attribute vec3 aSkin;\n' + sh.vertexShader
+      .replace('#include <color_vertex>', `#include <color_vertex>
+        #ifdef USE_INSTANCING_COLOR
+          vColor.rgb = aPart < .5 ? instanceColor.rgb : aPart < 1.5 ? aSkin : aPart < 2.5 ? vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14) : vec3(.07, .05, .04) + fract(aPh * 3.) * .32;
+        #endif`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
+        float near = max(smoothstep(46., 10., distance(ip, uCar.xz)), smoothstep(46., 10., distance(ip, uCar2.xz)));
+        float ph = aPh * 6.2832, T = uTime, walk = aBeh > 1.5 ? 1. : 0.;
+        float cheer = aBeh > .5 && aBeh < 1.5 ? .25 + .75 * near : aBeh < .5 ? near * near * .85 : 0.;
+        float side = (aLimb == 1. || aLimb == 3.) ? 1. : -1.;
+        if (aLimb > .5 && aLimb < 2.5) {                       // arms pivot at the shoulder: thrown up to cheer, swung to walk, small gestures while talking
+          vec3 q = transformed - vec3(side * .26, 1.3, 0.);
+          float up = cheer * (2.3 + sin(T * 9. + ph + side) * .45) * side;
+          float sw = walk * sin(T * 6. + ph) * .6 * side + (1. - cheer) * (1. - walk) * sin(T * 2.3 + ph * 3. + side * 1.3) * .4 * step(.45, fract(aPh * 5.));
+          float cz = cos(up), sz = sin(up); q.xy = vec2(cz * q.x - sz * q.y, sz * q.x + cz * q.y);
+          float cx = cos(sw), sx = sin(sw); q.yz = vec2(cx * q.y - sx * q.z, sx * q.y + cx * q.z);
+          transformed = q + vec3(side * .26, 1.3, 0.);
+        }
+        if (aLimb > 2.5 && aLimb < 4.5) { vec3 q = transformed - vec3(0., .8, 0.); float a = walk * sin(T * 6. + ph) * .6 * side; float cx = cos(a), sx = sin(a); q.yz = vec2(cx * q.y - sx * q.z, sx * q.y + cx * q.z); transformed = q + vec3(0., .8, 0.); }
+        if (aLimb > 4.5) { float a = (1. - walk) * (1. - cheer) * sin(T * 1.3 + ph * 2.) * .55; vec3 q = transformed - vec3(0., 1.5, 0.); float c2 = cos(a), s2 = sin(a); q.xz = vec2(c2 * q.x + s2 * q.z, -s2 * q.x + c2 * q.z); transformed = q + vec3(0., 1.5, 0.); }   // heads turn to a neighbour
+        transformed.y += abs(sin(T * 5.5 + ph)) * .2 * cheer;
+        transformed.x += sin(T * 1.1 + ph) * .03 * (1. - walk);
+        if (walk > .5) { float u = fract(T * .6 / max(aWalk, 1.) + aPh), tri = abs(u * 2. - 1.); transformed.xz *= (u < .5 ? -1. : 1.); transformed.z += (tri - .5) * aWalk; }`); };
+  const SKIN = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
+  const people = list => {
+    if (!list.length) return; const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
+    list.forEach((q, i) => { beh[i] = q.beh || 0; ph[i] = rnd(); const k = q.k || SKIN[rnd() * 4 | 0]; sk[i * 3] = k.r; sk[i * 3 + 1] = k.g; sk[i * 3 + 2] = k.b; wk[i] = q.walk || 0; if (!q.c) q.c = new THREE.Color(0xf3f4f6); });
+    g.setAttribute('aBeh', new THREE.InstancedBufferAttribute(beh, 1)); g.setAttribute('aPh', new THREE.InstancedBufferAttribute(ph, 1)); g.setAttribute('aSkin', new THREE.InstancedBufferAttribute(sk, 3)); g.setAttribute('aWalk', new THREE.InstancedBufferAttribute(wk, 1));
+    const m = instanced(g, personMat, list, false); m.frustumCulled = false; G.add(m);
+  };
   const BOB = 'transformed.y += abs(sin(uTime * 3.4 + instanceMatrix[3][0] * 1.7 + instanceMatrix[3][2] * 2.3)) * .14;';
   const path = resampleClosed(def.pts, 2); track.finishPath(path);
   const n = path.length;
@@ -335,7 +380,7 @@ function buildProc(track) {
       for (let q = 0; q < 3; q++) crew.push({ x: p.x + p.tz * (hw + 7.6) + p.tx * (q - 1) * 1.3, z: p.z - p.tx * (hw + 7.6) + p.tz * (q - 1) * 1.3, c: crewCols[j] });
     }
     const cb = new THREE.CapsuleGeometry(.3, .75, 3, 8); cb.translate(0, .68, 0); const chd = new THREE.SphereGeometry(.27, 8, 6); chd.translate(0, 1.52, 0);
-    G.add(instanced(cb, new THREE.MeshStandardMaterial({ roughness: .8 }), crew)); G.add(instanced(chd, new THREE.MeshStandardMaterial({ color: 0xf3f4f6, roughness: .5 }), crew.map(q => ({ x: q.x, z: q.z }))));
+    crew.forEach((q, n2) => { q.beh = 0; q.r = Math.atan2(path[0].tx, path[0].tz) - Math.PI / 2 + (n2 % 3 - 1) * .5; }); people(crew);
     const p0 = path[0], gar = new THREE.Mesh(new THREE.BoxGeometry(8, 4.6, (nb + na) * 1.5), new THREE.MeshStandardMaterial({ color: night ? 0x2a2c33 : 0xe9e2d4, roughness: .9 }));
     gar.position.set(p0.x + p0.tz * (pitWall + 5.5), 2.3, p0.z - p0.tx * (pitWall + 5.5)); gar.rotation.y = Math.atan2(p0.tx, p0.tz); gar.castShadow = gar.receiveShadow = true; G.add(gar);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(9.4, .5, (nb + na) * 1.5 + 1), new THREE.MeshStandardMaterial({ color: 0x3f7a5a, roughness: .8 })); roof.position.copy(gar.position); roof.position.y = 4.85; roof.rotation.y = gar.rotation.y; roof.castShadow = true; G.add(roof);
@@ -343,8 +388,8 @@ function buildProc(track) {
   // -- trackside life: spectators, sponsor boards, hay bales, support vans
   if (!def.dev) {
     const ppl = [], shirt = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c)), skin = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
-    for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 6; r++) { if (rnd() < .18) continue;
-      const p = path[i], off = s * (B + 1.7 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .9 + rnd() * .25, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0] }); } } }
+    for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 6; r++) { if (rnd() > .82 * CK) continue;
+      const p = path[i], off = s * (B + 1.7 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .92 + rnd() * .2, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0], i, sd: s, row: r }); } } }
     const body = new THREE.CapsuleGeometry(.28, .7, 3, 8); body.translate(0, .63, 0); const head = new THREE.SphereGeometry(.24, 8, 6); head.translate(0, 1.42, 0);
     // marshals in orange at every corner, flags along the fences
     const marsh = [], flags = [], fcol = [0xe3262e, 0xffc21a, 0xf3f4f6, 0x19a7ce, 0x2fb457, 0x111214].map(c => new THREE.Color(c));
@@ -354,7 +399,12 @@ function buildProc(track) {
     const fg = new THREE.PlaneGeometry(1.7, 1, 8, 1); fg.translate(.85, 3.8, 0);
     const fm = instanced(fg, anim(new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: .8 }), 'transformed.z += sin(position.x * 3.5 - uTime * 6. + instanceMatrix[3][0]) * .16 * position.x; transformed.y += sin(position.x * 2. - uTime * 4.) * .04 * position.x;'), flags, false); G.add(fm);
     ppl.push(...marsh.map(m => ({ ...m, s: 1.05, k: skin[1] })));
-    G.add(instanced(body, anim(new THREE.MeshStandardMaterial({ roughness: .9 }), BOB), ppl)); G.add(instanced(head, anim(new THREE.MeshStandardMaterial({ roughness: .8 }), BOB), ppl.map(q => ({ x: q.x, z: q.z, s: q.s, c: q.k }))));
+    // who does what: the front rows are fans, further back people stand in twos and threes talking, and some stroll behind the crowd
+    ppl.forEach((q, n2) => { if (q.i == null) { q.beh = 0; return; } const p = path[q.i], face = Math.atan2(p.x - q.x, p.z - q.z);
+      if (q.row < 2) { q.beh = rnd() < .7 ? 1 : 0; q.r = face + (rnd() - .5) * .5; }
+      else if (rnd() < .22) { q.beh = 2; q.walk = 5 + rnd() * 9; q.r = Math.atan2(p.tx, p.tz); }
+      else { q.beh = rnd() < .25 ? 1 : 0; q.r = face + (n2 % 2 ? 1.25 : -1.25) * (q.beh ? .2 : 1); } });
+    people(ppl);
     const brands = [['TAFHEET', '#e3262e', '#fff'], ['EGYSeal', '#f3f4f6', '#1c4ea8'], ['NILE COLA', '#1c4ea8', '#fff'], ['AMM SABER', '#ffc21a', '#17181c'], ['SCARAB OIL', '#f3f4f6', '#e3262e'], ['RA ROSSO', '#e3262e', '#ffc21a'], ['HORUS TYRES', '#17181c', '#ffc21a']];
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a4326, roughness: 1 });
     brands.forEach(([txt, bg, fg], b) => {
@@ -378,9 +428,9 @@ function buildProc(track) {
   G.add(stand);
   { // a full grandstand: people on every step, bouncing
     const sp = [], ry = stand.rotation.y, cs = Math.cos(ry), sn = Math.sin(ry), cols = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c));
-    for (let i = 0; i < 5; i++) for (let lz = -19; lz < 40; lz += .8) { if (rnd() < .12) continue; const lx = -i * 2.2 + (rnd() - .5) * .9; sp.push({ x: stand.position.x + lx * cs + lz * sn, z: stand.position.z - lx * sn + lz * cs, y: 1.1 * (i + 1), s: .9 + rnd() * .2, c: cols[rnd() * 7 | 0] }); }
+    for (let i = 0; i < 5; i++) for (let lz = -19; lz < 40; lz += .8) { if (rnd() > .88 * CK) continue; const lx = -i * 2.2 + (rnd() - .5) * .9; sp.push({ x: stand.position.x + lx * cs + lz * sn, z: stand.position.z - lx * sn + lz * cs, y: 1.1 * (i + 1), s: .9 + rnd() * .2, c: cols[rnd() * 7 | 0] }); }
     const b2 = new THREE.CapsuleGeometry(.28, .6, 3, 6); b2.translate(0, .55, 0); const h2 = new THREE.SphereGeometry(.23, 7, 5); h2.translate(0, 1.28, 0);
-    G.add(instanced(b2, anim(new THREE.MeshStandardMaterial({ roughness: .9 }), BOB), sp, false)); G.add(instanced(h2, anim(new THREE.MeshStandardMaterial({ color: 0xd9a577, roughness: .8 }), BOB), sp.map(q => ({ x: q.x, z: q.z, y: q.y, s: q.s })), false));
+    sp.forEach(q => { q.beh = rnd() < .75 ? 1 : 0; q.r = ry + Math.PI / 2 + (rnd() - .5) * .4; }); people(sp);
     // hot-air balloons drifting beyond the circuit
     const bc = [[0xe3262e, 0xffc21a], [0x19a7ce, 0xf3f4f6], [0x7b3fe4, 0xff7ab0], [0x2fb457, 0xffc21a]];
     if (!night) bc.forEach(([c1, c2], i) => { const g = new THREE.Group(), env = new THREE.Mesh(new THREE.SphereGeometry(9, 12, 10), new THREE.MeshStandardMaterial({ color: c1, roughness: .7, flatShading: true })); env.scale.y = 1.2; const band = new THREE.Mesh(new THREE.CylinderGeometry(8.9, 8.9, 3, 12, 1, true), new THREE.MeshStandardMaterial({ color: c2, roughness: .7 })); const bas = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2, 2.4), new THREE.MeshStandardMaterial({ color: 0x7a4326 })); bas.position.y = -14;

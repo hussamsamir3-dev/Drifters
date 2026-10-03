@@ -36,7 +36,7 @@ export class Post {
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), .4, .6, 1.0); this.composer.addPass(this.bloom);
+    this.bloom = { strength: 0 };   // bloom removed: lights stay crisp
     this.fx = new ShaderPass(FX); this.composer.addPass(this.fx);
     this.composer.addPass(new OutputPass());
     this.u = this.fx.uniforms;
