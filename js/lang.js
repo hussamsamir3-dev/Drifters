@@ -22,6 +22,7 @@ export const AR = {
   'Burnout': 'حرق إطارات', 'Wheelspin': 'دوران العجلات', 'Oversteer': 'انزلاق خلفي', 'Understeer': 'انزلاق أمامي', 'Slipstream': 'سحب هوائي',
   'Professional': 'احترافي', 'Arcade': 'أركيد', 'Daily box': 'صندوق اليوم', 'A car, an upgrade, XP or credits': 'سيارة أو ترقية أو خبرة أو رصيد', 'Open now': 'افتحه الآن', 'Come back tomorrow': 'عد غداً', 'Collect': 'استلم', 'New car': 'سيارة جديدة', 'Free upgrade': 'ترقية مجانية', 'Driver XP': 'خبرة السائق', 'Credits': 'رصيد', 'Your pit box': 'موقفك', 'laps of fuel': 'لفات وقود', 'is towed in': 'سُحبت إلى الصيانة', 'Engine': 'المحرك', 'Gearbox': 'ناقل الحركة', 'Bodywork': 'الهيكل',
   'Engine': 'المحرك',
+  'Pace': 'الإيقاع', 'Save': 'توفير', 'Push': 'هجوم', 'Delta': 'الفارق',
   'Go': 'انطلق', 'Final lap': 'اللفة الأخيرة', 'Wrong way': 'اتجاه خاطئ', 'Repaired': 'تم الإصلاح', 'Combo lost': 'ضاعت السلسلة',
   'Lights out. Clean first corner.': 'انطفأت الأضواء. خُذ المنعطف الأول بهدوء.', 'Last lap. Everything you have.': 'اللفة الأخيرة. أعطِ كل ما عندك.',
   'Tyres are nearly gone. Box at the blue pit.': 'الإطارات انتهت تقريباً. ادخل الصيانة.', 'Fuel is low. Box this lap or you will not make it.': 'الوقود قليل. ادخل الصيانة هذه اللفة.',

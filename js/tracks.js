@@ -243,6 +243,7 @@ function buildProc(track) {
   const anim = (mat, code) => { mat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + code); }; return mat; };
   // ---- people: jointed figures (legs, arms, head) animated on the graphics card. Behaviours: 0 = standing and chatting,
   // 1 = fan (arms up, jumping, wilder as a car comes past), 2 = walking a beat back and forth. Everyone cheers when a car is close.
+  const uHit = { value: new THREE.Vector4(1e6, 0, -99, 0) }; track.hit = (x, z) => { uHit.value.set(x, z, uT.value, 1); };      // a crash near the fence makes the people there recoil
   const CK = window.__crowdK || 1, uCar = { value: new THREE.Vector3(1e6, 0, 0) }, uCar2 = { value: new THREE.Vector3(1e6, 0, 0) };
   track.tick = (t, x, z, x2, z2) => { uT.value = t; if (x != null) { uCar.value.set(x, 0, z); uCar2.value.set(x2 ?? x, 0, z2 ?? z); } for (const f of movers) f(t); };
   const personGeo = (() => {      // a figure with rounded limbs: shirt, bare forearms, trousers, shoes, neck, head, hair or a cap
@@ -252,22 +253,25 @@ function buildProc(track) {
       tag(new THREE.CylinderGeometry(.05, .06, .09, 7).translate(0, 1.4, 0), 1, 0), tag(new THREE.SphereGeometry(.138, 10, 8).scale(1, 1.13, 1.03).translate(0, 1.54, 0), 1, 5),
       tag(new THREE.SphereGeometry(.15, 10, 5, 0, 6.2832, 0, 1.5).translate(0, 1.565, -.014), 3, 5), tag(new THREE.BoxGeometry(.2, .022, .15).translate(0, 1.6, .16), 5, 5)];
     for (const [sx, la, ll] of [[1, 1, 3], [-1, 2, 4]]) parts.push(cap(.074, .58, sx * .09, .43, 0, 2, ll), tag(new THREE.BoxGeometry(.1, .07, .23).translate(sx * .09, .035, .04), 4, ll), cap(.056, .2, sx * .25, 1.2, 0, 0, la), cap(.046, .24, sx * .25, .94, 0, 1, la));
+    parts.push(tag(new THREE.BoxGeometry(.3, .2, .012).translate(-.25, .63, .1), 6, 2), tag(new THREE.BoxGeometry(.014, .34, .014).translate(-.25, .7, 0), 3, 2));
     return mergeGeometries(parts);
   })();
   const personMat = new THREE.MeshStandardMaterial({ roughness: .85 });
-  personMat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.uniforms.uCar = uCar; sh.uniforms.uCar2 = uCar2;
-    sh.vertexShader = 'uniform float uTime; uniform vec3 uCar, uCar2; attribute float aPart, aLimb, aBeh, aPh, aWalk; attribute vec3 aSkin;\n' + sh.vertexShader
+  personMat.onBeforeCompile = sh => { sh.uniforms.uTime = uT; sh.uniforms.uCar = uCar; sh.uniforms.uCar2 = uCar2; sh.uniforms.uHit = uHit;
+    sh.vertexShader = 'uniform float uTime; uniform vec3 uCar, uCar2; uniform vec4 uHit; attribute float aPart, aLimb, aBeh, aPh, aWalk; attribute vec3 aSkin;\n' + sh.vertexShader
       .replace('#include <color_vertex>', `#include <color_vertex>
         #ifdef USE_INSTANCING_COLOR
           float capW = step(.7, fract(aPh * 13.));
-          vColor.rgb = aPart < .5 ? instanceColor.rgb : aPart < 1.5 ? aSkin : aPart < 2.5 ? vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14) : aPart < 3.5 ? mix(vec3(.07, .05, .04) + fract(aPh * 3.) * .32, instanceColor.rgb * .8, capW) : aPart < 4.5 ? vec3(.06) + fract(aPh * 5.) * .5 : instanceColor.rgb * .8;
+          vColor.rgb = aPart < .5 ? instanceColor.rgb : aPart < 1.5 ? aSkin : aPart < 2.5 ? vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14) : aPart < 3.5 ? mix(vec3(.07, .05, .04) + fract(aPh * 3.) * .32, instanceColor.rgb * .8, capW) : aPart < 4.5 ? vec3(.06) + fract(aPh * 5.) * .5 : aPart < 5.5 ? instanceColor.rgb * .8 : mix(vec3(.9, .1, .12), vec3(1., .78, .1), step(.5, fract(aPh * 29.)));
         #endif`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-        if (aPart > 4.5) transformed = mix(vec3(0., 1.6, 0.), transformed, step(.7, fract(aPh * 13.)));   // only cap wearers get a brim
+        if (aPart > 4.5 && aPart < 5.5) transformed = mix(vec3(0., 1.6, 0.), transformed, step(.7, fract(aPh * 13.)));
+        if (aPart > 5.5) transformed = mix(vec3(-.25, .8, 0.), transformed, step(.62, fract(aPh * 17.)) * step(.5, aBeh) * step(aBeh, 1.5));   // some fans hold a small flag   // only cap wearers get a brim
         vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
         float near = max(smoothstep(46., 10., distance(ip, uCar.xz)), smoothstep(46., 10., distance(ip, uCar2.xz)));
         float ph = aPh * 6.2832, T = uTime, walk = aBeh > 1.5 ? 1. : 0.;
-        float cheer = aBeh > .5 && aBeh < 1.5 ? .25 + .75 * near : aBeh < .5 ? near * near * .85 : 0.;
+        float flinch = smoothstep(20., 5., distance(ip, uHit.xy)) * clamp(1. - (uTime - uHit.z) / 1.4, 0., 1.) * step(uHit.z, uTime);
+        float cheer = max(flinch, aBeh > .5 && aBeh < 1.5 ? .25 + .75 * near : aBeh < .5 ? near * near * .85 : 0.);
         float side = (aLimb == 1. || aLimb == 3.) ? 1. : -1.;
         if (aLimb > .5 && aLimb < 2.5) {                       // arms pivot at the shoulder: thrown up to cheer, swung to walk, small gestures while talking
           vec3 q = transformed - vec3(side * .26, 1.3, 0.);
@@ -279,7 +283,7 @@ function buildProc(track) {
         }
         if (aLimb > 2.5 && aLimb < 4.5) { vec3 q = transformed - vec3(0., .8, 0.); float a = walk * sin(T * 6. + ph) * .6 * side; float cx = cos(a), sx = sin(a); q.yz = vec2(cx * q.y - sx * q.z, sx * q.y + cx * q.z); transformed = q + vec3(0., .8, 0.); }
         if (aLimb > 4.5) { float a = (1. - walk) * (1. - cheer) * sin(T * 1.3 + ph * 2.) * .55; vec3 q = transformed - vec3(0., 1.5, 0.); float c2 = cos(a), s2 = sin(a); q.xz = vec2(c2 * q.x + s2 * q.z, -s2 * q.x + c2 * q.z); transformed = q + vec3(0., 1.5, 0.); }   // heads turn to a neighbour
-        transformed.y += abs(sin(T * 5.5 + ph)) * .2 * cheer;
+        transformed.y += abs(sin(T * 5.5 + ph)) * .2 * cheer * (1. - flinch); transformed.z -= flinch * .5 * transformed.y; transformed.y *= 1. - flinch * .16;   // recoil: lean back and duck
         transformed.x += sin(T * 1.1 + ph) * .03 * (1. - walk);
         if (walk > .5) { float u = fract(T * .6 / max(aWalk, 1.) + aPh), tri = abs(u * 2. - 1.); transformed.xz *= (u < .5 ? -1. : 1.); transformed.z += (tri - .5) * aWalk; }`); };
   const SKIN = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
@@ -336,9 +340,14 @@ function buildProc(track) {
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.02, cz); ground.receiveShadow = true; G.add(ground);
 
   // -- road, lines, kerbs
-  const atex = canvasTex(256, 256, (k, W, H) => { noise(k, W, H, night ? '#26272c' : '#51475f', .1, 9000); { const g = k.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(255,255,255,.07)'); g.addColorStop(.3, 'rgba(0,0,0,.1)'); g.addColorStop(.5, 'rgba(0,0,0,.16)'); g.addColorStop(.7, 'rgba(0,0,0,.1)'); g.addColorStop(1, 'rgba(255,255,255,.07)'); k.fillStyle = g; k.fillRect(0, 0, W, H); }   // a darker rubbered-in groove down the middle
-    if (night) { k.fillStyle = 'rgba(255,255,255,.75)'; k.fillRect(W / 2 - 2, 0, 4, H * .45); } }, 1, 1);
-  const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 12), new THREE.MeshStandardMaterial({ map: atex, roughness: .85 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
+  const atex = canvasTex(512, 512, (k, W, H) => { noise(k, W, H, night ? '#26272c' : '#51475f', .1, 9000); { const g = k.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(255,255,255,.07)'); g.addColorStop(.3, 'rgba(0,0,0,.1)'); g.addColorStop(.5, 'rgba(0,0,0,.16)'); g.addColorStop(.7, 'rgba(0,0,0,.1)'); g.addColorStop(1, 'rgba(255,255,255,.07)'); k.fillStyle = g; k.fillRect(0, 0, W, H); }   // a darker rubbered-in groove down the middle
+    if (night) { k.fillStyle = 'rgba(255,255,255,.75)'; k.fillRect(W / 2 - 2, 0, 4, H * .45); }
+    // real tarmac: stone chips of different shades set in dark binder, darker patched strips, and hairline cracks
+    const im = k.getImageData(0, 0, W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const r = Math.random(), s = r < .08 ? 26 + Math.random() * 26 : r < .2 ? -22 - Math.random() * 16 : (Math.random() - .5) * 16; d[i] = Math.max(0, Math.min(255, d[i] + s)); d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + s * .97)); d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + s * .94)); } k.putImageData(im, 0, 0);
+    k.fillStyle = 'rgba(20,18,24,.13)'; for (let i = 0; i < 3; i++) k.fillRect(Math.random() * W * .8, Math.random() * H, 30 + Math.random() * 90, 60 + Math.random() * 160);
+    k.strokeStyle = 'rgba(12,10,14,.5)'; k.lineWidth = 1; for (let i = 0; i < 7; i++) { let x = Math.random() * W, y = Math.random() * H; k.beginPath(); k.moveTo(x, y); for (let q = 0; q < 9; q++) { x += (Math.random() - .5) * 26; y += 8 + Math.random() * 22; k.lineTo(x, y); } k.stroke(); } }, 1, 1);
+  const abump = canvasTex(256, 256, (k, W, H) => { const im = k.createImageData(W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const v = 110 + (Math.random() < .12 ? 90 : 0) + Math.random() * 55; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } k.putImageData(im, 0, 0); }, 1, 1); abump.colorSpace = THREE.NoColorSpace;
+  const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 9), new THREE.MeshStandardMaterial({ map: atex, bumpMap: abump, bumpScale: .5, roughness: .86 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
   const white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .7 });
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
   const ktex = canvasTex(64, 64, (k) => { k.fillStyle = day ? '#e8475a' : '#e3262e'; k.fillRect(0, 0, 64, 32); k.fillStyle = day ? '#f2c230' : '#f4f4f4'; k.fillRect(0, 32, 64, 32); });
@@ -372,7 +381,7 @@ function buildProc(track) {
     G.add(instanced(lamp, new THREE.MeshStandardMaterial({ color: 0x30323a }), lp, false));
     G.add(instanced(bulb, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2a8).multiplyScalar(3) }), lp, false));
     const cone = new THREE.ConeGeometry(3.4, 7, 14, 1, true); cone.translate(0, 3.5, 0);     // soft light pools under each lamp
-    const cm = instanced(cone, new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: .07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), lp, false); cm.receiveShadow = false; G.add(cm);
+    const cm = instanced(cone, new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: .07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), lp, false); cm.visible = false; G.add(cm);   // flat light cones looked like cut-outs from above; the lamps' glow stays
   } else {
     const trunk = new THREE.CylinderGeometry(.22, .34, desert || def.theme === 'coast' ? 6 : 2.4, 6); trunk.translate(0, desert || def.theme === 'coast' ? 3 : 1.2, 0);
     let crown;
@@ -457,6 +466,16 @@ function buildProc(track) {
   }
   if (def.dev) { const cones = []; for (let q = 0; q < 12; q++) cones.push({ x: 20 + q * 18, z: 24 }); for (let a = 0; a < 24; a++) cones.push({ x: 110 + Math.cos(a / 24 * 6.283) * 30, z: 65 + Math.sin(a / 24 * 6.283) * 30 });
     const cg = new THREE.ConeGeometry(.35, .9, 8); cg.translate(0, .45, 0); G.add(instanced(cg, new THREE.MeshStandardMaterial({ color: 0xff6a13, roughness: .7 }), cones)); }
+  // -- loose objects: braking boards before each corner, a tyre stack and cones at the apex, hay bales at the exit
+  track.propSpots = [];
+  if (!def.dev) { let inC = false, e = 0, best = 0, bi = 0, stack = 0;
+    for (let i = 0; i < n + 30; i++) { const p = path[i % n], ak = Math.abs(p.k);
+      if (!inC && ak > 1 / 70) { inC = true; e = i; best = 0; } if (inC && ak > best) { best = ak; bi = i; }
+      if (inC && ak < 1 / 95) { inC = false; if (i - e < 6 || inPit(bi % n)) continue; const a = path[bi % n], ins = a.k > 0 ? 1 : -1, th = Math.atan2(a.tx, a.tz);
+        for (const m of [50, 100]) { const q = path[((e - Math.round(m / 2)) % n + n) % n], o = -ins * (hw + 2.3); if (!inPit(((e - Math.round(m / 2)) % n + n) % n)) track.propSpots.push({ type: 'board', x: q.x + q.tz * o, z: q.z - q.tx * o, r: Math.atan2(q.tx, q.tz) + Math.PI }); }
+        const ox = a.x + a.tz * ins * (hw + 2.6), oz = a.z - a.tx * ins * (hw + 2.6); stack++; for (let t = 0; t < 3; t++) track.propSpots.push({ type: 'tyre', x: ox, z: oz, lift: t * .26, stack });
+        for (const d2 of [-3, 3]) track.propSpots.push({ type: 'cone', x: ox + a.tx * d2, z: oz + a.tz * d2, r: th });
+        const x2 = path[i % n], oo = -ins * (B - 1.3); if (!inPit(i % n)) for (const d2 of [0, 1.8]) track.propSpots.push({ type: 'bale', x: x2.x + x2.tz * oo + x2.tx * d2, z: x2.z - x2.tx * oo + x2.tz * d2, r: Math.atan2(x2.tx, x2.tz) }); } } }
   // -- grandstand beside the start straight
   const p0 = path[0], crowd = canvasTex(256, 64, (k) => { k.fillStyle = '#3a3d45'; k.fillRect(0, 0, 256, 64); for (let i = 0; i < 900; i++) { k.fillStyle = `hsl(${Math.random() * 360},70%,${45 + Math.random() * 30}%)`; k.fillRect(Math.random() * 256, Math.random() * 64, 3, 4); } }, 3, 1);
   const stand = new THREE.Group(); stand.position.set(p0.x - p0.tz * (B + 3), 0, p0.z + p0.tx * (B + 3)); stand.rotation.y = Math.atan2(p0.tx, p0.tz);
@@ -475,7 +494,7 @@ function buildProc(track) {
     if (night) [0xff2bd0, 0x19d3ff, 0xffc21a, 0x7dff9b].forEach((col, i) => {
       const ox = stand.position.x + (-9) * cs + (i * 16 - 14) * sn, oz = stand.position.z - (-9) * sn + (i * 16 - 14) * cs;
       const L = new THREE.SpotLight(col, 420, 95, .32, .6, 1.3); L.position.set(ox, 13, oz); G.add(L, L.target); track.fancyLights.push(L);
-      const beam = new THREE.Mesh(new THREE.ConeGeometry(5, 46, 12, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .09, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); beam.geometry.translate(0, -23, 0); beam.geometry.rotateX(Math.PI); beam.position.set(ox, 13, oz); G.add(beam);
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(5, 46, 12, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .09, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); beam.geometry.translate(0, -23, 0); beam.geometry.rotateX(Math.PI); beam.position.set(ox, 13, oz); beam.visible = false; G.add(beam);
       movers.push(t => { const s = Math.sin(t * .5 + i * 1.6), q = path[((Math.round((s * .5 + .5) * 40) - 20) % n + n) % n]; L.target.position.set(q.x + p0.tz * Math.sin(t * .9 + i) * 5, 0, q.z - p0.tx * Math.sin(t * .9 + i) * 5); beam.rotation.set(Math.sin(t * .7 + i) * .5, 0, Math.cos(t * .45 + i * 2) * .5); });
     });
   }

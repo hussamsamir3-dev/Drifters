@@ -45,6 +45,8 @@ export const TUNE = {
   // Component damage. Where a hit lands decides what breaks: nose = engine, tail = gearbox, corners and sides = that wheel.
   // A wrecked car always keeps a little: the engine never drops below `limp` power and wheels never come off, so you can crawl to the pits or a repair kit.
   parts: { limp: .26, enginePower: .8, engineDead: 9, gearboxTop: .45, wheelGrip: .65, wheelPull: .09, flatAt: .7, flatDrag: .22, towSeconds: 12 },
+  // Pace modes (keys 1 2 3): how hard the car is being driven. Save trades speed for fuel and tyres, Push does the opposite.
+  pace: [{ name: 'Save', pow: .93, fuel: .72, wear: .78 }, { name: 'Race', pow: 1, fuel: 1, wear: 1 }, { name: 'Push', pow: 1.055, fuel: 1.34, wear: 1.42 }],
   reset: { penalty: 2 },                // seconds held stationary after pressing reset
   // garage tuning: effect of one click (each setting runs from -2 to +2)
   setup: { gearAcc: .04, gearTop: .035, aeroDown: .35, aeroTop: .02, biasStep: .05, rollStep: .03, compound: { soft: [1.04, 1.6], medium: [1, 1], hard: [.97, .6] } },
