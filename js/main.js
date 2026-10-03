@@ -177,7 +177,7 @@ function respawn(car, manual) {
 }
 
 async function startRace(o) {
-  menuBg.stop(); if (R) endRace(); const token = ++raceToken; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
+  menuBg.stop(); arenaStop(); if (R) endRace(); const token = ++raceToken; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
   if (!o.attract) { audio.init(); show('menu', false); show('results', false); show('pause', false); show('loading', true); }
   const def = TRACKS.find(t => t.id === o.track);
   $('loadName').textContent = def.name; $('loadBar').style.width = '4%'; $('loadTip').textContent = TIPS[Math.random() * TIPS.length | 0];
@@ -787,12 +787,65 @@ function newGP() { const pool = CARS.filter(c => c.id !== save.car).sort(() => M
 const gpOpts = () => ({ mode: 'race', gp: true, track: GP_TRACKS[save.gp.round], laps: 3, diff: sel.diff, rivals: save.gp.rivals, rules: save.rules, weather: save.gp.round === 2 ? 'rain' : 'clear', nRivals: 7 });
 let menuView = '';
 const menuBg = new MenuBg($('menuBg'));
+// ---------------- menu showcase: the real cars, real physics and real lights on a small dirt arena ----------------
+// Three game cars drift circles on loose dirt, driven through the same tyre model as a race. There is no circuit, no crowd and
+// no scenery to draw, so it costs a fraction of a race. On Low graphics the 2D backdrop is used instead.
+const arena = { on: false, g: null, cars: [], fx: null, t: 0, acc: 0, track: { def: { theme: 'day', id: 'arena' }, theme: THEMES.day, wet: 0, surf: () => 0, height: () => 0, escape: () => null }, spots: [] };
+function buildArena() {
+  const g = arena.g = new THREE.Group(), c = document.createElement('canvas'); c.width = c.height = 1024; const k = c.getContext('2d'); let gr = k.createRadialGradient(512, 512, 60, 512, 512, 720); gr.addColorStop(0, '#5a4028'); gr.addColorStop(1, '#2a1c11'); k.fillStyle = gr; k.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 5200; i++) { const v = Math.random(); k.fillStyle = `rgba(${v > .5 ? '140,105,70' : '20,12,6'},${.03 + Math.random() * .08})`; k.beginPath(); k.ellipse(Math.random() * 1024, Math.random() * 1024, 2 + Math.random() * 22, 1 + Math.random() * 10, Math.random() * 3, 0, 7); k.fill(); }
+  for (let i = 0; i < 9; i++) { const x = 200 + Math.random() * 620, y = 200 + Math.random() * 620, rx = 24 + Math.random() * 60, ry = 12 + Math.random() * 26, a = Math.random() * 3; k.fillStyle = 'rgba(14,10,8,.6)'; k.beginPath(); k.ellipse(x, y, rx, ry, a, 0, 7); k.fill(); }
+  k.strokeStyle = 'rgba(15,9,5,.22)'; k.lineWidth = 7; for (const r of [108, 118, 220, 232]) { k.beginPath(); k.arc(512, 512, r + Math.random() * 8, 0, 7); k.stroke(); }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), new THREE.MeshStandardMaterial({ map: tex, roughness: .92, metalness: 0 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
+  // four floodlight towers with visible coloured beams; two of them are real lights that fall on the cars and the dust
+  [[0xffb060, 1, 1], [0x4aa8ff, -1, 1], [0xff3fa8, -1, -1], [0xffe2b0, 1, -1]].forEach(([col, sx, sz], i) => {
+    const x = sx * 34, z = sz * 34, mast = new THREE.Mesh(new THREE.CylinderGeometry(.25, .35, 16, 8), new THREE.MeshStandardMaterial({ color: 0x1b1c20, metalness: .7, roughness: .4 })); mast.position.set(x, 8, z); g.add(mast);
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, .5), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(2.5) })); lamp.position.set(x, 16.3, z); lamp.lookAt(0, 0, 0); g.add(lamp);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(7, 46, 20, 1, true).translate(0, -23, 0), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .028, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false })); beam.position.set(x, 16.3, z); g.add(beam);
+    let L = null; if (i < 2) { L = new THREE.SpotLight(col, 2600, 90, .5, .7, 1.5); L.position.set(x, 16.3, z); g.add(L, L.target); }
+    arena.spots.push({ beam, L, x, z, ph: i * 1.7 }); });
+}
+function arenaStart() {
+  if (arena.on) return; arena.on = true; if (!arena.g) buildArena(); scene.add(arena.g); garage.visible = false; arena.t = 0; arena.acc = 0;
+  if (sky) { scene.remove(sky); sky = null; } scene.background = new THREE.Color(0x0a0705); scene.fog = new THREE.FogExp2(0x17100a, .011); hemi.color.set(0x8090c0); hemi.groundColor.set(0x3a2a1a); hemi.intensity = .5; sun.color.set(0xbfd0ff); sun.intensity = 1.1; scene.environmentIntensity = .45; renderer.toneMappingExposure = 1.1;
+  if (post) { post.u.sunVis.value = 0; post.u.speed.value = 0; post.u.wet.value = 0; post.u.hit.value = 0; post.u.tilt.value = .55; }
+  arena.fx = { smoke: new Particles(scene, 1500), glow: new Particles(scene, 200, true), skids: new Skids(scene, 2200) };
+  const mine = CARS.find(c => c.id === save.car), others = CARS.filter(c => c.id !== save.car && c.drive !== 'fwd').sort(() => Math.random() - .5);
+  arena.cars = [[mine, 16, 1, 0], [others[0], 16, 1, Math.PI], [others[1], 8, -1, 1]].map(([spec, R0, dir, a0], i) => {
+    const car = new Car(spec, i ? PAINTS[(Math.random() * PAINTS.length) | 0] : paintOf(spec.id), '', i ? undefined : upOf(spec.id), i ? { wing: 2, split: 1, rim: 4, glow: [0, 2, 1][i] } : lookOf(spec.id));
+    car.reset(Math.sin(a0) * R0, Math.cos(a0) * R0, a0 + dir * Math.PI / 2); car.vx = Math.sin(car.th) * 9; car.vz = Math.cos(car.th) * 9; car.assistK = .8; car.tc = false; car.forceDrift = true; car.fuelK = 0; car.wear = 0; car.setLights(true); car.R0 = R0; car.dir = dir; car.inp = { steer: 0, throttle: 1, brake: 0, hand: false, nitro: false }; car.ruts = [null, null];
+    scene.add(car.root); return car; });
+}
+function arenaStop() {
+  if (!arena.on) return; arena.on = false; scene.remove(arena.g); for (const c of arena.cars) { scene.remove(c.root); c.dispose(); } arena.cars = [];
+  for (const p of [arena.fx.smoke, arena.fx.glow]) { scene.remove(p.points); p.geo.dispose(); p.mat.dispose(); } scene.remove(arena.fx.skids.mesh); arena.fx.skids.geo.dispose(); arena.fx = null; for (let i = 0; i < 4; i++) LIGHTS.c[i].set(0, 0, 0, 0);
+}
+function arenaTick(dt) {
+  const A = arena, tr = A.track; A.t += dt; A.acc += dt; let n = 0;
+  while (A.acc >= H && n++ < 6) { A.acc -= H;
+    for (const c of A.cars) {          // a simple driver: aim along the circle, turn in if running wide, keep the power on so the tail hangs out
+      const dist = Math.hypot(c.x, c.z), ang = Math.atan2(c.x, c.z), err = wrap(ang + c.dir * (Math.PI / 2 + clamp((dist - c.R0) * .15, -.95, .95)) - c.th);
+      c.inp.steer = clamp(err * 1.7, -1, 1); c.inp.throttle = c.speed < (c.R0 > 12 ? 15.5 : 10.5) ? 1 : .35; c.step(H, c.inp, tr, true);
+      if (dist > 60 || (c.speed < 1 && A.t > 3)) { const a = Math.random() * 6.28; c.reset(Math.sin(a) * c.R0, Math.cos(a) * c.R0, a + c.dir * Math.PI / 2); c.vx = Math.sin(c.th) * 9; c.vz = Math.cos(c.th) * 9; } }
+    for (let i = 0; i < A.cars.length; i++) for (let j = i + 1; j < A.cars.length; j++) A.cars[i].bump(A.cars[j], false); }
+  A.cars.forEach((c, i) => { c.render(dt, tr, clamp(A.acc / H, 0, 1)); c.effects(dt, A.fx, tr, .8);
+    const sn = Math.sin(c.th), cs = Math.cos(c.th);      // ruts behind the rear wheels
+    for (let q = 0; q < 2; q++) { const w = c.wheels[q ? 'RR' : 'RL'], wx = c.x + sn * w.z + cs * w.x, wz = c.z + cs * w.z - sn * w.x, l = [wx + cs * .16, .03, wz - sn * .16], r = [wx - cs * .16, .03, wz + sn * .16], last = c.ruts[q]; if (last && (last[0][0] - l[0]) ** 2 + (last[0][2] - l[2]) ** 2 < 9) A.fx.skids.quad(last[0], last[1], l, r); c.ruts[q] = [l, r]; }
+    LIGHTS.p[i].set(c.x + sn * c.zf, .62, c.z + cs * c.zf); LIGHTS.d[i].set(sn, -.07, cs).normalize(); LIGHTS.c[i].set(1, .93, .78, 1); });
+  const nar = innerWidth < 820, T = A.t;
+  camera.fov = 40; camera.position.set(Math.sin(T * .06) * 8 + (nar ? 0 : -4), 50 + Math.sin(T * .1) * 4, 22 + Math.cos(T * .06) * 6); camera.lookAt(nar ? 0 : -9, 0, 1); camera.updateProjectionMatrix();     // slow crane move above the arena
+  sun.position.set(30, 60, 18); sun.target.position.set(0, 0, 0);
+  for (const s of A.spots) { const tx = Math.sin(T * .35 + s.ph) * 16, tz = Math.cos(T * .27 + s.ph) * 16; s.beam.lookAt(tx, -30, tz); s.beam.rotateX(-Math.PI / 2); if (s.L) s.L.target.position.set(tx, 0, tz); }
+  const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360)); A.fx.smoke.mat.uniforms.uScale.value = A.fx.glow.mat.uniforms.uScale.value = sc; A.fx.smoke.update(dt); A.fx.glow.update(dt); A.fx.skids.flush();
+  if (post) post.u.time.value = T;
+}
 // The menu shows a light 2D scene. The 3D engine is only woken for the garage and tuning tabs, where the car has to be seen.
 function setMenuView() {
   if (racing() || $('menu').hidden || box.on) return; const want = sel.tab === 'garage' || sel.tab === 'tune' ? 'garage' : 'show';
   if (R) { raceToken++; endRace(); }
-  if (want === 'garage') { menuBg.stop(); if (menuView !== 'garage') { applyTheme(null); garage.visible = true; } menuView = 'garage'; }
-  else { menuView = 'show'; menuBg.start(); }
+  if (want === 'garage') { menuBg.stop(); arenaStop(); if (menuView !== 'garage') { applyTheme(null); garage.visible = true; } menuView = 'garage'; }
+  else { menuView = 'show'; if (gfx === 'low') { arenaStop(); menuBg.start(); } else { menuBg.stop(); arenaStart(); } }
 }
 const sel = { rivals: 5, wx: 'random', tab: 'quick', ev: 0, ch: 0, mode: 'race', track: 0, laps: 3, diff: 1, car: Math.max(0, CARS.findIndex(c => c.id === save.car)) };
 const menuPaths = {};
@@ -868,7 +921,7 @@ async function refreshMenu() {
 const pick = (key, n, d) => { sel[key] = (sel[key] + d + n) % n; };
 $('trkPrev').onclick = () => { pick('track', TRACKS.length, -1); sel.laps = TRACKS[sel.track].laps; refreshMenu(); };
 $('trkNext').onclick = () => { pick('track', TRACKS.length, 1); sel.laps = TRACKS[sel.track].laps; refreshMenu(); };
-const carChanged = () => { const s = CARS[sel.car]; if (save.owned.includes(s.id)) { save.car = s.id; persist(); tellPeer(); } showGarageCar(); refreshMenu(); };
+const carChanged = () => { const s = CARS[sel.car]; if (save.owned.includes(s.id)) { save.car = s.id; persist(); tellPeer(); arenaStop(); } showGarageCar(); refreshMenu(); };   // the arena restarts with the newly chosen car
 $('carPrev').onclick = () => { pick('car', CARS.length, -1); carChanged(); };
 $('carNext').onclick = () => { pick('car', CARS.length, 1); carChanged(); };
 $('lapMinus').onclick = () => { sel.laps = Math.max(1, sel.laps - 1); refreshMenu(); };
@@ -937,7 +990,7 @@ function rollBox() {
   const cr = [300, 400, 500, 750, 1000, 1500, 2500][Math.min(6, Math.floor(Math.pow(Math.random(), 1.8) * 7))]; save.credits += cr; return ['Credits', '+' + cr.toLocaleString()];
 }
 function openBox() {
-  if (save.boxDay === today() || box.on) return; audio.init(); if (!box.g) buildBox(); menuBg.stop(); raceToken++; if (R) endRace(); applyTheme(null); garage.visible = true; menuView = 'garage';
+  if (save.boxDay === today() || box.on) return; audio.init(); if (!box.g) buildBox(); menuBg.stop(); arenaStop(); raceToken++; if (R) endRace(); applyTheme(null); garage.visible = true; menuView = 'garage';
   if (garageCar) garageCar.root.visible = false; box.g.visible = true; box.on = true; box.t = 0; box.lid.rotation.x = 0; box.reward = null; show('menu', false); for (const b of box.beams) b.material.opacity = 0;
 }
 function boxTick(dt) {
@@ -1047,6 +1100,7 @@ function frame(now) {
   if (auOn && !racing()) auTick();
   if (R) { if (!paused) { try { updateRace(dt); } catch (e) { if (!window.__errOnce) { window.__errOnce = 1; console.error('RACE ERROR ' + e.message + ' cars=' + R.cars.length + ' t=' + R.t + ' state=' + R.state + ' mode=' + R.mode + ' attract=' + R.attract + ' keys=' + Object.keys(R).slice(0, 12)); } } } }
   else if (box.on) boxTick(dt);
+  else if (arena.on) arenaTick(dt);
   else if (garageCar) {
     garageSpin += dt * .35; garageCar.root.rotation.y = garageSpin;
     const narrow = innerWidth < 820; camera.fov = 38; camera.updateProjectionMatrix();
@@ -1060,5 +1114,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get R() { return R; }, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get R() { return R; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

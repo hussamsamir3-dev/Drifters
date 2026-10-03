@@ -125,7 +125,7 @@ export class Car {
     // engine, brakes, reverse
     let thr = live ? inp.throttle : 0, brk = live ? inp.brake : 1;
     if (this.fuel <= 0) thr = 0;
-    { const DR = TUNE.drift, on = this.driftable && Math.abs(inp.steer) > .92 && thr > .3 && speed > DR.minSpeed && vf > 0; this.di += ((on ? 1 : 0) - this.di) * Math.min(1, dt * (on ? DR.build : DR.decay)); }   // drift intent
+    { const DR = TUNE.drift, on = this.forceDrift || this.driftable && Math.abs(inp.steer) > .92 && thr > .3 && speed > DR.minSpeed && vf > 0; this.di += ((on ? 1 : 0) - this.di) * Math.min(1, dt * (on ? DR.build : DR.decay)); }   // drift intent
     const burn = this.burn = live && thr > .8 && brk > .5 && speed < 5 && s.drive !== 'fwd';     // brake + throttle from rest: a burnout
     if (this.inPit) { const lim = TUNE.pit.limit; if (vf > lim + .5) { thr = 0; brk = Math.max(brk, .55); } else if (vf > lim - 1.2) thr = Math.min(thr, .12); }   // pit-lane speed limiter
     const rev = live && brk > 0 && thr === 0 && vf < 1.2;
