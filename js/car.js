@@ -181,8 +181,10 @@ export class Car {
     let gi = this.gearI; if (!(this.shiftT > 0) && live) { if (gi < 5 && wsp > gtop[gi] * .97) { gi++; this.shiftT = .15; this.shiftEvt = 1; } else if (gi > 1 && wsp < gtop[gi - 1] * .72) { gi--; this.shiftT = .12; this.shiftEvt = -1; } }
     this.gearI = gi; this.gear = rev && vf < -.5 ? 0 : gi; this.shiftT = Math.max(0, this.shiftT - dt);
     let rt = !live ? idle + inp.throttle * (red * 1.04 - idle) : burn ? red * 1.05 : rev ? idle + Math.abs(vf) / 12 * (red * .5 - idle) : Math.max(red * wsp / gtop[gi], gi === 1 ? idle + thr * (red * .42 - idle) : idle);
-    this.limiter = rt > red * .995 && (thr > .5 || !live); if (rt > red) rt = red * (this.limiter ? .975 + .025 * Math.sin(performance.now() / 26) : 1);
-    { const rate = (rt > this.rpmR ? 8000 : 5500) * dt; this.rpmR += clamp(rt - this.rpmR, -rate, rate); }
+    // Rev limiter: only when the engine actually reaches the red line. The ignition is cut for a moment, the revs fall back, then climb again.
+    if (rt > red) rt = red * 1.01; this.cutT = Math.max(0, (this.cutT || 0) - dt); if (this.cutT > 0) rt = red * .93;
+    { const rate = (rt > this.rpmR ? 8000 : 10000) * dt; this.rpmR += clamp(rt - this.rpmR, -rate, rate); }
+    if (this.rpmR >= red && this.cutT <= 0) this.cutT = .08; this.limiter = this.cutT > 0;
     this.rpm = clamp((this.rpmR - idle) / (red - idle), 0, 1.02); this.load = live ? thr * (this.shiftT > 0 ? .2 : 1) : inp.throttle * .45;
     this.dirt = clamp(this.dirt + dt * (gr * Math.min(1, speed / 15) * .07 - wet * .03), 0, 1);
     this.lockF = this.braking && brk > .9 && speed > 17 && gr < .5;
@@ -285,15 +287,16 @@ export class Car {
 
   // Headlights: a lens, a low beam and a pool of light on the road for each side. A front hit breaks the lamp on that side.
   makeLamps() {
-    if (!LAMP.cone) { LAMP.cone = new THREE.ConeGeometry(2.1, 13, 16, 1, true).translate(0, -6.5, 0).rotateX(-Math.PI / 2).scale(1, .3, 1);
+    if (!LAMP.cone) { LAMP.cone = new THREE.ConeGeometry(1.15, 5.5, 16, 1, true).translate(0, -2.75, 0).rotateX(-Math.PI / 2).scale(1, .3, 1);
       LAMP.coneM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { uCol: { value: new THREE.Color(0xfff0cc) } },
         vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-        fragmentShader: 'uniform vec3 uCol; varying vec2 vUv; void main(){ gl_FragColor=vec4(uCol, .2*pow(vUv.y,2.4)+.012*vUv.y); }' });   // brightest at the lamp, fading to nothing at the far end
-      const c = document.createElement('canvas'); c.width = c.height = 128; const k = c.getContext('2d'), g = k.createRadialGradient(64, 64, 4, 64, 64, 64); g.addColorStop(0, 'rgba(255,244,214,1)'); g.addColorStop(.5, 'rgba(255,240,200,.45)'); g.addColorStop(1, 'rgba(255,240,200,0)'); k.fillStyle = g; k.fillRect(0, 0, 128, 128);
-      LAMP.poolM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: .2, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8, fog: false });
-      LAMP.pool = new THREE.PlaneGeometry(4.6, 10); LAMP.lens = new THREE.SphereGeometry(.085, 8, 6); LAMP.lensM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4d6).multiplyScalar(2.5) }); }
+        fragmentShader: 'uniform vec3 uCol; varying vec2 vUv; void main(){ gl_FragColor=vec4(uCol, .06*pow(vUv.y,3.2)); }' });   // only a faint glow in the air right at the lamp; the light itself is what lands on the ground   // brightest at the lamp, fading to nothing at the far end
+      // the throw on the road: narrow and hot just ahead of the bumper, widening and fading with distance
+      const c = document.createElement('canvas'); c.width = 128; c.height = 256; const k = c.getContext('2d'); k.translate(64, 0); k.scale(1, 2.3); const g = k.createRadialGradient(0, 22, 2, 0, 44, 62); g.addColorStop(0, 'rgba(255,246,222,1)'); g.addColorStop(.25, 'rgba(255,242,208,.7)'); g.addColorStop(.6, 'rgba(255,238,198,.25)'); g.addColorStop(1, 'rgba(255,238,198,0)'); k.fillStyle = g; k.fillRect(-64, 0, 128, 112);
+      LAMP.poolM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: .36, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8, fog: false });
+      LAMP.pool = new THREE.PlaneGeometry(6.5, 17); LAMP.lens = new THREE.SphereGeometry(.085, 8, 6); LAMP.lensM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff4d6).multiplyScalar(2.5) }); }
     const mk = sx => { const g = new THREE.Group(); g.position.set(sx * this.hw0 * .64, .56, this.zf0 - .04);
-      const cone = new THREE.Mesh(LAMP.cone, LAMP.coneM); cone.rotation.x = .05; const pool = new THREE.Mesh(LAMP.pool, LAMP.poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(-sx * .2, -.5, 6.2);
+      const cone = new THREE.Mesh(LAMP.cone, LAMP.coneM); cone.rotation.x = .05; const pool = new THREE.Mesh(LAMP.pool, LAMP.poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(-sx * .25, -.5, 8.3);
       g.add(cone, pool, new THREE.Mesh(LAMP.lens, LAMP.lensM)); g.visible = false; this.root.add(g); return { g, ok: true }; };
     this.lamps = [mk(1), mk(-1)]; this.lightsOn = false;
   }

@@ -359,3 +359,6 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 
 #menuBg{position:fixed;inset:0;width:100%;height:100%;z-index:1;display:block;background:#2b1e13}
 #menu{background:linear-gradient(90deg,rgba(15,16,19,.93) 0,rgba(15,16,19,.8) 30%,rgba(15,16,19,.25) 60%,rgba(15,16,19,.05) 100%)}
+
+#carPic{width:100%;height:auto;display:block;margin-bottom:-14px;filter:drop-shadow(0 10px 14px rgba(0,0,0,.55))}
+@media (max-height:640px){#carPic{display:none}}

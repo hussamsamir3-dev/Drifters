@@ -80,7 +80,7 @@ export class GameAudio {
       if (s.running === false) { if (this.voice.cur) this.voice.fadeOut(.5); }
       else { if (this.voice.name !== sp.snd) this.voice.start(sp.snd, s.rpm / REF_RPM);
         let vol = 1; if (t < (this.dipUntil || 0)) vol = .42;                                              // gear change: drive is cut, the note drops back, then returns
-        if (s.limiter) vol *= .7 + .3 * (Math.floor(t * 22) % 2);                                           // rev limiter: a soft stutter while the cut is active
+        if (s.limiter) vol *= .5;                                           // rev limiter: a soft stutter while the cut is active
         this.voice.set(s.rpm, s.load, vol);
         // Turbo. Boost builds with load and revs and lags behind the throttle like a real compressor. The spool is a whistle whose pitch
         // follows boost; lifting off while on boost dumps it through the blow-off valve (with flutter if you lift at high revs).
