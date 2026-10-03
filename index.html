@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Tafheet ~ تفحيط | EGYSeal</title>
+<meta name="theme-color" content="#17181c">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;1,700;1,900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- ============ MENU ============ -->
+<div id="menu" class="screen">
+  <header class="top">
+    <div class="logo"><span lang="ar" dir="rtl">تفحيط</span><b>Tafheet</b></div>
+    <nav class="tabs" id="tabs"><button data-tab="career">Career</button><button data-tab="quick">Quick play</button><button data-tab="online">Online</button><button data-tab="trophies">Trophies</button></nav>
+    <div class="level" title="Driver level"><b id="lvl">1</b><div><i id="xpBar"></i></div></div>
+    <div class="credits" title="Credits"><span id="credits">0</span> <small>credits</small></div>
+    <button id="assistBtn" class="chip" title="Stability assist strength">Assist</button>
+    <button id="gfxBtn" class="chip">Graphics</button>
+    <button id="gasBtn" class="chip" hidden>Auto gas</button>
+    <button id="muteBtn" class="chip" aria-label="Toggle sound">Sound on</button>
+  </header>
+
+  <section class="left">
+    <div id="tabCareer">
+      <div class="card chapter">
+        <button class="arrow" id="chPrev" aria-label="Previous chapter">‹</button>
+        <div><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p></div>
+        <button class="arrow" id="chNext" aria-label="Next chapter">›</button>
+      </div>
+      <ol id="events" class="events"></ol>
+    </div>
+    <div id="tabQuick">
+      <button id="daily" class="daily"><small>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button>
+      <div class="seg wide" id="modeSeg"><button data-mode="race">Race</button><button data-mode="trial">Time trial</button><button data-mode="drift">Drift attack</button></div>
+      <div class="seg wide two" id="rulesSeg"><button data-r="circuit">Circuit rules</button><button data-r="arcade">Arcade rules</button></div>
+    </div>
+
+    <div id="tabTrophies" hidden><ul id="trophies" class="trophies"></ul></div>
+    <div class="card track">
+      <button class="arrow" id="trkPrev" aria-label="Previous track">‹</button>
+      <div class="mid">
+        <canvas id="trkMap" width="120" height="90"></canvas>
+        <div>
+          <h2 id="trkName"></h2>
+          <p id="trkBlurb"></p>
+          <p class="meta"><span id="trkLen"></span><span id="trkBest"></span></p>
+        </div>
+      </div>
+      <button class="arrow" id="trkNext" aria-label="Next track">›</button>
+    </div>
+
+    <div class="row opts" id="optsRow">
+      <div class="stepper"><span>Laps</span><button id="lapMinus">−</button><b id="laps">3</b><button id="lapPlus">+</button></div>
+      <div class="seg" id="diff"><button data-d="0">Easy</button><button data-d="1" class="on">Medium</button><button data-d="2">Hard</button></div>
+    </div>
+
+    <div id="onlineBox" class="card online" hidden>
+      <div id="onlineJoin">
+        <button id="createRoom" class="btn">Create room</button>
+        <span class="or">or</span>
+        <input id="roomCode" maxlength="5" placeholder="Code" autocomplete="off" spellcheck="false">
+        <button id="joinRoom" class="btn ghost">Join</button>
+      </div>
+      <div id="lobby" hidden>
+        <p>Room <b id="lobbyCode"></b> <button id="copyLink" class="link">copy invite link</button> <button id="leaveRoom" class="link">leave</button></p>
+        <ul id="lobbyList"></ul>
+      </div>
+      <p id="onlineMsg" class="note"></p>
+    </div>
+
+    <ol id="board" class="board" hidden></ol>
+
+    <button id="startBtn" class="start">Start race</button>
+    <p class="keys">Arrows / WASD drive · Space handbrake · Shift nitro · R reset · C camera · Esc pause</p>
+  </section>
+
+  <section class="garage">
+    <label class="driver">Driver <input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <div class="carpick">
+      <button class="arrow" id="carPrev" aria-label="Previous car">‹</button>
+      <div>
+        <h2 id="carName"></h2>
+        <p id="carBlurb"></p>
+      </div>
+      <button class="arrow" id="carNext" aria-label="Next car">›</button>
+    </div>
+    <dl class="stats">
+      <dt>Speed</dt><dd><i id="stSpeed"></i></dd>
+      <dt>Launch</dt><dd><i id="stAcc"></i></dd>
+      <dt>Grip</dt><dd><i id="stGrip"></i></dd>
+      <dt>Drift</dt><dd><i id="stDrift"></i></dd>
+    </dl>
+    <div id="ups" class="ups"></div>
+    <div id="paints" class="paints"></div>
+    <button id="buyBtn" class="btn" hidden></button>
+  </section>
+  <footer class="credit">Track: “Karting Club Lider” by Nikita Teploukhov (CC BY-NC 4.0) · Cars: “Ultimate Low-Poly Car Pack” by ProbablyNotG (CC BY 4.0) · EGYSeal</footer>
+</div>
+
+<!-- ============ LOADING ============ -->
+<div id="loading" class="screen center" hidden>
+  <h2 id="loadName">Loading</h2>
+  <div class="bar"><i id="loadBar"></i></div>
+  <p id="loadTip"></p>
+</div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" hidden>
+  <div class="hp">
+    <div class="big" id="hPosBox"><b id="hPos">1</b><span><small>Pos</small><i id="hPosOf">/6</i></span></div>
+    <ol id="order"></ol>
+  </div>
+  <div class="ht">
+    <div class="big"><b id="hLapN">1</b><span><small>Lap</small><i id="hLapOf">/3</i></span></div>
+    <div class="trow"><span>Best</span><b id="hBest">—</b></div>
+    <div class="trow"><span>Lap</span><b id="hTime">0:00.00</b></div>
+    <div class="trow sec"><b id="hSec"></b></div>
+    <div class="trow" id="hPingRow" hidden><span>Ping</span><b id="hPing">…</b></div>
+  </div>
+  <div class="hg">
+    <div class="ring" id="gBody"><b id="hBody">100</b><small>Car</small></div>
+    <div class="ring" id="gFuel"><b id="hFuel">100</b><small>Fuel</small></div>
+    <div class="ring" id="gTyre"><b id="hTyre">100</b><small id="hTyreLbl">Tyres</small></div>
+    <div class="spd"><b id="hSpeed">0</b><span>km/h</span><em id="hGear">1</em></div>
+  </div>
+  <div class="hx" id="hArc" hidden>
+    <div class="nitro"><i id="hNitro"></i></div>
+    <div class="drift" id="hDrift"><span>Drift</span><b id="hDriftPts">0</b><em id="hCombo"></em></div>
+  </div>
+  <canvas id="mini" width="180" height="180"></canvas>
+  <div id="radio"><b>Amm Saber</b><span></span></div>
+  <div id="hEvent"></div>
+  <div id="hTow"></div>
+  <pre id="tele" hidden></pre>
+  <div id="lights"><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="msg"></div>
+  <div id="touch" hidden>
+    <button data-k="left" class="t l">◀</button><button data-k="right" class="t r">▶</button>
+    <button data-k="nitro" class="t n">N₂O</button><button data-k="hand" class="t h">Drift</button>
+    <button data-k="brake" class="t b">Brake</button><button data-k="gas" class="t g">Gas</button>
+  </div>
+  <button id="pauseBtn" class="chip">Pause</button>
+</div>
+
+<!-- ============ PAUSE / RESULTS ============ -->
+<div id="pause" class="screen center dim" hidden>
+  <h2>Paused</h2>
+  <button class="start" id="resumeBtn">Resume</button>
+  <button class="btn" id="restartBtn">Restart</button>
+  <button class="btn ghost" id="quitBtn">Back to menu</button>
+</div>
+<div id="results" class="screen center dim" hidden>
+  <div id="resStars" class="stars"></div>
+  <h2 id="resTitle"></h2>
+  <p id="resSub"></p>
+  <table id="resTable"></table>
+  <p id="resReward" class="reward"></p>
+  <div class="row"><button class="start" id="againBtn">Race again</button><button class="btn ghost" id="menuBtn">Menu</button></div>
+</div>
+<div id="story" class="screen dim" hidden>
+  <div class="dialog">
+    <div class="who"><i id="stFace"></i><div><b id="stWho"></b><small id="stEvent"></small></div></div>
+    <p id="stText"></p>
+    <div class="row"><button class="btn ghost" id="stSkip">Skip</button><button class="start" id="stNext">Next</button></div>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="rotate"><b>Rotate your phone</b><span>Tafheet plays in landscape</span></div>
+
+<script src="config.js"></script>
+<script src="lib/supabase.js"></script>
+<div id="fatal" hidden></div>
+<script>
+// Show problems on screen instead of failing silently.
+function fatal(t){var e=document.getElementById('fatal');e.hidden=false;e.textContent='The game could not start: '+t;}
+addEventListener('error',function(e){ if(!window.__booted) fatal(e.message||('could not load '+((e.target&&(e.target.src||e.target.href))||'a file'))); },true);
+addEventListener('unhandledrejection',function(e){ if(!window.__booted) fatal((e.reason&&e.reason.message)||String(e.reason)); });
+// Opened by double-click (file://): browsers refuse ES modules there, so load the pre-built single-file copy.
+(function(){var s=document.createElement('script');
+  if(location.protocol==='file:'){s.src='game.bundle.js';}else{s.type='module';s.src='js/main.js';}
+  document.body.appendChild(s);})();
+</script>
+</body>
+</html>
