@@ -354,3 +354,5 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 #boxWin small{font-size:15px;color:var(--yellow);font-weight:700;text-transform:uppercase;letter-spacing:.12em}#boxWin h2{font-size:clamp(34px,6vw,64px);font-style:italic;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.5)}
 .dev{border:1px dashed var(--yellow);padding:8px}.dev .note{width:100%;margin:2px 0 0}
 @media (max-width:900px),(max-height:480px){.parts{font-size:8px}.parts small{display:none}}
+
+.aud{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;align-items:center;font-size:12px;color:var(--dim)}.aud select{grid-column:1/-1;background:var(--tarmac);color:var(--chalk);border:1px solid var(--line);padding:6px}.aud label{display:flex;gap:6px;align-items:center}.aud input{flex:1;accent-color:var(--yellow)}.aud small{grid-column:1/-1;font-family:ui-monospace,monospace;color:#9effb0}

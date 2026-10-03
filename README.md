@@ -40,6 +40,19 @@ The rival is drawn slightly in the past (80-320 ms, adjusting itself to the conn
 real snapshots, so late or lost packets are absorbed instead of showing as jumps. The HUD shows ping and the
 current buffer during a duel. The free Supabase plan allows 100 messages a second; a duel uses about 40.
 
+## Engine audio
+
+- Samples live in `assets/audio/` (five engine loops made at 3000 rpm, two exhaust one-shots, and `audio_manifest.json`).
+  They are synthesised, not recordings of real cars.
+- Each car is assigned ONE engine identity in `js/config.js` (`snd`), with its own `idle` and `red` line, `turbo` and `pops`.
+- Pitch = simulated engine rpm / 3000. The rpm comes from the drivetrain in `js/car.js` (driven-wheel speed through the
+  selected gear, clutch slip from rest, free revs in the countdown, wheelspin, a torque cut on each shift).
+- Throttle/load only changes loudness and brightness. One looping source per engine; it is never restarted for rpm,
+  throttle or gear changes. Car changes crossfade over 200 ms.
+- `ENGINE_SETS` in `js/audio.js` is a list of loops per engine, so real idle/mid/high-rpm layers can be added later.
+- Settings has separate Engine, Sound effects and Music volumes. Developer mode has an audition panel
+  (engine, rpm, load, shift and pop triggers, output meter).
+
 ## Controls
 
 | Action | Keyboard | Gamepad |

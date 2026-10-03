@@ -78,7 +78,7 @@ export class Car {
   reset(x, z, th) {
     this.x = this.px = x; this.z = this.pz = z; this.th = this.pth = th; this.vx = this.vz = this.r = 0; this.steer = 0; this.axS = this.ayS = 0;
     this.slipR = 0; this.wspin = 0; this.locked = false; this.grass = 0; this.nitro = 1; this.nitroOn = false; this.braking = false;
-    this.rollD = this.pitchD = 0; this.lead = 0; this.draft = 0; this.oil = 0; this.lockF = false; this.y = 0; this.pitch = this.roll = 0; this.stuck = 0; this.lastSk = [null, null]; this.emitAcc = 0; this.rpm = 0; this.gear = 1;
+    this.rollD = this.pitchD = 0; this.di = 0; this.rpmR = 900; this.gearI = 1; this.shiftT = 0; this.lead = 0; this.draft = 0; this.oil = 0; this.lockF = false; this.y = 0; this.pitch = this.roll = 0; this.stuck = 0; this.lastSk = [null, null]; this.emitAcc = 0; this.rpm = 0; this.gear = 1;
   }
   get speed() { return Math.hypot(this.vx, this.vz); }
   get vf() { return this.vx * Math.sin(this.th) + this.vz * Math.cos(this.th); }
@@ -91,7 +91,7 @@ export class Car {
     const sn = Math.sin(this.th), cs = Math.cos(this.th);
     const vf = this.vx * sn + this.vz * cs, vl = this.vx * cs - this.vz * sn, speed = Math.hypot(vf, vl), sg = vf >= 0 ? 1 : -1;
 
-    const wet = track.wet || 0, D = this.dmg, P = this.parts, PT = TUNE.parts, wdrag = P.wheels.reduce((a, w) => a + (w > PT.flatAt ? PT.flatDrag : 0), 0), gripK = s.grip * TN.grip * (1 + .035 * U.tyre) * (.72 + .28 * this.tyre) * (this.oil > 0 ? .42 : 1) * TUNE.gripScale;
+    const wet = track.wet || 0, D = this.dmg, P = this.parts, PT = TUNE.parts, wdrag = Math.min(.3, P.wheels.reduce((a, w) => a + (w > PT.flatAt ? PT.flatDrag : 0), 0)), gripK = s.grip * TN.grip * (1 + .035 * U.tyre) * (.72 + .28 * this.tyre) * (this.oil > 0 ? .42 : 1) * TUNE.gripScale;
     const rainLoss = this.wetTyres ? .07 * wet + .07 * (1 - wet) : .27 * wet;      // wets: a little slower in the dry, far better in the rain
     this.oil = Math.max(0, this.oil - dt);
     // what is under each wheel
@@ -122,7 +122,8 @@ export class Car {
 
     // engine, brakes, reverse
     let thr = live ? inp.throttle : 0, brk = live ? inp.brake : 1;
-    if (this.fuel <= 0 || P.engine >= PT.engineDead) thr = 0;
+    if (this.fuel <= 0) thr = 0;
+    { const DR = TUNE.drift, on = this.driftable && Math.abs(inp.steer) > .92 && thr > .3 && speed > DR.minSpeed && vf > 0; this.di += ((on ? 1 : 0) - this.di) * Math.min(1, dt * (on ? DR.build : DR.decay)); }   // drift intent
     const burn = this.burn = live && thr > .8 && brk > .5 && speed < 5 && s.drive !== 'fwd';     // brake + throttle from rest: a burnout
     if (this.inPit) { const lim = TUNE.pit.limit; if (vf > lim + .5) { thr = 0; brk = Math.max(brk, .55); } else if (vf > lim - 1.2) thr = Math.min(thr, .12); }   // pit-lane speed limiter
     const rev = live && brk > 0 && thr === 0 && vf < 1.2;
@@ -130,13 +131,13 @@ export class Car {
     if (nit) this.nitro = Math.max(0, this.nitro - dt / (3.2 * (1 + .25 * U.nitro)));
     const vmax = s.top * TN.top * (1 + .04 * U.eng) * (nit ? 1.16 : 1) * (gr > .5 ? .55 : 1) * (1 - .1 * (D.front + D.rear)) * (1 - PT.gearboxTop * P.gearbox);
     if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));     // drift-angle hold: ease the power before a slide becomes a spin
-    let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * (1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, 16 / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 2, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
-    Fdrive *= TUNE.enginePower; if (burn) Fdrive *= .3;
+    let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, 16 / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 2, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
+    Fdrive *= TUNE.enginePower * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
     if (this._thr > .7 && thr < .1 && this.rpm > .55) this.backfire = .14; this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
     const bf = rev ? 0 : Math.min(brk * s.brake * m * g, m * Math.abs(vf) / dt);
     this.braking = brk > .1 && !rev;
     const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? .42 : 0;
-    const capF = muF * gripK * Nf * ltF, capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR;
+    const capF = muF * gripK * Nf * ltF, capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - TUNE.drift.rearCut * this.di);
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
@@ -160,7 +161,7 @@ export class Car {
     const ax = (FxR + FxF * cd - FyF * sd - .25 * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.03 + wdrag + gr * TUNE.surface.grassDrag) * vf - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
     const ay = (FyF * cd + FxF * sd + FyR) / m;
     this.vx += (ax * sn + ay * cs) * dt; this.vz += (ax * cs - ay * sn) * dt;
-    if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
+    if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt) * (1 - this.di); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
     this.r += (a * (FyF * cd + FxF * sd) - b * FyR) / this.I * dt; this.r -= this.r * (TUNE.yawDamp + speed * TUNE.yawDampSpeed + K * TUNE.assistYawDamp) * dt;
     if (thr === 0 && (brk === 0 || !live) && speed < .5) { this.vx *= .9; this.vz *= .9; this.r *= .85; }
     if (!live) { this.vx = this.vz = this.r = 0; }
@@ -171,13 +172,16 @@ export class Car {
     if (!nit && live) this.nitro = Math.min(1, this.nitro + dt * (.018 + (this.drifting ? .09 : 0)));
     this.drifting = Math.abs(this.beta) > .22 && speed > 9 && vf > 0 && gr < .6;
 
-    // fake gearbox for the rev counter + engine note
-    const sp = Math.abs(vf), gears = [0, .22, .4, .58, .78, 1.02].map(k => k * s.top);
-    let gi = 1; while (gi < 5 && sp > gears[gi]) gi++;
-    this.gear = rev && vf < -.5 ? 0 : gi;
-    const base = (sp - gears[gi - 1]) / (gears[gi] - gears[gi - 1]);
-    const want = live ? clamp(.25 + base * .7 + this.wspin * .3, .12, 1) : .15 + inp.throttle * .7;
-    this.rpm += (want - this.rpm) * Math.min(1, dt * 10);
+    // Drivetrain. Engine speed comes from the driven wheels through the selected gear (each gear reaches the red line at its own
+    // top speed). From rest the clutch slips, in the countdown the engine revs freely, wheelspin raises the revs, and a gear
+    // change cuts drive for a moment. shiftEvt is the one place a shift is announced (audio listens to it).
+    const idle = s.idle, red = s.red, wsp = Math.abs(vf) * (1 + Math.min(this.wspin, 1.5) * .5 + this.wspinF * .3), gtop = [0, .24, .42, .6, .8, 1.03].map(k => k * s.top * TN.top);
+    let gi = this.gearI; if (!(this.shiftT > 0) && live) { if (gi < 5 && wsp > gtop[gi] * .97) { gi++; this.shiftT = .15; this.shiftEvt = 1; } else if (gi > 1 && wsp < gtop[gi - 1] * .72) { gi--; this.shiftT = .12; this.shiftEvt = -1; } }
+    this.gearI = gi; this.gear = rev && vf < -.5 ? 0 : gi; this.shiftT = Math.max(0, this.shiftT - dt);
+    let rt = !live ? idle + inp.throttle * (red * .88 - idle) : rev ? idle + Math.abs(vf) / 12 * (red * .5 - idle) : Math.max(red * wsp / gtop[gi], gi === 1 ? idle + thr * (red * .42 - idle) : idle);
+    this.limiter = rt > red * .995 && (thr > .5 || !live); if (rt > red) rt = red * (this.limiter ? .975 + .025 * Math.sin(performance.now() / 26) : 1);
+    { const rate = (rt > this.rpmR ? 8000 : 5500) * dt; this.rpmR += clamp(rt - this.rpmR, -rate, rate); }
+    this.rpm = clamp((this.rpmR - idle) / (red - idle), 0, 1.02); this.load = live ? thr * (this.shiftT > 0 ? .2 : 1) : inp.throttle * .45;
     this.dirt = clamp(this.dirt + dt * (gr * Math.min(1, speed / 15) * .07 - wet * .03), 0, 1);
     this.lockF = this.braking && brk > .9 && speed > 17 && gr < .5;
     let hit = this.collideWalls(track);
@@ -225,7 +229,7 @@ export class Car {
       const ax = this.x + Math.sin(this.th) * za, az = this.z + Math.cos(this.th) * za, bx = o.x + Math.sin(o.th) * zb, bz = o.z + Math.cos(o.th) * zb;
       const dx = ax - bx, dz = az - bz, d = Math.hypot(dx, dz), min = 2.05;
       if (d >= min || d < 1e-4) continue;
-      const nx = dx / d, nz = dz / d, pen = min - d, ma = this.spec.mass, mb = kin ? 1e9 : o.spec.mass, ia = 1 / ma, ib = 1 / mb;
+      const nx = dx / d, nz = dz / d, pen = min - d, ma = this.spec.mass, mb = o.spec.mass, ia = 1 / ma, ib = 1 / mb;
       this.x += nx * pen * ib / (ia + ib) * (kin ? 0 : 1) + (kin ? nx * pen : 0); this.z += nz * pen * ib / (ia + ib) * (kin ? 0 : 1) + (kin ? nz * pen : 0);
       if (!kin) { o.x -= nx * pen * ia / (ia + ib); o.z -= nz * pen * ia / (ia + ib); }
       const vn = (this.vx - o.vx) * nx + (this.vz - o.vz) * nz; if (vn >= 0) continue;
@@ -302,7 +306,7 @@ export class Car {
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
     D[zone] = Math.min(1, D[zone] + amt);
     { const P = this.parts, k = amt * this.partK, corner = Math.abs(lx) > this.hw * .45;
-      const hitW = (i, v) => { P.wheels[i] = Math.min(1, P.wheels[i] + v); if (P.wheels[i] >= 1 && !this.gone[i]) { this.gone[i] = true; this.wheels[WK[i]].mesh.traverse(o => { if (o.isMesh) this.lost.push(o); }); } };   // a destroyed wheel comes off
+      const hitW = (i, v) => { P.wheels[i] = Math.min(.92, P.wheels[i] + v); if (P.wheels[i] >= 1 && !this.gone[i]) { this.gone[i] = true; this.wheels[WK[i]].mesh.traverse(o => { if (o.isMesh) this.lost.push(o); }); } };   // a destroyed wheel comes off
       if (zone === 'front') { P.engine = Math.min(1, P.engine + k * .9); if (corner) hitW(lx > 0 ? 0 : 1, k * 1.3); }
       else if (zone === 'rear') { P.gearbox = Math.min(1, P.gearbox + k * .9); if (corner) hitW(lx > 0 ? 2 : 3, k * 1.3); }
       else hitW(lx > 0 ? (lz > 0 ? 0 : 2) : (lz > 0 ? 1 : 3), k * 1.9); }
@@ -324,8 +328,8 @@ export class Car {
     }
     return amt;
   }
-  get health() { const D = this.dmg, P = this.parts; return Math.max(0, 1 - (D.front + D.rear + D.left + D.right) / 4 * .55 - P.engine * .2 - P.gearbox * .1 - (P.wheels[0] + P.wheels[1] + P.wheels[2] + P.wheels[3]) / 4 * .25); }
-  get stranded() { return this.parts.engine >= TUNE.parts.engineDead || this.gone.filter(Boolean).length >= 2; }
+  get health() { const D = this.dmg, P = this.parts; return Math.max(.05, 1 - (D.front + D.rear + D.left + D.right) / 4 * .55 - P.engine * .2 - P.gearbox * .1 - (P.wheels[0] + P.wheels[1] + P.wheels[2] + P.wheels[3]) / 4 * .25); }
+  get stranded() { return this.fuelK > 0 && this.fuel <= 0 && this.speed < 1; }   // only an empty tank strands a car now
   repair() {
     this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { o.visible = true; }); this.dress(this.look); for (const l of this.lamps) l.ok = true; this.setLights(this.lightsOn);
     for (const mesh of this.bodyMeshes) { mesh.geometry.attributes.position.array.set(mesh.userData.orig); mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.computeVertexNormals(); }
@@ -426,7 +430,7 @@ export class Car {
     N.buf.push({ t, x: p[0], z: p[1], th: p[2], vx: p[3], vz: p[4], r: p[5] }); if (N.buf.length > 40) N.buf.shift();
     N.off = Math.min(N.off + .05, now - t);                                   // clock offset + fastest trip seen (relaxes slowly)
     if (N.last) { const d = now - N.last; N.iv += (d - N.iv) * .1; N.jit += (Math.abs(d - N.iv) - N.jit) * .1; } N.last = now;
-    this.steer = p[6]; this.braking = !!(p[7] & 1); this.nitroOn = !!(p[7] & 2); this.locked = !!(p[7] & 4); this.slipR = p[7] & 8 ? .4 : 0; this.wspin = 0;
+    this.steer = p[6]; this.braking = !!(p[7] & 1); this.nitroOn = !!(p[7] & 2); this.locked = !!(p[7] & 4); this.slipR = p[7] & 8 ? .4 : 0; this.wspin = 0; this.pitBusy = !!(p[7] & 16);
   }
   netStep(dt, track, now) {
     const N = this.nb; if (!N || !N.buf.length) return;
@@ -445,7 +449,7 @@ export class Car {
     for (let i = 0; i < 4; i++) { const w = this.wheels[WK[i]]; this.wsurf[i] = track.surf(this.x + Math.sin(this.th) * w.z + Math.cos(this.th) * w.x, this.z + Math.cos(this.th) * w.z - Math.sin(this.th) * w.x); }
     this.grass = this.wsurf.filter(s => s === GRASS).length / 4; this.px = this.x; this.pz = this.z; this.pth = this.th;
   }
-  netPack() { return [+this.x.toFixed(2), +this.z.toFixed(2), +this.th.toFixed(3), +this.vx.toFixed(2), +this.vz.toFixed(2), +this.r.toFixed(2), +this.steer.toFixed(2), (this.braking ? 1 : 0) | (this.nitroOn ? 2 : 0) | (this.locked ? 4 : 0) | (this.slipR > .16 ? 8 : 0), Math.round(performance.now())]; }
+  netPack() { return [+this.x.toFixed(2), +this.z.toFixed(2), +this.th.toFixed(3), +this.vx.toFixed(2), +this.vz.toFixed(2), +this.r.toFixed(2), +this.steer.toFixed(2), (this.braking ? 1 : 0) | (this.nitroOn ? 2 : 0) | (this.locked ? 4 : 0) | (this.slipR > .16 ? 8 : 0) | (this.pitBusy ? 16 : 0), Math.round(performance.now())]; }
 
   dispose() { this.m.paint.dispose(); this.m.rear.dispose(); }
 }
@@ -455,11 +459,13 @@ export function aiDrive(car, track, ai, cars, dt) {
   const n = track.n, sp = car.speed, p = track.path;
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
   // drift the racing line towards the inside of the coming corner, and around slower cars
-  let want = clamp(tgt.k * 260, -1, 1) * ai.wide + ai.lane;
+  const ap = p[(car.idx + look + Math.round(34 / track.spacing)) % n], inside = clamp(tgt.k * 300, -1, 1), setup = clamp(ap.k * 300, -1, 1);
+  let want = (inside - setup * .85 * (1 - Math.abs(inside))) * ai.wide * 1.2 + ai.lane * (1 - Math.abs(inside));   // racing line: out wide before the corner, down to the apex, let it run out
   let brakeFor = 0; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
     if (o === car || o.out) continue; const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0;
-    if (f < -3.5 || f > 55 || Math.abs(l) > 8) continue;
+    if (f < -3.5) { if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + 1 && Math.abs(setup) > .3) want += setup * 1.4 * ai.care; continue; }   // a faster car behind before a corner: cover the inside
+    if (f > 55 || Math.abs(l) > 8) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 4.6) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 2.5 && ttc < 2.4) { want += (lp > 0 ? -1 : 1) * 3 * (1.2 - ttc / 2.4); if (ttc < .5 * ai.care) brakeFor = Math.max(brakeFor, 1 - ttc); }   // closing on a car: pick the clear side, brake if it is too late
@@ -479,6 +485,9 @@ export function aiDrive(car, track, ai, cars, dt) {
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;
   if (sp > 8 && Math.abs(car.beta) > .1) inp.throttle *= Math.abs(car.beta) > .25 ? .15 : .5;   // feather the throttle when the tail steps out
   inp.hand = false; inp.nitro = ai.skill > .9 && Math.abs(tgt.k) < .004 && Math.abs(err) < .08 && car.nitro > .5;
+  if (Math.abs(err) > 1.9 && sp < 12) { inp.steer = err > 0 ? 1 : -1; inp.throttle = .6; inp.brake = 0; }           // facing the wrong way: spin it round
+  ai.jam = sp < 1.2 && inp.throttle > 0 && !car.held ? (ai.jam || 0) + dt : 0;
+  if (ai.jam > 1.1 || ai.revT > 0) { if (!(ai.revT > 0)) ai.revT = 1.2; ai.revT -= dt; ai.jam = 0; inp.throttle = 0; inp.brake = 1; inp.steer = -inp.steer; inp.nitro = false; return inp; }   // nosed into a barrier: back out, then go
   if (brakeFor > 0 && car.vf > 6) { inp.throttle = 0; inp.brake = Math.max(inp.brake, brakeFor * .8); }
   if (inp.brake && car.vf < 2) inp.brake = 0;      // never let the AI select reverse by accident
   return inp;

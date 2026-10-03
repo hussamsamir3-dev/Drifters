@@ -1,0 +1,51 @@
+{
+  "origin": "Original procedural synthesis; not vehicle recordings or brand-accurate samples.",
+  "format": "Mono PCM16 WAV, 32000 Hz. WAV payloads are uncompressed; ZIP provides lossless delivery compression.",
+  "base_rpm": 3000,
+  "loop_start_seconds": 0,
+  "loop_end_seconds": 6,
+  "files": [
+    {
+      "file": "01_Turbo_Inline4_Loop.wav",
+      "duration_seconds": 6.0,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -7.76
+    },
+    {
+      "file": "02_Boxer_Flat4_Loop.wav",
+      "duration_seconds": 6.0,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -8.58
+    },
+    {
+      "file": "03_Race_Inline6_Loop.wav",
+      "duration_seconds": 6.0,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -7.63
+    },
+    {
+      "file": "04_Crossplane_V8_Loop.wav",
+      "duration_seconds": 6.0,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -8.26
+    },
+    {
+      "file": "05_Race_V10_Loop.wav",
+      "duration_seconds": 6.0,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -7.18
+    },
+    {
+      "file": "06_Shift_Exhaust_SinglePop.wav",
+      "duration_seconds": 0.85,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -20.82
+    },
+    {
+      "file": "07_Shift_Exhaust_CrackleBurst.wav",
+      "duration_seconds": 1.1,
+      "peak_dbfs": -2.05,
+      "rms_dbfs": -18.7
+    }
+  ]
+}

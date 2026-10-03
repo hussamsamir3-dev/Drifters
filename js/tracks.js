@@ -280,13 +280,19 @@ function buildProc(track) {
         transformed.x += sin(T * 1.1 + ph) * .03 * (1. - walk);
         if (walk > .5) { float u = fract(T * .6 / max(aWalk, 1.) + aPh), tri = abs(u * 2. - 1.); transformed.xz *= (u < .5 ? -1. : 1.); transformed.z += (tri - .5) * aWalk; }`); };
   const SKIN = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
+  const personLow = (() => {      // the same figure in six boxes, for crowds that are far from the camera
+    const tag = (g, part, limb) => { const n = g.attributes.position.count; g.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(n).fill(part), 1)); g.setAttribute('aLimb', new THREE.BufferAttribute(new Float32Array(n).fill(limb), 1)); return g; };
+    const box = (w, h, d, x, y, z, part, limb) => tag(new THREE.BoxGeometry(w, h, d).translate(x, y, z), part, limb);
+    return mergeGeometries([box(.4, .58, .25, 0, 1.1, 0, 0, 0), box(.27, .3, .27, 0, 1.55, 0, 1, 5), box(.14, .82, .17, .09, .41, 0, 2, 3), box(.14, .82, .17, -.09, .41, 0, 2, 4), box(.1, .5, .11, .26, 1.06, 0, 0, 1), box(.1, .5, .11, -.26, 1.06, 0, 0, 2)]);
+  })();
   const people = all => {
     const cells = new Map(); for (const q of all) { const k = Math.floor(q.x / 60) + ',' + Math.floor(q.z / 60); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(q); }
     for (const list of cells.values()) {
       const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
       list.forEach((q, i) => { beh[i] = q.beh || 0; ph[i] = rnd(); const k = q.k || SKIN[rnd() * 4 | 0]; sk[i * 3] = k.r; sk[i * 3 + 1] = k.g; sk[i * 3 + 2] = k.b; wk[i] = q.walk || 0; if (!q.c) q.c = new THREE.Color(0xf3f4f6); const b = q.s || 1; q.sx = b * (.9 + rnd() * .22); q.sz = q.sx; q.sy = b * (.94 + rnd() * .14); });   // different heights and builds
       g.setAttribute('aBeh', new THREE.InstancedBufferAttribute(beh, 1)); g.setAttribute('aPh', new THREE.InstancedBufferAttribute(ph, 1)); g.setAttribute('aSkin', new THREE.InstancedBufferAttribute(sk, 3)); g.setAttribute('aWalk', new THREE.InstancedBufferAttribute(wk, 1));
-      const m = instanced1(g, personMat, list, false); m.computeBoundingSphere(); m.boundingSphere.radius += 9; G.add(m);
+      const lo = personLow.clone(); for (const k of ['aBeh', 'aPh', 'aSkin', 'aWalk']) lo.setAttribute(k, g.getAttribute(k));
+      const m = instanced1(g, personMat, list, false); m.computeBoundingSphere(); m.boundingSphere.radius += 9; m.userData.lod = [g, lo]; m.userData.cur = 0; G.add(m);
     }
   };
   const BOB = 'transformed.y += abs(sin(uTime * 3.4 + instanceMatrix[3][0] * 1.7 + instanceMatrix[3][2] * 2.3)) * .14;';
