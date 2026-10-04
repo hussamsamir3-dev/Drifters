@@ -369,3 +369,12 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 #hPace{pointer-events:auto;font-style:italic;font-weight:900;font-size:13px;padding:6px 10px;border-radius:4px;background:rgba(243,244,246,.9);color:var(--asphalt);text-transform:uppercase;letter-spacing:.04em;min-width:58px}
 #hPace.p0{background:var(--blue);color:#04222b}#hPace.p2{background:var(--red);color:#fff}
 @media (max-width:900px),(max-height:480px){#hPace{font-size:11px;padding:5px 7px;min-width:46px}}
+
+#carSpec{font-size:12px;font-weight:700;color:var(--yellow);letter-spacing:.02em;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+
+/* ---------- v22: race flags and penalties ---------- */
+#hFlag{position:absolute;top:14px;left:calc(50% + 150px);width:54px;height:36px;border-radius:3px;display:none;align-items:center;justify-content:center;font-style:normal;font-weight:900;font-size:14px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#hFlag.yellow{display:flex;background:#ffc21a;animation:pulse .8s infinite}#hFlag.blue{display:flex;background:#1c6fe0}#hFlag.green{display:flex;background:#2fb457}
+#hFlag.warn{display:flex;background:linear-gradient(135deg,#111 50%,#f3f4f6 50%)}#hFlag.pen{display:flex;background:#e3262e}
+#hFlag.chequered{display:flex;background:conic-gradient(#111 25%,#f3f4f6 0 50%,#111 0 75%,#f3f4f6 0) 0 0/18px 18px}
+#hFlag:not(.yellow):not(.blue):not(.green):not(.warn):not(.pen):not(.chequered):not(:empty){display:flex;background:rgba(227,38,46,.85)}

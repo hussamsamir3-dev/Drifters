@@ -96,7 +96,7 @@ export class GameAudio {
         this.spool.g.gain.setTargetAtTime(0, t, .1);
         if (this.lastLoad > .6 && s.load < .15 && t - (this.liftT || 0) > .9) { this.liftT = t;
           if (tb && this.boost > .35) { this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .36 + this.boost * .24, true); this.boost *= .2; }
-          else if (!tb && s.rpmN > .5 && sp.pops === 'crackle' && Math.random() < .6) this.shot('crackle', .5); }
+          if (s.rpmN > .5) { if (sp.pops === 'crackle' && Math.random() < .55) this.shot('crackle', .42, true); else this.shot('pop', .34 + s.rpmN * .2, true); } }     // lifting off at high revs: the exhaust pops (the flame is drawn by the car)
         this.lastLoad += (s.load - this.lastLoad) * .5; }
     }
     this.wind.g.gain.setTargetAtTime(k * k * .3, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);

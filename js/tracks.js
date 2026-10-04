@@ -236,7 +236,7 @@ function instanced1(geo, mat, list, shadow = true) {
 }
 
 function buildProc(track) {
-  const def = track.def, th = track.theme, hw = def.width / 2, B = hw + def.runoff, G = track.group;
+  const def = track.def, th = track.theme, hw = (def.width * 1.2) / 2, B = hw + def.runoff, G = track.group;
   CULL = []; seed = def.id.length * 7919 + 13;
   // things that move: spectators bounce, flags wave, balloons drift, light beams sweep. main calls track.tick(time) each frame.
   const uT = track.uTime = { value: 0 }, movers = []; track.fancyLights = [];
@@ -296,7 +296,7 @@ function buildProc(track) {
     const cells = new Map(); for (const q of all) { const k = Math.floor(q.x / 60) + ',' + Math.floor(q.z / 60); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(q); }
     for (const list of cells.values()) {
       const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
-      list.forEach((q, i) => { beh[i] = q.beh || 0; ph[i] = rnd(); const k = q.k || SKIN[rnd() * 4 | 0]; sk[i * 3] = k.r; sk[i * 3 + 1] = k.g; sk[i * 3 + 2] = k.b; wk[i] = q.walk || 0; if (!q.c) q.c = new THREE.Color(0xf3f4f6); const b = q.s || 1; q.sx = b * (.9 + rnd() * .22); q.sz = q.sx; q.sy = b * (.94 + rnd() * .14); });   // different heights and builds
+      list.forEach((q, i) => { beh[i] = q.beh || 0; ph[i] = rnd(); const k = q.k || SKIN[rnd() * 4 | 0]; sk[i * 3] = k.r; sk[i * 3 + 1] = k.g; sk[i * 3 + 2] = k.b; wk[i] = q.walk || 0; if (!q.c) q.c = new THREE.Color(0xf3f4f6); const b = (q.s || 1) * 1.4; q.sx = b * (.9 + rnd() * .22); q.sz = q.sx; q.sy = b * (.94 + rnd() * .14); });   // different heights and builds
       g.setAttribute('aBeh', new THREE.InstancedBufferAttribute(beh, 1)); g.setAttribute('aPh', new THREE.InstancedBufferAttribute(ph, 1)); g.setAttribute('aSkin', new THREE.InstancedBufferAttribute(sk, 3)); g.setAttribute('aWalk', new THREE.InstancedBufferAttribute(wk, 1));
       const lo = personLow.clone(); for (const k of ['aBeh', 'aPh', 'aSkin', 'aWalk']) lo.setAttribute(k, g.getAttribute(k));
       const m = instanced1(g, personMat, list, false); m.computeBoundingSphere(); m.boundingSphere.radius += 9; m.userData.lod = [g, lo]; m.userData.cur = 0; G.add(m);

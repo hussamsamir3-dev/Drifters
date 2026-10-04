@@ -111,5 +111,8 @@ mesh), so it cannot just be dropped in. Send the model and it can be baked the s
 
 - Track: "Karting Club Lider | Outdoor Race Track" by Nikita Teploukhov (sketchfab.com/skril4ek), CC BY-NC 4.0.
   Non-commercial only. Remove or replace this track before selling the game or adding ads.
-- Cars: "Ultimate Low-Poly Car Pack" by ProbablyNotG (sketchfab.com/mr_c0neDude), CC BY 4.0.
 - three.js (MIT), supabase-js (MIT).
+
+
+
+- All vehicles are generated in code by `js/carmodel.js` (smooth lofted bodies, wheel wells, glass cabins, wheels, lamps, wings). No external car models are used.

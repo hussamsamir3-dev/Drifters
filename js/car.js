@@ -1,5 +1,6 @@
 // Cars: models, tyre-model physics, wheel animation, effects, AI driver, network ghost.
 import * as THREE from 'three';
+import { buildStyled, hasOwnWing } from './carmodel.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GRASS, KERB, ROAD, WALL, PIT } from './tracks.js';
 import { getAsset } from './assets.js';
@@ -23,12 +24,66 @@ const LAMP = {};
 const DUST = [new THREE.Color(0x5a4630), new THREE.Color(0xc9a66b)];
 let protos = null;
 
+// Three vehicles built here from shaped parts (rounded extrusions, plates, cylinders) rather than loaded from a file.
+function buildProcedural() {
+  const K = {}, mat = n => K[n] || (K[n] = Object.assign(new THREE.MeshBasicMaterial(), { name: n }));
+  const ext = (pts, w, bevel) => { const sh = new THREE.Shape(); pts.forEach(([z, y], i) => i ? sh.lineTo(-z, y) : sh.moveTo(-z, y)); const b = bevel ?? .07; return new THREE.ExtrudeGeometry(sh, { depth: w - b * 2, bevelEnabled: b > 0, bevelSize: b, bevelThickness: b, bevelSegments: 4, curveSegments: 10 }).rotateY(Math.PI / 2).translate(-(w - b * 2) / 2, 0, 0); };   // side profile [z forward, y up] swept across the body with rounded edges
+  const mk = (geo, kind, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat(kind)); m.position.set(x, y, z); return m; };
+  const bx = (w, h, l, kind, x, y, z, r = .04) => mk(ext([[-l / 2, -h / 2], [l / 2, -h / 2], [l / 2, h / 2], [-l / 2, h / 2]], w, Math.min(r, w / 2 - .001, h / 2 - .001)), kind, x, y, z);
+  const wheel = (r, w, spokes = 6) => { const g = new THREE.Group(); g.add(mk(new THREE.CylinderGeometry(r, r, w, 28, 1).rotateZ(Math.PI / 2), 'tire'), mk(new THREE.TorusGeometry(r - .06, .06, 8, 28).rotateY(Math.PI / 2), 'tire', w / 2 - .02), mk(new THREE.TorusGeometry(r - .06, .06, 8, 28).rotateY(Math.PI / 2), 'tire', -w / 2 + .02), mk(new THREE.CylinderGeometry(r * .64, r * .64, w + .02, 20).rotateZ(Math.PI / 2), 'rim7'));
+    for (const sx of [-1, 1]) { g.add(mk(new THREE.CylinderGeometry(r * .2, r * .2, .05, 12).rotateZ(Math.PI / 2), 'silver', sx * (w / 2 + .02))); for (let i = 0; i < spokes; i++) { const s = mk(new THREE.BoxGeometry(.03, r * .56, .07), 'silver', sx * (w / 2 + .015), 0, 0); s.geometry = s.geometry.clone().translate(0, r * .34, 0).rotateX(i / spokes * Math.PI * 2); g.add(s); } } return g; };
+  const car = (id, body, wb, tf, tr2, rf, rr, wf, wr, exhaust) => { const P = new THREE.Group(); P.name = id; const b = new THREE.Group(); b.name = 'body'; for (const m of body) b.add(m); P.add(b);
+    for (const [n, x, z, r, w] of [['FL', tf, wb / 2, rf, wf], ['FR', -tf, wb / 2, rf, wf], ['RL', tr2, -wb / 2, rr, wr], ['RR', -tr2, -wb / 2, rr, wr]]) { const g = wheel(r, w, id === 'proc:f1' ? 5 : 6); g.name = 'wheel_' + n; g.position.set(x, r, z); P.add(g); } P.userData.exhaust = exhaust; protos[id] = P; };
+  // ---- Formula car: tub, needle nose, sidepods, airbox, halo, floor, front and rear wings, open wheels
+  car('proc:f1', [
+    bx(1.5, .04, 3.9, 'body', 0, .1, -.1, .02), mk(ext([[-1.5, .14], [1.1, .14], [1.9, .2], [2.62, .22], [2.62, .3], [1.6, .46], [.5, .58], [-.2, .6], [-1.5, .5]], .56, .1), 'paint'),
+    mk(ext([[-1.9, .16], [-.3, .16], [-.3, .9], [-.7, .98], [-1.9, .5]], .34, .1), 'paint'), mk(ext([[-1.3, .14], [.55, .14], [.75, .32], [.55, .52], [-1.3, .4]], .5, .12), 'paint', .5), mk(ext([[-1.3, .14], [.55, .14], [.75, .32], [.55, .52], [-1.3, .4]], .5, .12), 'paint', -.5),
+    bx(.4, .16, .2, 'body', .5, .34, .72, .03), bx(.4, .16, .2, 'body', -.5, .34, .72, .03), mk(new THREE.TorusGeometry(.27, .035, 8, 20, Math.PI).rotateX(-Math.PI / 2).rotateZ(0), 'trim', 0, .72, .22), bx(.05, .26, .06, 'trim', 0, .6, .5, .01),
+    mk(new THREE.SphereGeometry(.15, 14, 10), 'accent', 0, .7, .05), bx(.24, .2, .02, 'body', 0, .9, -.28, 0),
+    bx(1.86, .035, .42, 'paint', 0, .13, 2.5, .012), bx(1.86, .03, .2, 'stripe', 0, .2, 2.42, .01), bx(.03, .24, .5, 'paint', .93, .2, 2.48, .01), bx(.03, .24, .5, 'paint', -.93, .2, 2.48, .01),
+    bx(1.02, .04, .4, 'paint', 0, .92, -1.95, .012), bx(1.02, .035, .22, 'stripe', 0, 1.02, -2.06, .01), bx(.035, .62, .56, 'paint', .51, .74, -1.95, .012), bx(.035, .62, .56, 'paint', -.51, .74, -1.95, .012), bx(.1, .5, .12, 'trim', 0, .62, -1.9, .02),
+    bx(.3, .09, .06, 'rear', 0, .42, -2.02, .02), bx(1.3, .1, .5, 'body', 0, .2, -1.95, .03),
+    ...[1, -1].flatMap(s => [bx(.5, .03, .06, 'trim', s * .55, .34, 1.72, .01), bx(.5, .03, .06, 'trim', s * .55, .3, 1.9, .01), bx(.46, .03, .06, 'trim', s * .52, .36, -1.72, .01)])],
+    3.6, .8, .78, .34, .36, .36, .44, [[0, .4, -2.05]]);
+  // ---- Pickup truck: bonnet, cab and open bed, with arches, grille, bumpers, glass and lamps
+  car('proc:truck', [
+    mk(ext([[-2.75, .52], [2.6, .52], [2.72, .7], [2.7, 1.08], [1.1, 1.2], [.55, 1.86], [-.75, 1.9], [-.95, 1.2], [-2.75, 1.2]], 1.96, .12), 'paint'),
+    bx(1.66, .5, 1.5, 'body', 0, 1.02, -1.86, .04), bx(1.98, .1, .1, 'trim', 0, 1.22, -2.72, .03), ...[1, -1].map(s => bx(.1, .1, 1.78, 'trim', s * .94, 1.22, -1.86, .03)),
+    mk(ext([[.62, 1.22], [1.02, 1.22], [.56, 1.8]], 1.7, .0), 'window', 0, 0, .03), mk(ext([[-.92, 1.24], [-.72, 1.84], [-.7, 1.84], [-.9, 1.24]], 1.6, 0), 'window'),
+    ...[1, -1].flatMap(s => [bx(.03, .5, 1.02, 'window', s * .985, 1.52, -.1, .01), bx(.05, .7, .06, 'paint', s * .985, 1.5, -.14, .01), bx(.3, .14, .1, 'front', s * .72, .98, 2.7, .03), bx(.1, .3, .06, 'rear', s * .9, 1.0, -2.76, .02),
+      mk(new THREE.TorusGeometry(.5, .09, 8, 18, Math.PI).rotateY(Math.PI / 2), 'body', s * .92, .5, 1.72), mk(new THREE.TorusGeometry(.5, .09, 8, 18, Math.PI).rotateY(Math.PI / 2), 'body', s * .92, .5, -1.72), bx(.12, .05, .2, 'silver', s * 1.06, 1.3, .86, .02), bx(.1, .08, 2.2, 'body', s * .98, .5, 0, .03)]),
+    bx(1.5, .34, .08, 'trim', 0, .9, 2.72, .03), bx(2.02, .22, .22, 'silver', 0, .56, 2.72, .06), bx(2.02, .2, .2, 'silver', 0, .58, -2.76, .06), bx(1.2, .08, .9, 'body', 0, 1.24, 1.9, .03)],
+    3.44, .86, .86, .46, .46, .34, .34, [[.6, .44, -2.82]]);
+  // ---- Minibus: one tall rounded box with a sloped nose, a band of windows, sliding-door line, roof rack and bumpers
+  car('proc:bus', [
+    mk(ext([[-2.35, .4], [2.2, .4], [2.42, .62], [2.42, 1.0], [2.05, 1.96], [1.6, 2.08], [-2.3, 2.08], [-2.42, 1.9], [-2.42, .6]], 1.86, .14), 'paint'),
+    mk(ext([[2.34, 1.14], [2.02, 1.9], [2.0, 1.9], [2.3, 1.14]], 1.56, 0), 'window'), mk(ext([[-2.43, 1.3], [-2.43, 1.86], [-2.45, 1.86], [-2.45, 1.3]], 1.4, 0), 'window'),
+    ...[1, -1].flatMap(s => [...[1.46, .52, -.42, -1.36].map(z => bx(.03, .56, .78, 'window', s * .94, 1.58, z, .01)), bx(.02, 1.1, .03, 'body', s * .945, 1.0, .06, 0), bx(.3, .16, .1, 'front', s * .62, .86, 2.42, .03), bx(.12, .34, .06, 'rear', s * .8, 1.1, -2.44, .02), bx(.12, .06, .22, 'silver', s * 1.0, 1.34, 1.9, .02), bx(.04, .05, 3.6, 'silver', s * .6, 2.14, -.2, .01)]),
+    ...[1.2, .1, -1.0, -1.9].map(z => bx(1.3, .04, .05, 'silver', 0, 2.14, z, .01)), bx(1.9, .2, .18, 'body', 0, .5, 2.4, .06), bx(1.9, .2, .18, 'body', 0, .5, -2.42, .06), bx(1.1, .22, .06, 'trim', 0, .86, 2.44, .02), bx(1.5, .06, .05, 'stripe', 0, 1.1, 2.44, .01)],
+    2.9, .8, .8, .36, .36, .26, .26, [[.5, .34, -2.46]]);
+}
 export async function loadCars() {
-  const gltf = await new GLTFLoader().parseAsync(await getAsset('cars.glb'), '');
-  protos = {}; for (const c of gltf.scene.children) protos[c.name] = c;
+  protos = {};          // every vehicle is generated by carmodel.js
+  for (const s of CARS) { protos['sty:' + s.id] = buildStyled(s.id); s.model = 'sty:' + s.id; s.body = 'k'; s.wing = hasOwnWing(s.id); }
 }
 
 const shared = {};
+// The livery is painted by the shader from the body's own shape, so its edges are crisp on any model: a roof panel, twin stripes
+// nose to tail, and a white roundel on each door for the race number.
+export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
+function livery(m) {
+  const U = m.userData.liv = { uH: { value: 1 }, uL: { value: new THREE.Color(0xf2f2ee) }, uRoof: { value: 0 }, uStripe: { value: 0 }, uDoor: { value: 0 }, uFlash: { value: 0 }, uNose: { value: 0 }, uL2: { value: new THREE.Color(0x1c57c8) }, uZ: { value: 2 } };
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U);
+    sh.vertexShader = 'varying vec3 vOP; varying vec3 vON;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vOP = position; vON = normal;');
+    sh.fragmentShader = 'varying vec3 vOP; varying vec3 vON; uniform float uH, uRoof, uStripe, uDoor, uFlash, uNose, uZ; uniform vec3 uL, uL2;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      float lr = smoothstep(uH * .86, uH * .88, vOP.y) * step(.55, abs(vON.y)) * uRoof;
+      float ls = (1. - smoothstep(.06, .07, abs(abs(vOP.x) - .19))) * step(.25, abs(vON.y)) * uStripe;
+      float ld = (1. - smoothstep(.3, .315, length(vec2(vOP.z + .1, vOP.y - uH * .5)))) * step(.7, abs(vON.x)) * uDoor;
+      float lf = uFlash * step(.55, abs(vON.x)) * (1. - smoothstep(.15, .19, abs(vOP.y * 1.7 - vOP.z * .8 - uH * .3)));
+      float ln = uNose * step(uZ * .5, vOP.z) * step(.2, vON.y + abs(vON.z));
+      diffuseColor.rgb = mix(mix(mix(diffuseColor.rgb, uL, max(lr, ls)), uL2, max(lf, ln)), vec3(.96), ld);`); };
+  m.customProgramCacheKey = () => 'livery'; return m;
+}
 function mats(color) {
   if (!shared.tire) {
     shared.tire = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: .92 });
@@ -36,22 +91,29 @@ function mats(color) {
     shared.rimDark = new THREE.MeshStandardMaterial({ color: 0x2a2c30, metalness: .8, roughness: .4 });
     shared.body = new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: .6, metalness: .2 });
     shared.trim = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: .45, metalness: .5 });
-    shared.window = new THREE.MeshPhysicalMaterial({ color: 0x0a1016, roughness: .06, metalness: .9, clearcoat: 1 });
+    shared.window = new THREE.MeshStandardMaterial({ color: 0x1a2836, roughness: .1, metalness: .1, envMapIntensity: .9 });      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
     shared.front = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3d0, emissiveIntensity: 1.1 });
+    shared.vcol = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .5, metalness: .05 });      // parts that keep the colours the model was drawn with
+    shared.stripe = new THREE.MeshPhysicalMaterial({ color: 0xf2f3f5, metalness: .2, roughness: .35, clearcoat: 1, clearcoatRoughness: .1 });      // painted stripes and race numbers
+    shared.silver = new THREE.MeshStandardMaterial({ color: 0xb9bdc4, metalness: .85, roughness: .32 });
+    shared.accent = new THREE.MeshStandardMaterial({ color: 0xd3221c, metalness: .3, roughness: .4 });                                              // brake calipers and red trim
   }
+  for (const k in shared) shared[k].side = THREE.DoubleSide;
+  const two = m => { m.side = THREE.DoubleSide; return m; };
   return {
     ...shared,
-    paint: new THREE.MeshPhysicalMaterial({ color, metalness: .55, roughness: .32, clearcoat: 1, clearcoatRoughness: .06 }),
-    rear: new THREE.MeshStandardMaterial({ color: 0x8a0a0a, emissive: 0xff1a1a, emissiveIntensity: .5 }),
+    paint: livery(two(new THREE.MeshPhysicalMaterial({ color, metalness: .72, roughness: .3, clearcoat: 1, clearcoatRoughness: .05, envMapIntensity: 1.25 }))),      // metallic paint under a clear coat
+    paint2: two(new THREE.MeshPhysicalMaterial({ color: new THREE.Color(color).multiplyScalar(.6), metalness: .55, roughness: .36, clearcoat: 1, clearcoatRoughness: .1 })),   // the second body tone follows the paint, darker
+    rear: two(new THREE.MeshStandardMaterial({ color: 0x8a0a0a, emissive: 0xff1a1a, emissiveIntensity: .5 })),
   };
 }
 
 export class Car {
   constructor(spec, color = spec.color, name = 'Driver', up, look, tune) {
     this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
-    this.fuel = 1; this.fuelK = 1; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; this.partK = 1; this.pace = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
+    this.fuel = 1; this.fuelK = 1; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; this.partK = 1; this.pace = 1; this.bopP = 1; this.bopG = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
     this.dirt = 0; this.dirtShown = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
-    const proto = protos[spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
+    const proto = protos[spec.model || spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
     this.m = mats(color); this.wheels = {}; this.bodyMeshes = [];
     this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dmgScale = 1; this.wear = 1;
@@ -61,19 +123,22 @@ export class Car {
         if (!o.isMesh) return; o.castShadow = true;
         const n = o.userData.kind = o.material.name;
         o.material = n === 'paint' ? this.m.paint : n === 'tire' ? this.m.tire : n === 'rim7' ? this.m.rim : n === 'rim6' ? this.m.rimDark : this.m[n] || this.m.body;
+        if (o.geometry.attributes.color) { const k = o.material.uuid; this.vc = this.vc || {}; if (!this.vc[k]) { const src = o.material; this.vc[k] = src.clone(); this.vc[k].vertexColors = true; if (src.userData.liv) { this.vc[k].userData.liv = src.userData.liv; this.vc[k].onBeforeCompile = src.onBeforeCompile; this.vc[k].customProgramCacheKey = () => 'liveryvc'; } } o.material = this.vc[k]; }   // models that carry their own panel shading keep it
       });
       if (c.name.startsWith('body')) { chassis.add(c); c.traverse(o => { if (o.isMesh) { o.geometry = o.geometry.clone(); o.userData.orig = o.geometry.attributes.position.array.slice(); this.bodyMeshes.push(o); } }); }
       else { const pivot = new THREE.Group(); pivot.position.copy(c.position); c.position.set(0, 0, 0); pivot.add(c); root.add(pivot); this.wheels[c.name.slice(6, 8)] = { pivot, mesh: c, x: pivot.position.x, y: pivot.position.y, z: pivot.position.z }; }
     }
-    const w = this.wheels; this.a = w.FL.z; this.b = -w.RL.z; this.tw = w.FL.x; this.R = w.RL.y;
-    { const T = TUNE.toy; chassis.scale.set(T.w, T.h, T.l); for (const k in w) { const q = w[k]; q.mesh.scale.setScalar(T.wheel); q.y *= T.wheel; q.pivot.position.set(q.x * T.w, q.y, q.z * T.l); } this.rideY = this.R * (T.wheel - 1); this.R *= T.wheel; }
+    const w = this.wheels; { const L = w.FL.z - w.RL.z, fw = spec.fw || .5; this.a = L * (1 - fw); this.b = L * fw; } this.tw = w.FL.x; this.R = w.RL.y;      // centre of mass placed by the car's real front/rear weight split
+    { const B = TUNE.body[spec.body] || TUNE.body.coupe; this.T = { w: TUNE.toy.w * B.w, h: TUNE.toy.h * B.h, l: TUNE.toy.l * B.l, wheel: TUNE.toy.wheel * B.wheel }; }
+    { const T = this.T; chassis.scale.set(T.w, T.h, T.l); for (const k in w) { const q = w[k]; q.mesh.scale.setScalar(T.wheel); q.y *= T.wheel; q.x *= T.w; q.z *= T.l; q.pivot.position.set(q.x, q.y, q.z); } this.rideY = this.R * (T.wheel - 1); this.R *= T.wheel; }
     const box = new THREE.Box3().setFromObject(chassis);
     { if (!LAMP.aoTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const k = c.getContext('2d'), g = k.createRadialGradient(32, 32, 6, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,.85)'); g.addColorStop(.6, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); k.fillStyle = g; k.fillRect(0, 0, 64, 64); LAMP.aoTex = new THREE.CanvasTexture(c); LAMP.aoM = new THREE.MeshBasicMaterial({ map: LAMP.aoTex, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); }
       const ao = new THREE.Mesh(new THREE.PlaneGeometry((box.max.x - box.min.x) * 1.45, (box.max.z - box.min.z) * 1.25), LAMP.aoM); ao.rotation.x = -Math.PI / 2; ao.position.set(0, .03, (box.max.z + box.min.z) / 2); ao.renderOrder = 1; root.add(ao); }   // soft contact shadow: the car sits on the road instead of floating
     this.tn = tuneOf(spec, tune); this.wear = this.tn.wear; this.dress(look);
     this.hw0 = (box.max.x - box.min.x) / 2; this.zf0 = box.max.z; this.makeLamps();
+    { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
-    this.I = spec.mass * this.a * this.b * spec.yawK; this.h = .3;
+    this.I = spec.mass * this.a * this.b * spec.yawK; this.h = .5;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
     this.reset(0, 0, 0);
   }
@@ -93,7 +158,7 @@ export class Car {
     const sn = Math.sin(this.th), cs = Math.cos(this.th);
     const vf = this.vx * sn + this.vz * cs, vl = this.vx * cs - this.vz * sn, speed = Math.hypot(vf, vl), sg = vf >= 0 ? 1 : -1;
 
-    const wet = track.wet || 0, D = this.dmg, P = this.parts, PT = TUNE.parts, wdrag = Math.min(.3, P.wheels.reduce((a, w) => a + (w > PT.flatAt ? PT.flatDrag : 0), 0)), gripK = s.grip * TN.grip * (1 + .035 * U.tyre) * (.72 + .28 * this.tyre) * (this.oil > 0 ? .42 : 1) * TUNE.gripScale;
+    const wet = track.wet || 0, D = this.dmg, P = this.parts, PT = TUNE.parts, wdrag = Math.min(.3, P.wheels.reduce((a, w) => a + (w > PT.flatAt ? PT.flatDrag : 0), 0)), gripK = this.bopG * s.grip * TN.grip * (1 + .035 * U.tyre) * (.72 + .28 * this.tyre) * (this.oil > 0 ? .42 : 1) * TUNE.gripScale;
     const rainLoss = this.wetTyres ? .07 * wet + .07 * (1 - wet) : .27 * wet;      // wets: a little slower in the dry, far better in the rain
     this.oil = Math.max(0, this.oil - dt);
     // what is under each wheel
@@ -127,19 +192,20 @@ export class Car {
     if (this.fuel <= 0) thr = 0;
     { const DR = TUNE.drift, on = this.forceDrift || this.driftable && Math.abs(inp.steer) > .92 && thr > .3 && speed > DR.minSpeed && vf > 0; this.di += ((on ? 1 : 0) - this.di) * Math.min(1, dt * (on ? DR.build : DR.decay)); }   // drift intent
     const burn = this.burn = live && thr > .8 && brk > .5 && speed < 5 && s.drive !== 'fwd';     // brake + throttle from rest: a burnout
+    if (this.capV && vf > this.capV) { thr = 0; brk = Math.max(brk, Math.min(.8, (vf - this.capV) * .2)); }      // safety-car speed limit
     if (this.inPit) { const lim = TUNE.pit.limit; if (vf > lim + .5) { thr = 0; brk = Math.max(brk, .55); } else if (vf > lim - 1.2) thr = Math.min(thr, .12); }   // pit-lane speed limiter
     const rev = live && brk > 0 && thr === 0 && vf < 1.2;
     const nit = this.nitroOn = !!(inp.nitro && !this.noNitro && this.nitro > 0 && thr > 0 && live && vf > 3);
     if (nit) this.nitro = Math.max(0, this.nitro - dt / (3.2 * (1 + .25 * U.nitro)));
     const vmax = s.top * TN.top * (1 + .04 * U.eng) * (nit ? 1.16 : 1) * (gr > .5 ? .55 : 1) * (1 - .1 * (D.front + D.rear)) * (1 - PT.gearboxTop * P.gearbox);
     if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));     // drift-angle hold: ease the power before a slide becomes a spin
-    let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, 16 / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 2, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
-    Fdrive *= TUNE.enginePower * PC.pow * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
-    if (this._thr > .7 && thr < .1 && this.rpm > .55) this.backfire = .14; this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
+    let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, s.pw / (s.acc * m) / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 8, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
+    Fdrive *= TUNE.enginePower * this.bopP * PC.pow * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
+    if (this._thr > .7 && thr < .1 && this.rpm > .5) { this.backfire = .24; this.popEvt = 1; } if (this.shiftEvt > 0 && this.rpm > .6 && thr > .6) this.backfire = Math.max(this.backfire || 0, .12); this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
     const bf = rev ? 0 : Math.min(brk * s.brake * m * g, m * Math.abs(vf) / dt);
     this.braking = brk > .1 && !rev;
     const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? .42 : 0;
-    const capF = muF * gripK * Nf * ltF * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - TUNE.drift.rearCut * this.di);
+    const capF = muF * gripK * Nf * ltF * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
@@ -160,7 +226,7 @@ export class Car {
     if (burn) { this.wspin = Math.max(this.wspin, 1.2); FyR *= .3; }
     this.aF = aF; this.useF = Math.hypot(FxF, FyF) / (capF || 1); this.useR = Math.hypot(FxR, FyR) / (capR || 1);
     const cd = Math.cos(this.steer), sd = Math.sin(this.steer);
-    const ax = (FxR + FxF * cd - FyF * sd - .25 * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.03 + wdrag + gr * TUNE.surface.grassDrag) * vf - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
+    const ax = (FxR + FxF * cd - FyF * sd - .6 * s.cda * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.006 + wdrag + gr * TUNE.surface.grassDrag) * vf - m * .12 * Math.sign(vf) * Math.min(1, Math.abs(vf)) - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
     const ay = (FyF * cd + FxF * sd + FyR) / m;
     this.vx += (ax * sn + ay * cs) * dt; this.vz += (ax * cs - ay * sn) * dt;
     if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt) * (1 - this.di); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
@@ -229,9 +295,9 @@ export class Car {
   // circle-vs-circle bump between two cars. `kin` = the other car is network-driven and does not react here
   bump(o, kin) {
     let hit = 0;
-    for (const za of [1.15, -1.15]) for (const zb of [1.15, -1.15]) {
+    const S = TUNE.toy.l; for (const za of [1.15 * S, -1.15 * S]) for (const zb of [1.15 * S, -1.15 * S]) {
       const ax = this.x + Math.sin(this.th) * za, az = this.z + Math.cos(this.th) * za, bx = o.x + Math.sin(o.th) * zb, bz = o.z + Math.cos(o.th) * zb;
-      const dx = ax - bx, dz = az - bz, d = Math.hypot(dx, dz), min = 2.05;
+      const dx = ax - bx, dz = az - bz, d = Math.hypot(dx, dz), min = 2.05 * TUNE.toy.w;
       if (d >= min || d < 1e-4) continue;
       const nx = dx / d, nz = dz / d, pen = min - d, ma = this.spec.mass, mb = o.spec.mass, ia = 1 / ma, ib = 1 / mb;
       this.x += nx * pen * ib / (ia + ib) * (kin ? 0 : 1) + (kin ? nx * pen : 0); this.z += nz * pen * ib / (ia + ib) * (kin ? 0 : 1) + (kin ? nz * pen : 0);
@@ -248,7 +314,8 @@ export class Car {
   // Bodywork options. Every part is positioned from the car's own geometry (rear deck height, nose height, body width),
   // so a wing sits on the boot lid and a splitter sits under the bumper whatever the model.
   dress(look) {
-    const L = this.look = Object.assign({ wing: 0, split: 0, rim: 0, tint: 0, glow: 0, skirt: 0, scoop: 0, pipe: 0 }, look || {}), ch = this.chassis; let part = 'wing';
+    const L = this.look = Object.assign({ wing: 0, split: 0, rim: 0, tint: 0, glow: 0, skirt: 0, scoop: 0, pipe: 0, liv: 3, livc: 0, num: 0 }, look || {}), ch = this.chassis; let part = 'wing';
+    { const U = this.m.paint.userData.liv; U.uRoof.value = L.liv & 2 ? 1 : 0; U.uStripe.value = L.liv & 1 ? 1 : 0; U.uDoor.value = L.num ? 1 : 0; U.uL.value.setHex(LIVC[L.livc] ?? LIVC[0]); U.uFlash.value = L.liv & 4 ? 1 : 0; U.uNose.value = L.liv & 8 ? 1 : 0; U.uL2.value.setHex(LIVC[L.livc2 ?? 3] ?? LIVC[3]); }
     if (this.addons) ch.remove(this.addons); const A = this.addons = new THREE.Group(); ch.add(A);
     let minZ = 1e9, maxZ = -1e9, maxX = 0; const V = [];
     for (const m of this.bodyMeshes) { const o = m.userData.orig; for (let i = 0; i < o.length; i += 3) { V.push(o[i], o[i + 1], o[i + 2]); if (o[i + 2] < minZ) minZ = o[i + 2]; if (o[i + 2] > maxZ) maxZ = o[i + 2]; if (o[i] > maxX) maxX = o[i]; } }
@@ -256,33 +323,68 @@ export class Car {
     const low = (z0, z1) => { let y = 9; for (let i = 0; i < V.length; i += 3) if (V[i + 2] >= z0 && V[i + 2] <= z1 && V[i + 1] < y) y = V[i + 1]; return y; };
     const dark = new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: .45, metalness: .5 }), W = maxX * 2;
     const add = (w, h, d, mat, x, y, z) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); me.position.set(x, y, z); me.castShadow = true; me.userData.part = part; A.add(me); return me; };
-    if (L.wing) {
-      const deck = top(minZ + .08, minZ + .5, maxX * .75), z = minZ + .26;
-      if (L.wing === 1) add(W * .8, .06, .2, this.m.paint, 0, deck + .02, minZ + .14).rotation.x = .25;                  // ducktail lip on the boot edge
-      else { const hi = L.wing === 2 ? .27 : .4, dep = L.wing === 2 ? .3 : .42, wd = W * (L.wing === 2 ? .86 : .97);
-        add(wd, .035, dep, L.wing === 2 ? this.m.paint : dark, 0, deck + hi, z).rotation.x = .13;
-        for (const sx of [-.27, .27]) add(.04, hi, .11, dark, sx * W, deck + hi / 2, z + .03);
-        for (const sx of [-.5, .5]) add(.025, L.wing === 2 ? .15 : .24, dep + .06, dark, sx * wd, deck + hi + .02, z); }
+    // ---- bodywork parts. Each one is shaped (aerofoil sections, wedges, round pipes) and fitted to this body by reading its
+    // outline: boot height and width at the tail, the bumper's plan shape at the nose, the sill between the wheel arches, the roof peak.
+    dark.side = THREE.DoubleSide; dark.color.set(0x111215);
+    const side = (z0, z1, y0, y1) => { let x = 0; for (let i = 0; i < V.length; i += 3) if (V[i + 2] >= z0 && V[i + 2] <= z1 && V[i + 1] >= y0 && V[i + 1] <= y1 && Math.abs(V[i]) > x) x = Math.abs(V[i]); return x; };
+    const ext = (pts, depth) => { const sh = new THREE.Shape(); pts.forEach(([x, y], i) => i ? sh.lineTo(x, y) : sh.moveTo(x, y)); return new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false }); };
+    const across = (pts, w) => ext(pts, w).rotateY(Math.PI / 2).translate(-w / 2, 0, 0);          // a side profile (x = towards the rear, y = up) swept across the car
+    const put = (geo, mat, x, y, z) => { const me = new THREE.Mesh(geo, mat); me.position.set(x, y, z); me.castShadow = true; me.userData.part = part; A.add(me); return me; };
+    const foil = (ch, th) => { const up = [], dn = []; for (let q = 0; q <= 14; q++) { const t = q / 14, yt = 5 * th * ch * (.2969 * Math.sqrt(t) - .126 * t - .3516 * t * t + .2843 * t ** 3 - .1015 * t ** 4), x = -ch / 2 + ch * t, cam = .05 * ch * Math.sin(t * Math.PI); up.push([x, yt * .55 + cam * t]); dn.push([x, -yt * 1.25 + cam * t]); } return [...up, ...dn.reverse()]; };   // an inverted wing section: flat on top, full underneath
+    if (this.hasWing == null) {       // does this body already carry a wing? Look for a slab at the tail with clear air under it.
+      const ys = []; for (let i = 0; i < V.length; i += 3) if (V[i + 2] < minZ + .55 && Math.abs(V[i]) < maxX * .5) ys.push(V[i + 1]); ys.sort((a, b) => a - b); let gap = 0, at = 0; const hTop = ys[ys.length - 1];
+      for (let i = 1; i < ys.length; i++) if (ys[i - 1] > hTop * .45 && ys[i] - ys[i - 1] > gap) { gap = ys[i] - ys[i - 1]; at = ys[i]; } this.hasWing = !!this.spec.wing; }
+    if (L.wing && !this.hasWing) {
+      const tailW = side(minZ, minZ + .55, 0, 9) * 2, deck = top(minZ + .04, minZ + .42, tailW * .36);
+      if (L.wing === 1) put(across([[-.26, 0], [-.06, .03], [.02, .085], [.035, .078], [.02, 0]], tailW * .86), this.m.paint, 0, deck - .004, minZ + .05);      // ducktail: rises smoothly from the boot lid to a crisp edge
+      else { const race = L.wing === 3, ch = race ? .36 : .27, hi = race ? .36 : .24, wd = tailW * (race ? 1.0 : .88), z = minZ + (race ? .1 : .18);
+        put(across(foil(ch, .13), wd), race ? dark : this.m.paint, 0, deck + hi, z).rotation.x = race ? .2 : .12;
+        if (race) put(across(foil(.13, .12), wd), dark, 0, deck + hi + .075, z - .17).rotation.x = .5;                                                          // second element (flap)
+        for (const sx of [-1, 1]) { put(across([[-.1, 0], [.06, 0], [.085, hi - .01], [.02, hi - .01]], .016), dark, sx * wd * .29, deck - .01, z + .02);       // swept uprights
+          put(across([[-ch * .62, -.085], [ch * .7, -.085], [ch * .7, race ? .15 : .07], [-ch * .25, race ? .15 : .07], [-ch * .62, -.01]], .012), dark, sx * wd / 2, deck + hi, z); } }   // end plates
     }
     part = 'split';
-    if (L.split) { const y = low(maxZ - .3, maxZ); add(W * .88, .03, .34, dark, 0, y + .015, maxZ - .1); for (const sx of [-.46, .46]) add(.03, .09, .2, dark, sx * W * .88, y + .05, maxZ - .14); }
-    part = 'skirt'; if (L.skirt) { const y = low(minZ + .8, maxZ - .8); for (const sx of [-1, 1]) add(.07, .1, (maxZ - minZ) * .46, dark, sx * (maxX - .02), y + .07, (minZ + maxZ) / 2); }
-    part = 'scoop'; if (L.scoop) { const ry = top(-.5, .3, maxX * .45); add(.36, .09, .52, dark, 0, ry + .035, -.12); add(.3, .05, .06, this.m.paint, 0, ry + .06, .15); }
-    part = 'pipe'; if (L.pipe) { const chrome = new THREE.MeshStandardMaterial({ color: 0xd8dade, metalness: 1, roughness: .2 }), y = low(minZ, minZ + .3); for (const sx of [-.24, -.16, .16, .24]) add(.075, .075, .2, chrome, sx * W, y + .13, minZ - .03); }
+    if (L.split) { const y0 = low(maxZ - .45, maxZ), pts = [], zs = []; for (let z = maxZ - .5; z < maxZ - .01; z += .05) zs.push(z); let lastX = side(maxZ - .6, maxZ - .45, y0, y0 + .3) || maxX;
+      const xs = zs.map(z => { const x = side(z - .05, z + .05, y0, y0 + .3); if (x > .05) lastX = Math.min(x, lastX + .02); else lastX *= .8; return lastX; });
+      zs.forEach((z, q) => pts.push([xs[q] + .045, -(z + .03)])); pts.push([xs[xs.length - 1] * .7, -(maxZ + .075)], [-xs[xs.length - 1] * .7, -(maxZ + .075)]); for (let q = zs.length - 1; q >= 0; q--) pts.push([-xs[q] - .045, -(zs[q] + .03)]);
+      put(ext(pts, .02).rotateX(-Math.PI / 2), dark, 0, y0 - .012, 0);                                                                                         // a blade cut to the plan shape of this bumper
+      for (const sx of [-1, 1]) put(across([[-.1, 0], [.1, 0], [.1, .05], [-.04, .075]], .012), dark, sx * (xs[2] + .03), y0 + .005, zs[2] + .1); }           // dive planes
+    part = 'skirt';
+    if (L.skirt) { const zr = this.wheels.RL.z + this.R + .07, zf = this.wheels.FL.z - this.R - .07, y0 = low(zr, zf), xs = side(zr, zf, y0, y0 + .22);
+      for (const sx of [-1, 1]) { const me = put(ext([[-.04, 0], [.05, 0], [.058, .016], [.0, .075], [-.04, .075]], zf - zr), dark, sx * (xs - .012), y0 - .012, zr); me.scale.x = sx; } }   // a wedge under the sill, arch to arch
+    part = 'scoop';
+    if (L.scoop) { let ry = 0, rz = 0; for (let i = 0; i < V.length; i += 3) if (Math.abs(V[i]) < maxX * .3 && V[i + 2] > minZ + .9 && V[i + 2] < maxZ - 1.1 && V[i + 1] > ry) { ry = V[i + 1]; rz = V[i + 2]; }
+      put(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(.17, .075, .34), this.m.paint, 0, ry - .012, rz - .1);
+      put(new THREE.CircleGeometry(1, 16, 0, Math.PI).scale(.14, .055, 1), new THREE.MeshBasicMaterial({ color: 0x050506 }), 0, ry - .008, rz + .2).rotation.x = -.35; }   // the intake mouth
+    part = 'pipe';
+    if (L.pipe) { const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe2e6, metalness: 1, roughness: .16, side: THREE.DoubleSide }), inner = new THREE.MeshBasicMaterial({ color: 0x060606 });
+      let spots = this.exhL; if (!spots) { const yl = low(minZ, minZ + .35) + .12, tw = side(minZ, minZ + .3, 0, 9); spots = []; for (const sx of [-1, 1]) { const x0 = sx * tw * .5; let zr = 9; for (let i = 0; i < V.length; i += 3) if (Math.abs(V[i] - x0) < .16 && V[i + 1] < yl + .2 && V[i + 2] < zr) zr = V[i + 2]; spots.push([x0, yl, zr]); } }   // no pipes on the model: sit them in the rear valance, flush with the bodywork there
+      for (const [x, y, z] of spots) { put(new THREE.CylinderGeometry(.058, .05, .15, 20, 1, true).rotateX(Math.PI / 2), chrome, x, y, z - .035); put(new THREE.CircleGeometry(.047, 18), inner, x, y, z + .02).rotation.y = Math.PI; } }   // a larger polished tip over each of the car's own pipes
+    this.m.paint.userData.liv.uH.value = top(minZ, maxZ, 9); this.m.paint.userData.liv.uZ.value = maxZ;
+    part = 'num';
+    if (L.num) { const key = 'n' + L.num; if (!LAMP[key]) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const k = cv.getContext('2d'); k.fillStyle = '#111'; k.font = '900 ' + (L.num > 9 ? 78 : 96) + 'px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(String(L.num), 64, 70); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; LAMP[key] = new THREE.MeshBasicMaterial({ map: t, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }); }
+      const hTop = top(minZ, maxZ, 9), xs = side(-.5, .3, hTop * .35, hTop * .65); for (const sx of [-1, 1]) { const p = put(new THREE.PlaneGeometry(.46, .46), LAMP[key], sx * (xs + .012), hTop * .5, -.1); p.rotation.y = sx * Math.PI / 2; p.castShadow = false; } }
+    // ---- upgrades you can see: engine = bonnet vents (and an intake at level 3), tyres = wider rubber, armour = nose bar, nitro = blue bottles on the tail
+    part = 'up'; { const U = this.up || {}, by = z => top(z - .15, z + .15, maxX * .5);
+      if (U.eng) for (const sx of [-1, 1]) for (let q = 0; q < U.eng; q++) put(new THREE.BoxGeometry(.2, .012, .035), dark, sx * .27, by(maxZ * .5 - q * .09) + .008, maxZ * .5 - q * .09);
+      if (U.eng >= 3) put(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(.15, .06, .26), this.m.paint, 0, by(maxZ * .42) - .005, maxZ * .42);
+      if (U.armor) { const y = low(maxZ - .3, maxZ) + .2, tube = new THREE.MeshStandardMaterial({ color: 0x1a1b1f, metalness: .6, roughness: .4 }); put(new THREE.CylinderGeometry(.028, .028, W * (1.2 + U.armor * .15), 10).rotateZ(Math.PI / 2), tube, 0, y, maxZ + .05); if (U.armor > 1) put(new THREE.CylinderGeometry(.028, .028, W * 1.2, 10).rotateZ(Math.PI / 2), tube, 0, y + .14, maxZ + .04); }
+      if (U.nitro) { const blue = new THREE.MeshStandardMaterial({ color: 0x1c6fe0, metalness: .6, roughness: .3 }), y = low(minZ, minZ + .3) + .16; for (let q = 0; q < U.nitro; q++) put(new THREE.CylinderGeometry(.035, .035, .16, 12).rotateX(Math.PI / 2), blue, (q - (U.nitro - 1) / 2) * .1, y + .1, minZ - .02); }
+      for (const k in this.wheels) this.wheels[k].mesh.scale.x = this.T.wheel * (1 + .09 * (U.tyre || 0)); }
     part = 'glow';
-    if (L.glow) {        // underglow: light tubes under the sills and a soft pool of colour that spills out past the car onto the road
-      if (!LAMP.glowTex) { const c = document.createElement('canvas'); c.width = c.height = 128; const k = c.getContext('2d'), g = k.createRadialGradient(64, 64, 6, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,.55)'); g.addColorStop(.42, 'rgba(255,255,255,.95)'); g.addColorStop(.7, 'rgba(255,255,255,.3)'); g.addColorStop(1, 'rgba(255,255,255,0)'); k.fillStyle = g; k.fillRect(0, 0, 128, 128); LAMP.glowTex = new THREE.CanvasTexture(c); }
-      const col = new THREE.Color(GLOWS[L.glow]), y0 = low(minZ, maxZ), len = maxZ - minZ;
-      const pool = new THREE.Mesh(new THREE.PlaneGeometry(W * 2.5, len * 1.45), new THREE.MeshBasicMaterial({ map: LAMP.glowTex, color: col, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7, fog: false }));
-      pool.rotation.x = -Math.PI / 2; pool.position.set(0, .03 - this.rideY / TUNE.toy.h, (minZ + maxZ) / 2); pool.userData.part = 'glow'; A.add(pool); this.glowPool = pool;
-      const tube = new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(2.2) });
-      for (const sx of [-1, 1]) { const t = new THREE.Mesh(new THREE.BoxGeometry(.035, .035, len * .6), tube); t.position.set(sx * (maxX - .08), y0 + .03, (minZ + maxZ) / 2); t.userData.part = 'glow'; A.add(t); }
-      for (const sz of [minZ + .25, maxZ - .3]) { const t = new THREE.Mesh(new THREE.BoxGeometry(W * .7, .035, .035), tube); t.position.set(0, y0 + .03, sz); t.userData.part = 'glow'; A.add(t); }
+    if (L.glow) {        // Underglow. No visible tubes: the LED strips are tucked under the sills, and what you see is their light on the road,
+      // brightest in a line along each side and fading out. It tints the surface it falls on rather than painting over it.
+      if (!LAMP.glowTex) { const c = document.createElement('canvas'); c.width = 128; c.height = 256; const k = c.getContext('2d'); k.fillStyle = '#000'; k.fillRect(0, 0, 128, 256); k.filter = 'blur(9px)'; k.strokeStyle = '#fff'; k.lineWidth = 9; const rr = (x, y, w, h, r) => { k.beginPath(); k.moveTo(x + r, y); k.arcTo(x + w, y, x + w, y + h, r); k.arcTo(x + w, y + h, x, y + h, r); k.arcTo(x, y + h, x, y, r); k.arcTo(x, y, x + w, y, r); k.closePath(); };
+        rr(40, 44, 48, 168, 16); k.stroke(); k.filter = 'blur(22px)'; k.globalAlpha = .55; k.lineWidth = 20; rr(40, 44, 48, 168, 16); k.stroke(); k.fillStyle = '#fff'; k.globalAlpha = .3; k.fill(); LAMP.glowTex = new THREE.CanvasTexture(c); }
+      const col = new THREE.Color(GLOWS[L.glow]), len = maxZ - minZ, geo = new THREE.PlaneGeometry(W * 2.66, len * 1.52), at = m => { const p = new THREE.Mesh(geo, m); p.rotation.x = -Math.PI / 2; p.position.set(0, .03 - this.rideY / this.T.h, (minZ + maxZ) / 2); p.userData.part = 'glow'; A.add(p); return p; };
+      at(new THREE.MeshBasicMaterial({ map: LAMP.glowTex, color: col.clone().multiplyScalar(2.6), transparent: true, depthWrite: false, fog: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.OneFactor, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7 }));
+      this.glowPool = at(new THREE.MeshBasicMaterial({ map: LAMP.glowTex, color: col, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7, fog: false }));
     } else this.glowPool = null;
     const rimM = L.rim ? new THREE.MeshStandardMaterial({ color: RIMS[L.rim], metalness: .9, roughness: .26 }) : null;
-    for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
-    const winM = L.tint ? new THREE.MeshPhysicalMaterial({ color: TINTS[L.tint], roughness: .08, metalness: .9, clearcoat: 1 }) : this.m.window;
-    for (const m of this.bodyMeshes) if (m.userData.kind === 'window') m.material = winM;
+    const shaded = m => { const q = m.clone(); q.vertexColors = true; return q; }, rimS = rimM ? shaded(rimM) : null, rim0 = shaded(this.m.rim);
+    for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = o.geometry.attributes.color ? (rimS || rim0) : rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
+    const winM = L.tint ? new THREE.MeshStandardMaterial({ color: new THREE.Color(TINTS[L.tint]).multiplyScalar(.45), roughness: .2, metalness: 0, envMapIntensity: .14, side: THREE.DoubleSide }) : this.m.window;
+    const winS = shaded(winM); for (const m of this.bodyMeshes) if (m.userData.kind === 'window') m.material = m.geometry.attributes.color ? winS : winM;
   }
 
   // Headlights: a lens, a low beam and a pool of light on the road for each side. A front hit breaks the lamp on that side.
@@ -360,8 +462,9 @@ export class Car {
     this.pitch += (Math.atan2((h[2] + h[3] - h[0] - h[1]) / 2, this.a + this.b) - this.pitch) * k;
     this.roll += (Math.atan2((h[0] + h[2] - h[1] - h[3]) / 2, this.tw * 2) - this.roll) * k;
     this.root.position.set(X, this.y, Z); this.root.rotation.set(this.pitch, TH + this.lead, this.roll);
-    this.rollD += (clamp(this.ayS * .011, -.085, .085) - this.rollD) * Math.min(1, dt * 7);
-    this.pitchD += (clamp(-this.axS * .0055, -.05, .05) - this.pitchD) * Math.min(1, dt * 7);
+    const mk = Math.sqrt(clamp(this.spec.mass / 1500, .5, 1.8)), stiff = this.spec.body === 'f1' ? .25 : this.spec.klass === 'Super' ? .6 : this.spec.klass === 'Utility' ? 1.5 : 1;
+    this.rollD += (clamp(this.ayS * .017 * mk * stiff, -.16, .16) - this.rollD) * Math.min(1, dt * 6.5 / mk);
+    this.pitchD += (clamp(-this.axS * .0095 * mk * stiff, -.09, .09) - this.pitchD) * Math.min(1, dt * 6.5 / mk);
     const rough = this.speed > 2 ? (this.grass * .011 + (this.wsurf.includes(KERB) ? .005 : 0)) : 0;
     this.chassis.rotation.set(this.pitchD + (Math.random() - .5) * rough * .5 + this.dmg.front * .02 + ((this.gone[0] || this.gone[1] ? .06 : 0) - (this.gone[2] || this.gone[3] ? .06 : 0)), 0, ((this.gone[1] || this.gone[3] ? .07 : 0) - (this.gone[0] || this.gone[2] ? .07 : 0)) + this.rollD + (Math.random() - .5) * rough + (this.dmg.left - this.dmg.right) * .035);
     this.chassis.position.y = this.rideY + (Math.random() - .5) * rough + (this.rpm > .2 ? Math.sin(performance.now() * .05) * .003 : 0);
@@ -386,7 +489,9 @@ export class Car {
       const onRoad = sf === ROAD || sf === KERB;
       if (skid && onRoad) {
         const inten = clamp(this.slipR * 1.6 + this.wspin + (this.locked ? .6 : 0), .3, 1);
-        for (let k = 0; k < n; k++) if (Math.random() < inten) fx.smoke.emit(wx + (Math.random() - .5) * .3, y + .15, wz + (Math.random() - .5) * .3, this.vx * .3 + (Math.random() - .5) * 1.5, .6 + Math.random() * 1.1, this.vz * .3 + (Math.random() - .5) * 1.5, 1.5 + Math.random() * 1.3, .8, 3.8, .88, .89, .93, .3 * inten);
+        for (let k = 0; k < n; k++) if (Math.random() < inten) { const jx = (Math.random() - .5) * .4, jz = (Math.random() - .5) * .4, sh = .9 + Math.random() * .1;
+            fx.smoke.emit(wx + jx, y + .12, wz + jz, this.vx * .34 + (Math.random() - .5) * 1.2, .5 + Math.random() * .7, this.vz * .34 + (Math.random() - .5) * 1.2, 1.0 + Math.random() * .8, .65, 2.6, sh, sh, sh + .03, .3 * inten);                 // dense, bright core hugging the tyre
+            if (Math.random() < .7) fx.smoke.emit(wx + jx * 2, y + .3, wz + jz * 2, this.vx * .22 + (Math.random() - .5) * 2.2, .9 + Math.random() * 1.3, this.vz * .22 + (Math.random() - .5) * 2.2, 2.0 + Math.random() * 1.3, 1.2, 3.8, sh - .05, sh - .04, sh, .1 * inten); }   // big billows that rise, spread and hang
         const l = [wx + cs * .15, y + .06, wz - sn * .15], r = [wx - cs * .15, y + .06, wz + sn * .15], last = this.lastSk[i - 2];
         if (last && (last[0][0] - l[0]) ** 2 + (last[0][2] - l[2]) ** 2 < 9) fx.skids.quad(last[0], last[1], l, r);
         this.lastSk[i - 2] = [l, r];
@@ -406,10 +511,12 @@ export class Car {
     }
     if (this.wspinF > .15) for (let i = 0; i < 2; i++) { const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; for (let k = 0; k < n; k++) if (Math.random() < .6) fx.smoke.emit(wx, this.y + .15, wz, (Math.random() - .5) * 2, .8 + Math.random(), (Math.random() - .5) * 2, 1, .8, 3, .93, .93, .95, .28); }
     if (this.burn) for (let i = 2; i < 4; i++) { const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; for (let k = 0; k < n * 2; k++) fx.smoke.emit(wx + (Math.random() - .5) * .5, this.y + .2, wz + (Math.random() - .5) * .5, -sn * 2 + (Math.random() - .5) * 3, 1 + Math.random() * 2, -cs * 2 + (Math.random() - .5) * 3, 1.6 + Math.random(), 1.1, 4.2, .96, .96, .97, .4); }
-    if (sp < 12 && Math.random() < .25 * n) { const ex = this.x - sn * (this.zr + .12), ez = this.z - cs * (this.zr + .12); fx.smoke.emit(ex + cs * .3 * (Math.random() < .5 ? 1 : -1), this.y + .32, ez, this.vx * .6 - sn * (1 + this.rpm * 2), .25 + Math.random() * .4, this.vz * .6 - cs * (1 + this.rpm * 2), .7 + Math.random() * .5, .22, 1.3, .78, .78, .82, .1 + this.rpm * .1); }   // exhaust haze when stationary or slow
+    if (sp < 12 && Math.random() < .25 * n) { const e = this.exh[Math.random() * this.exh.length | 0], ex = this.x + sn * e[2] + cs * e[0], ez = this.z + cs * e[2] - sn * e[0]; fx.smoke.emit(ex, this.y + e[1], ez, this.vx * .6 - sn * (1 + this.rpm * 2), .25 + Math.random() * .4, this.vz * .6 - cs * (1 + this.rpm * 2), .7 + Math.random() * .5, .22, 1.3, .78, .78, .82, .1 + this.rpm * .1); }   // exhaust haze when stationary or slow
     if (skid && sp > 8 && Math.random() < .5) { const w = this.wheels[WK[2 + (Math.random() * 2 | 0)]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x; fx.smoke.emit(wx, this.y + .1, wz, -this.vx * .15 + (Math.random() - .5) * 5, 1 + Math.random() * 2.5, -this.vz * .15 + (Math.random() - .5) * 5, .5, .09, 0, .05, .05, .05, 1, 13); }   // flecks of rubber thrown off a sliding tyre
     if (this.gear !== this._g) { if (this._g && sp > 6) { const ex = this.x - sn * (this.zr + .15), ez = this.z - cs * (this.zr + .15); for (let k = 0; k < 4; k++) fx.smoke.emit(ex, this.y + .4, ez, this.vx * .5 - sn * 2, .4 + Math.random(), this.vz * .5 - cs * 2, .5, .35, 2.2, .35, .35, .37, .3); } this._g = this.gear; }   // a puff from the exhaust on each gear change
-    if (this.backfire > 0 && Math.random() < .5) { const ex = this.x - sn * (this.zr + .15), ez = this.z - cs * (this.zr + .15); fx.glow.emit(ex, this.y + .4, ez, this.vx - sn * 5, .5, this.vz - cs * 5, .1, .45, -2, 1, .55, .15, 1); }
+    if (this.backfire > 0) for (const e of this.exh) { const ex = this.x + sn * e[2] + cs * e[0], ez = this.z + cs * e[2] - sn * e[0], ey = this.y + e[1], k = Math.min(1, this.backfire / .12);      // unburnt fuel lighting in the pipe: a blue-white core in an orange tongue
+      for (let q = 0; q < 2; q++) { const v = 4 + Math.random() * 7; fx.glow.emit(ex - sn * .1, ey, ez - cs * .1, this.vx - sn * v + (Math.random() - .5) * 1.5, (Math.random() - .3) * 1.2, this.vz - cs * v + (Math.random() - .5) * 1.5, .07 + Math.random() * .07, .5 * k + .15, -3, 1, .5 + Math.random() * .25, .12, 1); }
+      fx.glow.emit(ex, ey, ez, this.vx - sn * 3, 0, this.vz - cs * 3, .05, .28, -2, .75, .85, 1, 1); if (Math.random() < .3) fx.smoke.emit(ex - sn * .5, ey + .1, ez - cs * .5, this.vx * .5 - sn * 2, .8, this.vz * .5 - cs * 2, .5, .3, 2, .16, .16, .17, .3); }
     const wet = track.wet || 0;
     if (wet > .15 && sp > 8) for (let i = 2; i < 4; i++) {                 // spray off wet tarmac
       const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x;
@@ -476,16 +583,16 @@ export function aiDrive(car, track, ai, cars, dt) {
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
   // drift the racing line towards the inside of the coming corner, and around slower cars
   const ap = p[(car.idx + look + Math.round(34 / track.spacing)) % n], inside = clamp(tgt.k * 300, -1, 1), setup = clamp(ap.k * 300, -1, 1);
-  let want = (inside - setup * .85 * (1 - Math.abs(inside))) * ai.wide * 1.2 + ai.lane * (1 - Math.abs(inside));   // racing line: out wide before the corner, down to the apex, let it run out
+  let want = (inside - setup * .85 * (1 - Math.abs(inside))) * ai.wide * 1.2 + ai.lane * (1 - Math.abs(inside)) + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);   // racing line: out wide before the corner, down to the apex, let it run out
   let brakeFor = 0; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
     if (o === car || o.out) continue; const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0;
     if (f < -3.5) { if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + 1 && Math.abs(setup) > .3) want += setup * 1.4 * ai.care; continue; }   // a faster car behind before a corner: cover the inside
     if (f > 55 || Math.abs(l) > 8) continue;
-    const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 4.6) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
+    const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
-    else if (f > 0 && Math.abs(lp) < 2.5 && ttc < 2.4) { want += (lp > 0 ? -1 : 1) * 3 * (1.2 - ttc / 2.4); if (ttc < .5 * ai.care) brakeFor = Math.max(brakeFor, 1 - ttc); }   // closing on a car: pick the clear side, brake if it is too late
-    else if (f > -3.5 && f < 5 && Math.abs(l) < 3.3) want += (l > 0 ? -1 : 1) * 1.3 * ai.care;                                                // alongside: leave a car's width
+    else if (f > 0 && Math.abs(lp) < 3.4 && ttc < 2.4) { want += (lp > 0 ? -1 : 1) * 3 * (1.2 - ttc / 2.4); if (ttc < .5 * ai.care) brakeFor = Math.max(brakeFor, 1 - ttc); }   // closing on a car: pick the clear side, brake if it is too late
+    else if (f > -5 && f < 7 && Math.abs(l) < 4.3) want += (l > 0 ? -1 : 1) * 1.3 * ai.care;                                                // alongside: leave a car's width
   }
   ai.off += (clamp(want, -ai.max, ai.max) - ai.off) * Math.min(1, dt * 1.5);
   const tx = tgt.x + tgt.tz * ai.off, tz = tgt.z - tgt.tx * ai.off;
@@ -493,13 +600,13 @@ export function aiDrive(car, track, ai, cars, dt) {
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
   const B = ai.brain || (ai.brain = { react: .09 + Math.random() * .1, consist: .9 + Math.random() * .09, brave: .97 + Math.random() * .07, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
-  B.ef += (err - B.ef) * Math.min(1, dt / B.react); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
+  const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
-  const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, chased ? 3 : 1)) B.lapse = 1.3; } B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
+  const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (chased ? 3 : 1) * (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 7.5 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 7.5 * ai.skill;
   for (let i = 0; i < 70; i++) {
-    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (B.lapse > 0 ? 1.07 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
+    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16);
@@ -511,6 +618,12 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (car.held) ai.revT = 0;
   ai.jam = sp < 1.2 && inp.throttle > 0 && !car.held ? (ai.jam || 0) + dt : 0;
   if (ai.jam > 1.1 || ai.revT > 0) { if (!(ai.revT > 0)) ai.revT = 1.2; ai.revT -= dt; ai.jam = 0; inp.throttle = 0; inp.brake = 1; inp.steer = -inp.steer; inp.nitro = false; return inp; }   // nosed into a barrier: back out, then go
+  // The mistakes: 0 brakes too late, 1 gets on the power too early (the tail steps out), 2 locks the brakes and ploughs on,
+  // 3 misses the apex by a car's width, 4 is caught napping (slow hands, does not see the car ahead).
+  car.tc = slip !== 1; car.abs = slip !== 2;
+  if (slip === 1 && cornering && car.vf > 8) { inp.throttle = 1; inp.brake = 0; }
+  if (slip === 2 && inp.brake > 0) inp.brake = 1;
+  if (slip === 4) brakeFor = 0;
   if (brakeFor > 0 && car.vf > 6) { inp.throttle = 0; inp.brake = Math.max(inp.brake, brakeFor * .8); }
   if (inp.brake && car.vf < 2) inp.brake = 0;      // never let the AI select reverse by accident
   return inp;

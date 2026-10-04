@@ -6,8 +6,8 @@ export const LIGHTS = { p: [0, 1, 2, 3].map(() => new THREE.Vector3(0, -999, 0))
 const LIT = 'uniform vec3 uLP[4]; uniform vec3 uLD[4]; uniform vec4 uLC[4]; vec3 beams(vec3 w){ vec3 l=vec3(0.); for(int i=0;i<4;i++){ vec3 d=w-uLP[i]; float dist=length(d)+.001; float c=dot(d/dist,uLD[i]); l+=uLC[i].rgb*uLC[i].a*smoothstep(.88,.975,c)*max(0.,1.-dist/48.)*min(1.,dist*.5); } return l; }';
 let PUFF = null;
 function puffTex() {            // a cloudy puff: many soft blobs piled up, brighter on top, with a ragged edge
-  if (PUFF) return PUFF; const c = document.createElement('canvas'); c.width = c.height = 128; const k = c.getContext('2d');
-  for (let i = 0; i < 46; i++) { const a = Math.random() * 6.28, r = Math.random() * 30, x = 64 + Math.cos(a) * r, y = 64 + Math.sin(a) * r, s = 12 + Math.random() * 20, v = 150 + Math.random() * 105 | 0, g = k.createRadialGradient(x, y, 0, x, y, s); g.addColorStop(0, `rgba(${v},${v},${v},.34)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`); k.fillStyle = g; k.fillRect(x - s, y - s, s * 2, s * 2); }
+  if (PUFF) return PUFF; const c = document.createElement('canvas'); c.width = c.height = 256; const k = c.getContext('2d'); k.scale(2, 2);
+  for (let i = 0; i < 120; i++) { const a = Math.random() * 6.28, r = Math.pow(Math.random(), .7) * 34, x = 64 + Math.cos(a) * r, y = 64 + Math.sin(a) * r, s = 7 + Math.random() * 19, v = Math.min(255, 120 + (64 - y) * 1.6 + Math.random() * 90) | 0, g = k.createRadialGradient(x, y, 0, x, y, s); g.addColorStop(0, `rgba(${v},${v},${v},.34)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`); k.fillStyle = g; k.fillRect(x - s, y - s, s * 2, s * 2); }
   PUFF = new THREE.CanvasTexture(c); return PUFF;
 }
 export class Particles {
@@ -133,15 +133,15 @@ export class Props {
     };
   }
   add(type, x, z, y, ry = 0, stack = 0) {
-    const K = this.kinds[type], m = K.make(); m.traverse(o => { if (o.isMesh) o.castShadow = true; }); m.position.set(x, y + K.h, z); m.rotation.y = ry; this.scene.add(m);
+    const K = this.kinds[type], m = K.make(); m.traverse(o => { if (o.isMesh) o.castShadow = true; }); m.scale.setScalar(1.35); m.position.set(x, y * 1.35 + K.h * 1.35, z); m.rotation.y = ry; this.scene.add(m);
     this.items.push({ m, K, v: new THREE.Vector3(), w: new THREE.Vector3(), rest: true, stack, g: y }); return this;
   }
   update(dt, cars, track, onHit) {
     for (const it of this.items) {
       const p = it.m.position;
       for (const c of cars) {                      // car against object: two circles along the car
-        if (c.out || (c.x - p.x) ** 2 + (c.z - p.z) ** 2 > 16) continue; const sn = Math.sin(c.th), cs = Math.cos(c.th);
-        for (const o of [1.15, -1.15]) { const dx = p.x - (c.x + sn * o), dz = p.z - (c.z + cs * o), d = Math.hypot(dx, dz), min = 1.05 + it.K.r; if (d >= min || p.y - it.g > .75) continue;
+        if (c.out || (c.x - p.x) ** 2 + (c.z - p.z) ** 2 > 30) continue; const sn = Math.sin(c.th), cs = Math.cos(c.th);
+        for (const o of [1.6, -1.6]) { const dx = p.x - (c.x + sn * o), dz = p.z - (c.z + cs * o), d = Math.hypot(dx, dz), min = 1.45 + it.K.r * 1.35; if (d >= min || p.y - it.g > .75) continue;
           const nx = dx / (d || 1), nz = dz / (d || 1), vn = (c.vx - it.v.x) * nx + (c.vz - it.v.z) * nz; p.x += nx * (min - d); p.z += nz * (min - d); if (vn < .4) continue;
           const mr = it.K.m / c.spec.mass, lat = dx * cs - dz * sn, sd = (Math.abs(lat) > .15 ? Math.sign(lat) : Math.random() < .5 ? 1 : -1) * vn * (.35 + Math.random() * .4);   // glances off to one side rather than riding on the nose
           it.v.x += nx * vn * .95 + cs * sd; it.v.z += nz * vn * .95 - sn * sd; it.v.y = 1.5 + vn * .2 * (1 + Math.random());
@@ -152,7 +152,7 @@ export class Props {
       if (it.rest) continue;
       it.v.y -= 21 * dt; p.addScaledVector(it.v, dt); it.m.rotation.x += it.w.x * dt; it.m.rotation.y += it.w.y * dt; it.m.rotation.z += it.w.z * dt;
       if (track.surf(p.x, p.z) === 3) { p.addScaledVector(it.v, -dt); it.v.x *= -.4; it.v.z *= -.4; }                       // off the barrier
-      const g = track.height(p.x, p.z) + it.K.h * .8; it.g = g;
+      const g = track.height(p.x, p.z) + it.K.h * 1.08; it.g = g;
       if (p.y < g + .02) { const f = Math.exp(-3.2 * dt); it.v.x *= f; it.v.z *= f; }      // drag while sliding or rolling on the ground
       if (p.y < g) { p.y = g; if (Math.abs(it.v.y) < 1.6 && it.v.x * it.v.x + it.v.z * it.v.z < .5) { it.rest = true; it.v.set(0, 0, 0); } else { it.v.y *= -.38; it.v.x *= .7; it.v.z *= .7; it.w.multiplyScalar(.6); } }
     }
