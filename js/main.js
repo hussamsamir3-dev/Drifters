@@ -34,7 +34,8 @@ if (!save.v9) { save.zoom = 1.5; save.v9 = 1; }
 { const ids = CARS.map(c => c.id); save.owned = (save.owned || []).filter(id => ids.includes(id)); for (const id of ['Mustang', 'Mazda']) if (!save.owned.includes(id)) save.owned.push(id); if (!ids.includes(save.car)) { save.car = 'Mazda'; if (!save.v19) save.credits = (save.credits || 0) + 4000; } save.v19 = 1; }   // the car list changed: keep what still exists, hand back credits for what does not   // automatic gas is now off unless switched on in the menu
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
 const tx = s => save.lang === 'ar' && AR[s] != null ? AR[s] : s;
-const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 });
+const DEFRIM = { Ford: 3, Sterrato: 3, Mazda: 3, LandRover: 1, Urus: 1, Mustang: 1, Mustang2: 1, F1: 4 };      // class-typical wheels: bronze rally rims, white trophy and muscle wheels, gold vintage hubs
+const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: DEFRIM[id] ?? 0, tint: 0, glow: 0 });
 const tuneSet = id => save.tune[id] || (save.tune[id] = { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' });
 const racing = () => !!R && !R.attract;
 const paintOf = id => save.paint[id] ?? CARS.find(c => c.id === id).color;

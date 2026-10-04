@@ -64,11 +64,8 @@ function buildProcedural() {
     2.9, .8, .8, .36, .36, .26, .26, [[.5, .34, -2.46]]);
 }
 export async function loadCars() {
-  // Two sets of artist-made car models (Qualix_studio, ProbablyNotG; CC BY 4.0), plus the vintage open-wheel cars from carmodel.js
-  const gltf = await new GLTFLoader().parseAsync(await getAsset('cars.glb'), '');
-  protos = {}; for (const c of gltf.scene.children) protos[c.name] = c;
-  const old = await new GLTFLoader().parseAsync(await getAsset('cars_old.glb'), ''); for (const c of old.scene.children) protos['old:' + c.name] = c;
-  for (const s of CARS) { s.body = (s.id === 'F1' || s.id === 'F1b') ? 'k' : 'toy'; if (s.id === 'F1' || s.id === 'F1b') { protos['sty:' + s.id] = buildStyled(s.id); s.model = 'sty:' + s.id; s.wing = hasOwnWing(s.id); } }
+  protos = {};       // every vehicle is generated in carmodel.js, one builder per racing class
+  for (const s of CARS) { protos['sty:' + s.id] = buildStyled(s.id); s.model = 'sty:' + s.id; s.body = 'k'; s.wing = hasOwnWing(s.id); }
 }
 
 const shared = {};
