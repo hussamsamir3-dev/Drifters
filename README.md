@@ -116,3 +116,5 @@ mesh), so it cannot just be dropped in. Send the model and it can be baked the s
 
 
 - All vehicles are generated in code by `js/carmodel.js` (smooth lofted bodies, wheel wells, glass cabins, wheels, lamps, wings). No external car models are used.
+
+- Cars: "Asset of low-poly cars" parts 1 and 2 by Qualix_studio, and "Ultimate Low-Poly Car Pack" 1 and 2 by ProbablyNotG, all CC BY 4.0 (commercial use allowed with credit, shown in the menu footer). The open-wheel cars are generated in `js/carmodel.js`.

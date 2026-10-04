@@ -189,7 +189,9 @@ function buildF1(P, id) {
   const fz = 1.4, rz = -1.2;
   for (const [key, z] of [['F', fz], ['R', rz]]) { const R = key === 'F' ? Rf : Rr, tw = key === 'F' ? twf : twr, wxs = hw + tw / 2 + .12;       // narrower tyres in front, wider and a little taller at the back
     for (const sx of [1, -1]) { const w = wheelGroup(R, tw, P.spokes); w.name = 'wheel_' + key + (sx > 0 ? 'L' : 'R'); w.position.set(sx * wxs, R, z); root.add(w);
-      add(bar([sx * hw * .85, .3, z + .16], [sx * (wxs - tw / 2 - .02), R + .05, z], .02, 'silver')); add(bar([sx * hw * .85, .46, z - .16], [sx * (wxs - tw / 2 - .02), R - .04, z + .02], .02, 'silver')); add(bar([sx * hw * .9, .38, z], [sx * (wxs - tw / 2 - .02), R + .1, z], .013, 'silver')); } }
+      const xi = sx * (wxs - tw / 2 - .03);      // inner face of the tyre: chunky, clearly visible links from the body to each wheel
+      add(bar([sx * hw * .9, R, z], [xi, R, z], .09, 'trim')); add(rbox(.13, R * 1.5, .22, 'trim', xi, R, z));
+      add(bar([sx * hw * .85, .3, z + .24], [xi, R + .08, z], .06, 'silver')); add(bar([sx * hw * .85, .48, z - .24], [xi, R - .05, z], .06, 'silver')); add(bar([sx * hw * .9, .66, z], [xi, R + .14, z], .04, 'silver')); } }
   for (const sx of [-1, 1]) add(ell(.05, .04, .04, 'stripe', sx * .34, topAt(.55) + .1, zt(.58)));
   if (v2) { add(rbox(1.5, .035, .34, 'paint', 0, .16, zt(.99))); for (const sx of [-1, 1]) add(rbox(.03, .2, .4, 'paint', sx * .76, .22, zt(.99))); add(rbox(1.1, .04, .32, 'paint', 0, 1.0, z0 - .02)); for (const sx of [-1, 1]) add(rbox(.03, .4, .38, 'paint', sx * .55, .84, z0 - .02)); }
   root.userData.exhaust = [[-.1, .55, z0 - .1], [.1, .55, z0 - .1]]; root.userData.door = [.62, zc]; bakeBody(body); return root;

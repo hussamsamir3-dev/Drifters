@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#17181c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;1,700;1,900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=28">
 <script type="importmap">{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }</script>
 </head>
 <body>
@@ -29,10 +29,12 @@
   <section class="left">
     <div id="tabCareer" hidden><button id="chPrev"></button><button id="chNext"></button><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p><ol id="events"></ol></div>
     <div id="tabQuick">
+      <h3 class="sec" data-t>Game mode</h3>
       <div class="seg wide" id="modeSeg"><button data-mode="race" data-t>Race</button><button data-mode="gp" data-t>Grand Prix</button><button data-mode="elim" data-t>Knockout</button><button data-mode="endu" data-t>Endurance</button><button data-mode="trial" data-t>Time trial</button><button data-mode="drift" data-t>Drift</button></div>
+      <h3 class="sec" data-t>Rules</h3>
       <div class="seg wide two" id="rulesSeg"><button data-r="circuit" data-t>Professional</button><button data-r="arcade" data-t>Arcade</button></div>
-      <button id="boxBtn" class="daily box"><small data-t>Daily box</small><b data-t>A car, an upgrade, XP or credits</b><span id="boxInfo"></span></button>
-      <button id="daily" class="daily"><small data-t>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button>
+      <h3 class="sec" data-t>Today</h3>
+      <div class="dailies"><button id="boxBtn" class="daily box"><small data-t>Daily box</small><b data-t>A car, an upgrade, XP or credits</b><span id="boxInfo"></span></button><button id="daily" class="daily"><small data-t>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button></div>
       <div id="gpBox" class="card gp" hidden></div>
     </div>
     <div id="tabGarage" hidden>
@@ -44,14 +46,11 @@
     <div id="tabTune" hidden><h3 data-t>Car set-up</h3><div id="tuneRows"></div></div>
     <div id="tabTrophies" hidden><ul id="trophies" class="trophies"></ul></div>
     <div id="tabSettings" hidden class="settings">
-      <label><span data-t>Language</span><div class="seg" id="langSeg"><button data-l="en">English</button><button data-l="ar">العربية</button></div></label>
-      <label><span data-t>Driver name</span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
-      <label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1" data-t>Close</button><button data-z="1.5" data-t>Normal</button><button data-z="2.25" data-t>Far</button><button data-z="3" data-t>Very far</button></div></label>
-      <label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label>
-      <label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label>
-      <label><span data-t>Engine</span><input type="range" id="engVol" min="0" max="100"></label>
-      <label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label>
-      <div class="row chips"><button id="assistBtn" class="chip">Assist</button><button id="tcBtn" class="chip">TC</button><button id="absBtn" class="chip">ABS</button><button id="sensBtn" class="chip">Steering</button><button id="gfxBtn" class="chip">Graphics</button><button id="gasBtn" class="chip" hidden>Auto gas</button><button id="muteBtn" class="chip">Sound on</button><button id="resetBtn" class="chip danger" data-t>Reset progress</button><button id="devBtn" class="chip">Developer</button></div>
+      <section class="sgrp"><h3 class="sec" data-t>Profile</h3><label><span data-t>Driver name</span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label><label><span data-t>Language</span><div class="seg" id="langSeg"><button data-l="en">English</button><button data-l="ar">العربية</button></div></label></section>
+      <section class="sgrp"><h3 class="sec" data-t>Driving assists</h3><div class="tiles"><button id="assistBtn" class="tile">Assist</button><button id="tcBtn" class="tile">TC</button><button id="absBtn" class="tile">ABS</button><button id="sensBtn" class="tile">Steering</button></div></section>
+      <section class="sgrp"><h3 class="sec" data-t>Display</h3><label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1" data-t>Close</button><button data-z="1.5" data-t>Normal</button><button data-z="2.25" data-t>Far</button><button data-z="3" data-t>Very far</button></div></label><label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label><div class="tiles"><button id="gfxBtn" class="tile">Graphics</button><button id="gasBtn" class="tile" hidden>Auto gas</button></div></section>
+      <section class="sgrp"><h3 class="sec" data-t>Audio</h3><label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label><label><span data-t>Engine</span><input type="range" id="engVol" min="0" max="100"></label><label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label><div class="tiles"><button id="muteBtn" class="tile">Sound on</button></div></section>
+      <section class="sgrp"><h3 class="sec" data-t>Data</h3><div class="tiles"><button id="resetBtn" class="tile danger" data-t>Reset progress</button><button id="devBtn" class="tile">Developer</button></div></section>
       <div id="devBox" class="row chips dev" hidden><button class="chip" data-a="cars">Unlock all cars</button><button class="chip" data-a="cash">+50,000 credits</button><button class="chip" data-a="ups">Max all upgrades</button><button class="chip" data-a="box">Reset daily box</button><button class="chip" data-a="god" id="devGod">No damage</button><button class="chip" data-a="scale" id="devScale">Game speed</button><button class="chip" data-a="tele">Telemetry</button><button class="chip danger" data-a="off">Leave developer mode</button><p class="note">In a race: F2 repair + refuel · F3 rain · F4 front impact · F6 empty tank · F7 skip to lap end · T telemetry</p><div class="aud"><select id="auEng"></select><label>RPM <input type="range" id="auRpm" min="700" max="9500" value="3000"></label><label>Load <input type="range" id="auLoad" min="0" max="100" value="30"></label><button class="chip" id="auUp" type="button">Upshift</button><button class="chip" id="auPop" type="button">Pop</button><button class="chip" id="auCrk" type="button">Crackle</button><small id="auMeter"></small></div></div>
     </div>
 
@@ -64,10 +63,11 @@
       <button class="arrow" id="trkNext" aria-label="Next track">›</button>
     </div>
     <div class="opts2" id="optsRow">
+      <h3 class="sec" data-t>Race setup</h3>
       <div class="stepper"><span data-t>Laps</span><button id="lapMinus">−</button><b id="laps">3</b><button id="lapPlus">+</button></div>
       <div class="stepper"><span data-t>Rivals</span><button id="rivMinus">−</button><b id="rivals">5</b><button id="rivPlus">+</button></div>
-      <div class="seg" id="diff"><button data-d="0" data-t>Easy</button><button data-d="1" class="on" data-t>Medium</button><button data-d="2" data-t>Hard</button></div>
-      <div class="seg" id="wxSeg"><button data-w="clear" data-t>Dry</button><button data-w="random" data-t>Changeable</button><button data-w="rain" data-t>Rain</button></div>
+      <div class="cell"><small data-t>Difficulty</small><div class="seg" id="diff"><button data-d="0" data-t>Easy</button><button data-d="1" class="on" data-t>Medium</button><button data-d="2" data-t>Hard</button></div></div>
+      <div class="cell"><small data-t>Weather</small><div class="seg" id="wxSeg"><button data-w="clear" data-t>Dry</button><button data-w="random" data-t>Changeable</button><button data-w="rain" data-t>Rain</button></div></div>
     </div>
 
     <div id="onlineBox" class="card online" hidden>
@@ -102,7 +102,7 @@
       <dt data-t>Drift</dt><dd><i id="stDrift"></i></dd>
     </dl>
   </section>
-  <footer class="credit">Track: “Karting Club Lider” by Nikita Teploukhov (CC BY-NC 4.0) · Cars: generated in-game · EGYSeal</footer>
+  <footer class="credit">Track: “Karting Club Lider” by Nikita Teploukhov (CC BY-NC 4.0) · Cars: Qualix_studio and ProbablyNotG (CC BY 4.0) · EGYSeal · build 28</footer>
 </div>
 
 <!-- ============ LOADING ============ -->
@@ -190,7 +190,7 @@ addEventListener('error',function(e){ if(!window.__booted) fatal(e.message||('co
 addEventListener('unhandledrejection',function(e){ if(!window.__booted) fatal((e.reason&&e.reason.message)||String(e.reason)); });
 // Opened by double-click (file://): browsers refuse ES modules there, so load the pre-built single-file copy.
 (function(){var s=document.createElement('script');
-  if(location.protocol==='file:'){s.src='game.bundle.js';}else{s.type='module';s.src='js/main.js';}
+  if(location.protocol==='file:'){s.src='game.bundle.js?v=28';}else{s.type='module';s.src='js/main.js?v=28';}
   document.body.appendChild(s);})();
 </script>
 </body>

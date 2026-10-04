@@ -503,8 +503,8 @@ function updateLights(dt) {
     L.position.set(x, c.y + .62, z); L.target.position.set(x + sn * 22, c.y - .9, z + cs * 22); L.intensity += ((okL && okR ? 150 : 80) * dark - L.intensity) * k;
     LIGHTS.p[i].copy(L.position); LIGHTS.d[i].set(sn, -.07, cs).normalize(); LIGHTS.c[i].set(1, .93, .78, (okL && okR ? 1 : .55) * dark); });
   const glo = near.filter(c => c.look && c.look.glow && c.glowPool);
-  R.glows.forEach((L, i) => { const c = glo[i]; if (!c) { L.intensity += (0 - L.intensity) * k; return; } L.color.setHex(GLOWS[c.look.glow]); L.position.set(c.root.position.x, c.y + .28, c.root.position.z); L.intensity += ((R.track.theme.night ? 9 : 4) - L.intensity) * k; });
-  const pulse = .68 + .1 * Math.sin(performance.now() / 420); for (const c of R.cars) if (c.glowPool) c.glowPool.material.opacity = pulse * (R.track.theme.night ? 1 : .6);
+  R.glows.forEach((L, i) => { const c = glo[i]; if (!c) { L.intensity += (0 - L.intensity) * k; return; } L.color.setHex(GLOWS[c.look.glow]); L.position.set(c.root.position.x, c.y + .28, c.root.position.z); L.intensity += ((R.track.theme.night ? 9 : R.track.def.theme === 'coast' ? 3 : .8) - L.intensity) * k; });
+  const pulse = .68 + .1 * Math.sin(performance.now() / 420); for (const c of R.cars) if (c.glowPool) c.glowPool.material.opacity = pulse * (R.track.theme.night ? 1 : R.track.def.theme === 'coast' ? .6 : .12 + .3 * R.wet);      // underglow is a night effect: barely there in daylight
 }
 
 // ---------------- pit box, pickups, weather ----------------

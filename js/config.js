@@ -52,7 +52,7 @@ export const TUNE = {
   setup: { gearAcc: .04, gearTop: .035, aeroDown: .35, aeroTop: .02, biasStep: .05, rollStep: .03, compound: { soft: [1.04, 1.6], medium: [1, 1], hard: [.97, .6] } },
   toy: { w: 1.4, h: 1.4, l: 1.4, wheel: 1.4 },
   // Stylised proportions by body type (multiplies the scale above): shorter, taller, wider, bigger wheels.
-  body: { k: { w: 1, h: 1, l: 1, wheel: 1 }, coupe: { w: 1.12, h: 1.2, l: .88, wheel: 1.24 }, sedan: { w: 1.13, h: 1.26, l: .85, wheel: 1.27 }, hatch: { w: 1.14, h: 1.3, l: .84, wheel: 1.3 }, suv: { w: 1.1, h: 1.18, l: .88, wheel: 1.24 }, '4x4': { w: 1.1, h: 1.16, l: .9, wheel: 1.22 }, truck: { w: 1.04, h: 1.02, l: .9, wheel: 1.08 }, bus: { w: 1.06, h: 1.0, l: .92, wheel: 1.12 }, f1: { w: 1.08, h: 1.12, l: .9, wheel: 1.1 } },   // how large cars are drawn and how much room they take on track; their mass, wheelbase and forces stay real   // visual proportions only: short, tall, big-wheeled miniature cars
+  body: { k: { w: 1, h: 1, l: 1, wheel: 1 }, toy: { w: 1.1, h: 1.08, l: .93, wheel: 1.22 }, coupe: { w: 1.12, h: 1.2, l: .88, wheel: 1.24 }, sedan: { w: 1.13, h: 1.26, l: .85, wheel: 1.27 }, hatch: { w: 1.14, h: 1.3, l: .84, wheel: 1.3 }, suv: { w: 1.1, h: 1.18, l: .88, wheel: 1.24 }, '4x4': { w: 1.1, h: 1.16, l: .9, wheel: 1.22 }, truck: { w: 1.04, h: 1.02, l: .9, wheel: 1.08 }, bus: { w: 1.06, h: 1.0, l: .92, wheel: 1.12 }, f1: { w: 1.08, h: 1.12, l: .9, wheel: 1.1 } },   // how large cars are drawn and how much room they take on track; their mass, wheelbase and forces stay real   // visual proportions only: short, tall, big-wheeled miniature cars
 };
 
 // top = top speed (m/s) · acc = launch acceleration (m/s²) · grip = tyre μ · rear = rear-axle grip bias (<1 = tail-happy)
@@ -84,36 +84,9 @@ export const CARS = [
   { id: 'F1', model: 'k:race', body: 'k', wing: 1, snd: '06_Race_V12', idle: 3200, red: 12500, turbo: 1, pops: 'crackle', cyl: 6, name: 'Ra F1', ar: 'رع إف١', cls: 'Formula car · RWD', price: 20000, color: 0xe3262e,
     kmh: 0, sprint: 2.2, hp: 1000, cda: 1.25, fw: .46, top: 95, acc: 14, grip: 1.9, rear: 1.0, loose: .55, off: .3, mass: 798, drive: 'rwd', brake: 2.4, aero: 5.5, rollF: .52, yawK: .85, engine: '1.6 L turbo-hybrid V6',
     blurb: 'An open-wheel single-seater: under 800 kg, a thousand horsepower and wings that push it into the road. Nothing else stops or corners like it.' },
-  { id: 'Truck', model: 'k:truck', body: 'k', snd: '04_Crossplane_V8', idle: 700, red: 6000, turbo: 1, pops: '', cyl: 8, name: 'Apis', ar: 'أبيس', cls: 'Pickup truck · 4x4', price: 2500, color: 0x2b4f8f,
-    kmh: 0, sprint: 4.8, hp: 450, cda: 1.25, fw: .56, top: 50, acc: 9.5, grip: .8, rear: 1.02, loose: .5, off: .85, mass: 2580, drive: 'awd', brake: .95, aero: .2, rollF: .56, yawK: 1.25, engine: '3.5 L twin-turbo V6',
-    blurb: 'A full-size pickup. Heavy and tall, so it leans and takes its time, but it shrugs off grass and gravel.' },
-  { id: 'Bus', model: 'k:van', body: 'k', snd: '01_Turbo_Inline4', idle: 800, red: 4800, turbo: 1, pops: '', cyl: 4, name: 'Bes', ar: 'بس', cls: 'Minibus · RWD', price: 1200, color: 0xf2f2ee,
-    kmh: 0, sprint: 6.8, hp: 280, cda: 1.4, fw: .5, top: 45, acc: 7.5, grip: .78, rear: 1.04, loose: .35, off: .5, mass: 2100, drive: 'rwd', brake: .9, aero: .1, rollF: .58, yawK: 1.3, engine: '2.8 L turbo diesel',
-    blurb: 'The fourteen-seat microbus. Top-heavy and slow to turn; carrying speed through a corner in one is an art.' },
   { id: 'F1b', model: 'k:race-future', body: 'k', wing: 1, snd: '05_FlatPlane_V8', idle: 3200, red: 12500, turbo: 1, pops: '', cyl: 6, name: 'Aten F1', ar: 'آتون', cls: 'Formula car · RWD', price: 22000, color: 0x1c57c8,
     kmh: 0, sprint: 5, hp: 1050, cda: 1.2, fw: 0.46, top: 50, acc: 14, grip: 1.95, rear: 1.0, loose: 0.55, off: 0.3, mass: 790, drive: 'rwd', brake: 2.4, aero: 5.8, rollF: 0.52, yawK: 0.85, engine: '1.6 L turbo-hybrid V6',
     blurb: 'A newer single-seater: a touch more power and downforce than the Ra, and just as unforgiving.' },
-  { id: 'HatchS', model: 'k:hatchback-sports', body: 'k', snd: '01_Turbo_Inline4', idle: 850, red: 7000, turbo: 1, pops: '', cyl: 4, name: 'Maat', ar: 'ماعت', cls: 'Hot hatch · FWD', price: 600, color: 0x2fb457,
-    kmh: 0, sprint: 5, hp: 280, cda: 0.7, fw: 0.62, top: 50, acc: 9.6, grip: 0.98, rear: 1.04, loose: 0.3, off: 0.55, mass: 1350, drive: 'fwd', brake: 1.1, aero: 0.5, rollF: 0.6, yawK: 1.0, engine: '2.0 L turbo four',
-    blurb: 'A small, light front-drive hatch. Nimble, forgiving, and quicker than it looks.' },
-  { id: 'SedanS', model: 'k:sedan-sports', body: 'k', snd: '03_Race_Inline6', idle: 800, red: 7200, turbo: 1, pops: '', cyl: 6, name: 'Shu', ar: 'شو', cls: 'Sports saloon · RWD', price: 1600, color: 0xe8683f,
-    kmh: 0, sprint: 5, hp: 340, cda: 0.7, fw: 0.53, top: 50, acc: 10.2, grip: 0.98, rear: 0.96, loose: 0.7, off: 0.5, mass: 1500, drive: 'rwd', brake: 1.1, aero: 0.5, rollF: 0.5, yawK: 1.0, engine: '3.0 L turbo six',
-    blurb: 'A rear-drive sports saloon with a straight six. Balanced, and happy to slide.' },
-  { id: 'Taxi', model: 'k:taxi', body: 'k', snd: '02_Boxer_Flat4', idle: 800, red: 6200, turbo: 0, pops: '', cyl: 4, name: 'Cairo Taxi', ar: 'تاكسي القاهرة', cls: 'Taxi · FWD', price: 300, color: 0xf8b848,
-    kmh: 0, sprint: 5, hp: 160, cda: 0.74, fw: 0.6, top: 50, acc: 8, grip: 0.86, rear: 1.05, loose: 0.25, off: 0.55, mass: 1300, drive: 'fwd', brake: 0.95, aero: 0.2, rollF: 0.6, yawK: 1.05, engine: '1.6 L four',
-    blurb: 'The city taxi. Little power, soft springs, and it has seen every pothole in Cairo.' },
-  { id: 'Police', model: 'k:police', body: 'k', snd: '04_Crossplane_V8', idle: 750, red: 6400, turbo: 0, pops: '', cyl: 8, name: 'Medjay', ar: 'المدجاي', cls: 'Interceptor · RWD', price: 2800, color: 0xf2f2ee,
-    kmh: 0, sprint: 5, hp: 400, cda: 0.76, fw: 0.54, top: 50, acc: 10.4, grip: 0.98, rear: 0.97, loose: 0.7, off: 0.5, mass: 1850, drive: 'rwd', brake: 1.1, aero: 0.4, rollF: 0.5, yawK: 1.05, engine: '5.7 L V8',
-    blurb: 'A pursuit saloon: a big V8, heavy-duty brakes and lights on the roof.' },
-  { id: 'SUVk', model: 'k:suv-luxury', body: 'k', snd: '04_Crossplane_V8', idle: 700, red: 6200, turbo: 1, pops: '', cyl: 8, name: 'Geb', ar: 'جب', cls: 'Luxury SUV · AWD', price: 3000, color: 0xf8b848,
-    kmh: 0, sprint: 5, hp: 420, cda: 0.92, fw: 0.55, top: 50, acc: 10, grip: 0.9, rear: 1.02, loose: 0.45, off: 0.75, mass: 2350, drive: 'awd', brake: 1.0, aero: 0.3, rollF: 0.56, yawK: 1.2, engine: '4.4 L twin-turbo V8',
-    blurb: 'A tall, heavy luxury 4x4. Grips well off the tarmac, leans hard on it.' },
-  { id: 'Delivery', model: 'k:delivery', body: 'k', snd: '01_Turbo_Inline4', idle: 700, red: 4200, turbo: 1, pops: '', cyl: 4, name: 'Hapi', ar: 'حابي', cls: 'Box truck · RWD', price: 1500, color: 0x58c888,
-    kmh: 0, sprint: 5, hp: 300, cda: 1.6, fw: 0.45, top: 50, acc: 7, grip: 0.75, rear: 1.05, loose: 0.3, off: 0.5, mass: 3500, drive: 'rwd', brake: 0.85, aero: 0.1, rollF: 0.6, yawK: 1.4, engine: '5.2 L turbo diesel',
-    blurb: 'A delivery truck. Three and a half tonnes of box: brake early, turn gently.' },
-  { id: 'Fire', model: 'k:firetruck', body: 'k', snd: '04_Crossplane_V8', idle: 650, red: 3600, turbo: 1, pops: '', cyl: 8, name: 'Sekhmet', ar: 'سخمت', cls: 'Fire engine · 4x4', price: 4000, color: 0xf8683f,
-    kmh: 0, sprint: 5, hp: 520, cda: 2.0, fw: 0.5, top: 50, acc: 6.5, grip: 0.72, rear: 1.05, loose: 0.3, off: 0.6, mass: 7000, drive: 'awd', brake: 0.8, aero: 0.1, rollF: 0.6, yawK: 1.6, engine: '9.0 L turbo diesel',
-    blurb: 'Seven tonnes of fire engine. Everyone gets out of its way, one way or another.' },
   // The original fourteen (models: "Ultimate Low-Poly Car Pack" 1 & 2 by ProbablyNotG, CC BY 4.0)
   { id: 'Ford', body: 'hatch', model: 'old:Ford', kmh: 180, sprint: 5.7, hp: 350, cda: 0.7, fw: 0.61, engine: '2.3 L turbo four', snd: '01_Turbo_Inline4', idle: 900, red: 7200, turbo: 1, pops: 'pop', cyl: 4,      name: 'Scarab RS',  ar: 'الجعران',  cls: 'Compact · FWD', price: 800,    color: 0x1f6feb, top: 50, acc: 8.6,  grip: 0.98, rear: 1.04, loose: .3,  off: .62, mass: 1480, drive: 'fwd', brake: 1.1, aero: .5,  rollF: .60, yawK: 1.12, blurb: 'Front-drive hot hatch. Safe understeer, lift to tuck the nose in. The beginner\u2019s car.' },
   { id: 'Sterrato', model: 'old:Sterrato', kmh: 191, sprint: 3.6, hp: 610, cda: 0.74, fw: 0.43, engine: '5.2 L V10', snd: '08_Race_V10', idle: 1000, red: 8500, turbo: 0, pops: 'crackle', cyl: 10,  name: 'Sandstorm',  ar: 'العاصفة',  cls: 'Rally · AWD',   price: 1800,    color: 0xe8a21c, top: 53, acc: 9.4,  grip: 1.0, rear: 1.0,  loose: .5,  off: .8,  mass: 1470, drive: 'awd', brake: 1.15, aero: .7,  rollF: .54, yawK: 1.25, blurb: 'All-wheel drive. Huge traction out of corners and barely notices the grass.' },
@@ -134,7 +107,7 @@ export const CARS = [
 for (const c of CARS) { c.pw = c.hp * 745.7 * .84; let v = 60; for (let i = 0; i < 40; i++) v = Math.cbrt(Math.max(1, c.pw - c.mass * (.12 + .006 * v) * v) / (.6 * c.cda)); c.top = v; c.kmh = Math.round(v * 3.6); }
 // Racing classes. A Professional race is run within one class, and a balance of performance trims power and grip towards the
 // field's average, so the cars on the grid are closely matched and the result comes down to the driving.
-export const CLASSES = { Formula: ['F1', 'F1b'], Utility: ['LandRover', 'Truck', 'Bus', 'SUVk', 'Delivery', 'Fire'], Touring: ['Mazda', 'Ford', 'Mustang', 'Mustang2', 'Mercedes', 'Audi', 'HatchS', 'SedanS', 'Taxi', 'Police'], GT: ['M8', 'Urus', 'Porsche', 'GTR', 'AMG', 'FordGT', 'BMW'], Super: ['Lambo', 'Sterrato', 'Artura', 'Ferrari', 'Zenvo', 'P1GTR'] };
+export const CLASSES = { Formula: ['F1', 'F1b'], Touring: ['Mazda', 'Ford', 'Mustang', 'Mustang2', 'Mercedes', 'Audi', 'LandRover'], GT: ['M8', 'Urus', 'Porsche', 'GTR', 'AMG', 'FordGT', 'BMW'], Super: ['Lambo', 'Sterrato', 'Artura', 'Ferrari', 'Zenvo', 'P1GTR'] };
 for (const k in CLASSES) for (const id of CLASSES[k]) CARS.find(c => c.id === id).klass = k;
 export function balance(spec, field) {
   const pm = c => c.pw / c.mass, n = field.length, rp = field.reduce((a, c) => a + pm(c), 0) / n, rg = field.reduce((a, c) => a + c.grip, 0) / n, lim = (v, a, b) => Math.max(a, Math.min(b, v));
