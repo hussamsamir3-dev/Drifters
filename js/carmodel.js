@@ -8,7 +8,7 @@ const sp = (c, n) => sg(c) * Math.pow(ab(c), 2 / n);
 function curve(pts) { return t => { if (t <= pts[0][0]) return pts[0][1]; for (let i = 1; i < pts.length; i++) if (t <= pts[i][0]) { const [t0, v0] = pts[i - 1], [t1, v1] = pts[i], u = (t - t0) / (t1 - t0), s = u * .45 + .55 * (1 - Math.cos(u * Math.PI)) / 2; return v0 + (v1 - v0) * s; } return pts[pts.length - 1][1]; }; }
 function loftGeo(st, ring = 32, capF = true, capR = true) {
   const pos = [], idx = [], n = st.length;
-  for (const s of st) for (let j = 0; j < ring; j++) { const a = j / ring * TAU, c = Math.cos(a), sn = Math.sin(a), nn = sn >= 0 ? s.nt : s.nb, yc = (s.yb + s.yt) / 2, hy = (s.yt - s.yb) / 2; pos.push((s.x || 0) + s.w * sp(c, nn), yc + hy * sp(sn, nn), s.z); }
+  for (const s of st) for (let j = 0; j < ring; j++) { const a = j / ring * TAU, c = Math.cos(a), sn = Math.sin(a), nn = sn >= 0 ? s.nt : s.nb, yc = (s.yb + s.yt) / 2, hy = (s.yt - s.yb) / 2; pos.push((s.x || 0) + s.w * sp(c, nn) * (1 - (s.tm || 0) * clamp(((yc + hy * sp(sn, nn)) - s.yb) / (s.yt - s.yb), 0, 1)), yc + hy * sp(sn, nn), s.z); }
   for (let i = 0; i < n - 1; i++) for (let j = 0; j < ring; j++) { const a = i * ring + j, b = i * ring + (j + 1) % ring, c = (i + 1) * ring + j, d = (i + 1) * ring + (j + 1) % ring; idx.push(a, b, c, b, d, c); }
   if (capF) { const f = st[n - 1]; pos.push(f.x || 0, (f.yb + f.yt) / 2, f.z); const ci = pos.length / 3 - 1, base = (n - 1) * ring; for (let j = 0; j < ring; j++) idx.push(ci, base + j, base + (j + 1) % ring); }
   if (capR) { const f = st[0]; pos.push(f.x || 0, (f.yb + f.yt) / 2, f.z); const ci = pos.length / 3 - 1; for (let j = 0; j < ring; j++) idx.push(ci, (j + 1) % ring, j); }
@@ -53,15 +53,15 @@ function wheelGroup(R, w, spokes = 10) {
 }
 // ---------------- archetypes (units: metres, drawn chunky; the game scales them up) ----------------
 const A = {
-  hatch: { L: 3.5, W: 1.8, wb: 2.2, R: .43, tw: .32, clr: .21, belt: .8, hood: .9, deck: .96, roof: 1.4, ct0: .04, ct1: .66, rw: .13, fw: .2, flare: .1, nose: .17, tail: .1, wing: 'rally', vents: 2, scoop: 1, spokes: 10, nt: 3.4, doors: 2 },
-  sedan: { L: 4.2, W: 1.8, wb: 2.6, R: .41, tw: .28, clr: .21, belt: .78, hood: .86, deck: .9, roof: 1.36, ct0: .16, ct1: .62, rw: .17, fw: .2, flare: .07, nose: .15, tail: .1, wing: 'none', vents: 0, spokes: 7, nt: 3.6, trunk: 1, doors: 2 },
-  coupe: { L: 4.3, W: 1.86, wb: 2.6, R: .42, tw: .32, clr: .2, belt: .78, hood: .88, deck: .84, roof: 1.3, ct0: .24, ct1: .56, rw: .12, fw: .16, flare: .09, nose: .13, tail: .1, wing: 'none', vents: 0, spokes: 10, nt: 3.2, trunk: 1, doors: 1, b: 0, lamps: 'round', bumper: 'chrome', bulge: 1 },
-  gt: { L: 4.1, W: 1.96, wb: 2.55, R: .43, tw: .36, clr: .17, belt: .74, hood: .84, deck: .88, roof: 1.26, ct0: .2, ct1: .6, rw: .1, fw: .17, flare: .14, nose: .14, tail: .09, wing: 'gt', vents: 2, spokes: 12, nt: 3.0, doors: 1, b: 0, diffuser: 1 },
-  super: { L: 4.2, W: 2.0, wb: 2.5, R: .43, tw: .37, clr: .15, belt: .7, hood: .78, deck: .86, roof: 1.12, ct0: .3, ct1: .64, rw: .2, fw: .24, flare: .13, nose: .16, tail: .1, wing: 'lip', vents: 2, spokes: 10, nt: 2.8, doors: 1, b: 0, diffuser: 1 },
-  suv: { L: 4.2, W: 1.9, wb: 2.65, R: .46, tw: .32, clr: .32, belt: .98, hood: 1.06, deck: 1.12, roof: 1.68, ct0: .08, ct1: .6, rw: .06, fw: .17, flare: .08, nose: .13, tail: .08, wing: 'none', vents: 0, rails: 1, spokes: 10, nt: 5, doors: 2 },
-  truck: { L: 4.7, W: 1.95, wb: 2.95, R: .5, tw: .34, clr: .34, belt: 1.04, hood: 1.12, deck: 1.0, roof: 1.7, ct0: .46, ct1: .7, rw: .05, fw: .12, flare: .09, nose: .13, tail: .06, wing: 'none', vents: 0, bed: 1, spokes: 8, nt: 4.4, doors: 2 },
-  van: { L: 4.4, W: 1.9, wb: 2.8, R: .41, tw: .29, clr: .24, belt: 1.28, hood: 1.12, deck: 1.28, roof: 1.9, ct0: .03, ct1: .84, rw: .02, fw: .08, flare: .04, nose: .15, tail: .05, wing: 'none', vents: 0, spokes: 8, gw: .93, nt: 5.2, doors: 2 },
-  boxtruck: { L: 5.5, W: 2.0, wb: 3.5, R: .47, tw: .32, clr: .38, belt: 1.04, hood: 1.02, deck: 1.0, roof: 1.92, ct0: .7, ct1: .93, rw: .03, fw: .1, flare: .05, nose: .08, tail: .04, wing: 'none', vents: 0, cargo: 1, spokes: 8, nt: 4.8, doors: 1, b: 0 },
+  hatch: { L: 3.4, W: 1.95, wb: 2.1, R: 0.5, tw: 0.36, clr: 0.24, belt: 0.95, hood: 1.04, deck: 1.08, roof: 1.58, ct0: .04, ct1: .66, rw: .13, fw: .2, flare: .1, nose: .17, tail: .1, wing: 'rally', vents: 2, scoop: 1, spokes: 10, nt: 4.4, doors: 2 },
+  sedan: { L: 4.0, W: 1.9, wb: 2.45, R: 0.47, tw: 0.32, clr: 0.24, belt: 0.92, hood: 1.0, deck: 1.02, roof: 1.56, ct0: 0.14, ct1: 0.62, rw: 0.14, fw: 0.17, flare: .07, nose: .15, tail: .1, wing: 'none', vents: 0, spokes: 7, nt: 4.8, trunk: 1, doors: 2 },
+  coupe: { L: 4.1, W: 1.95, wb: 2.5, R: 0.48, tw: 0.36, clr: 0.23, belt: 0.92, hood: 1.02, deck: 1.0, roof: 1.5, ct0: 0.2, ct1: 0.6, rw: 0.1, fw: 0.12, flare: .09, nose: .13, tail: .1, wing: 'none', vents: 0, spokes: 10, nt: 4.2, trunk: 1, doors: 1, b: 0, lamps: 'round', bumper: 'chrome', bulge: 1 },
+  gt: { L: 3.9, W: 2.05, wb: 2.4, R: 0.49, tw: 0.4, clr: 0.2, belt: 0.86, hood: 0.98, deck: 1.0, roof: 1.44, ct0: 0.2, ct1: 0.62, rw: 0.09, fw: 0.15, flare: .14, nose: .14, tail: .09, wing: 'gt', vents: 2, spokes: 12, nt: 3.8, doors: 1, b: 0, diffuser: 1 },
+  super: { L: 4.0, W: 2.1, wb: 2.4, R: 0.49, tw: 0.42, clr: 0.18, belt: 0.8, hood: 0.92, deck: 0.98, roof: 1.3, ct0: 0.28, ct1: 0.66, rw: 0.13, fw: 0.17, flare: .13, nose: .16, tail: .1, wing: 'lip', vents: 2, spokes: 10, nt: 3.4, doors: 1, b: 0, diffuser: 1 },
+  suv: { L: 4.0, W: 2.0, wb: 2.5, R: 0.52, tw: 0.36, clr: 0.36, belt: 1.12, hood: 1.22, deck: 1.28, roof: 1.86, ct0: .08, ct1: .6, rw: .06, fw: .17, flare: .08, nose: .13, tail: .08, wing: 'none', vents: 0, rails: 1, spokes: 10, nt: 5.5, doors: 2 },
+  truck: { L: 4.5, W: 2.05, wb: 2.8, R: 0.56, tw: 0.38, clr: 0.4, belt: 1.18, hood: 1.28, deck: 1.1, roof: 1.9, ct0: .46, ct1: .7, rw: .05, fw: .12, flare: .09, nose: .13, tail: .06, wing: 'none', vents: 0, bed: 1, spokes: 8, nt: 5, doors: 2 },
+  van: { L: 4.2, W: 2.0, wb: 2.6, R: 0.47, tw: 0.33, clr: 0.28, belt: 1.4, hood: 1.24, deck: 1.4, roof: 2.1, ct0: .03, ct1: .84, rw: .02, fw: .08, flare: .04, nose: .15, tail: .05, wing: 'none', vents: 0, spokes: 8, gw: .97, nt: 5.6, doors: 2 },
+  boxtruck: { L: 5.4, W: 2.1, wb: 3.4, R: 0.52, tw: 0.36, clr: 0.42, belt: 1.16, hood: 1.12, deck: 1.1, roof: 2.1, ct0: .7, ct1: .93, rw: .03, fw: .1, flare: .05, nose: .08, tail: .04, wing: 'none', vents: 0, cargo: 1, spokes: 8, nt: 5.2, doors: 1, b: 0 },
   f1: { f1: 1, wing: 'none', spokes: 5 },
 };
 const STYLE = {
@@ -85,7 +85,7 @@ function buildCar(P, id) {
   const L = P.L, hw = P.W / 2, z0 = -L / 2, zt = t => z0 + t * L, R = P.R, ra = R + .055, tr = (-P.wb / 2 - z0) / L, tfw = (P.wb / 2 - z0) / L, wdT = ra * 1.2 / L, nf = P.nose, nr = P.tail, lerp = (a, b, u) => a + (b - a) * u;
   const bump = (t, c) => { const d = (t - c) / wdT; return ab(d) < 1 ? .5 * (1 + Math.cos(d * Math.PI)) : 0; };
   const Wp = t => { let w = hw; if (t > 1 - nf) { const u = (t - 1 + nf) / nf; w *= .52 + .48 * Math.sqrt(Math.max(0, 1 - u * u)); } if (t < nr) { const u = (nr - t) / nr; w *= .56 + .44 * Math.sqrt(Math.max(0, 1 - u * u)); } return w + P.flare * (bump(t, tr) + bump(t, tfw)); };
-  const t1 = Math.max(.07, P.ct0 + .02), nt = P.nt || 3.4;
+  const t1 = Math.max(.07, P.ct0 + .02), nt = P.nt || 4.6;
   const Tp0 = curve([[0, P.deck * .85], [.05, P.deck], [t1, P.deck], [t1 + .07, P.belt], [P.ct1 - .05, P.belt], [P.ct1, P.hood], [1 - nf * .4, P.hood + (P.bulge || 0) * .3], [1, P.hood * .8]]);
   const Tp = t => { const bw = Math.max(bump(t, tr), bump(t, tfw)); return Math.max(Tp0(t), Tp0(t) + (2 * R + .1 - Tp0(t)) * bw); };
   const Bp = curve([[0, P.clr + .08], [.06, P.clr], [.94, P.clr], [1, P.clr + .07]]);
@@ -99,12 +99,13 @@ function buildCar(P, id) {
   const bx = (t, y) => { const yb = Bp(t), yt = yTop(t), yc = (yb + yt) / 2, hy = (yt - yb) / 2, k = (y - yc) / hy; if (ab(k) >= .999) return 0; const nn = k >= 0 ? nt : 7; return Wp(t) * Math.pow(1 - Math.pow(ab(k), nn), 1 / nn); };
   const surfY = (t, x) => { const yb = Bp(t), yt = yTop(t), yc = (yb + yt) / 2, hy = (yt - yb) / 2, k = clamp(ab(x) / Wp(t), 0, .98); return yc + hy * Math.pow(1 - Math.pow(k, nt), 1 / nt); };
   // ---- cabin shell (painted roof and pillars). The glass is NOT part of it: it is separate panels laid on top, each in a black frame.
-  const Rc = curve([[P.ct0, P.belt - .02], [P.ct0 + P.rw, P.roof], [P.ct1 - P.fw, P.roof], [P.ct1, P.belt - .02]]), gw = hw * (P.gw || .85), gh = [], Ng = 40;
+  const CNT = P.cnt || 6, CNB = 9, TM = P.tm ?? .11;
+  const Rc = curve([[P.ct0, P.belt - .02], [P.ct0 + P.rw, P.roof], [P.ct1 - P.fw, P.roof], [P.ct1, P.belt - .02]]), gw = hw * (P.gw || .95), gh = [], Ng = 40;
   const gS = t => { const u = clamp((t - P.ct0) / (P.ct1 - P.ct0), 0, 1), w = gw * (.84 + .16 * Math.sin(Math.PI * u)), yb = P.belt - .1, yt = Rc(t); return { w, yb, yt, yc: (yb + yt) / 2, hy: (yt - yb) / 2 }; };
-  for (let i = 0; i < Ng; i++) { const t = P.ct0 + (P.ct1 - P.ct0) * i / (Ng - 1), s = gS(t); gh.push({ z: zt(t), w: s.w, yb: s.yb, yt: s.yt, nt: 3.6, nb: 8 }); }
-  const gg = loftGeo(gh, 40); gg.computeVertexNormals(); add(mesh(gg, 'paint'));
-  const gx = (t, y) => { const s = gS(t), k = (y - s.yc) / s.hy; if (ab(k) >= .999) return 0; const nn = k >= 0 ? 3.6 : 8; return s.w * Math.pow(1 - Math.pow(ab(k), nn), 1 / nn); };
-  const gTop = (t, x) => { const s = gS(t), k = clamp(ab(x) / s.w, 0, .999); return s.yc + s.hy * Math.pow(1 - Math.pow(k, 3.6), 1 / 3.6); };
+  for (let i = 0; i < Ng; i++) { const t = P.ct0 + (P.ct1 - P.ct0) * i / (Ng - 1), s = gS(t); gh.push({ z: zt(t), w: s.w, yb: s.yb, yt: s.yt, nt: CNT, nb: CNB, tm: TM }); }
+  const gg = loftGeo(gh, 44); gg.computeVertexNormals(); add(mesh(gg, 'paint'));
+  const gx = (t, y) => { const s = gS(t); if (y <= s.yb || y >= s.yt) return 0; const yn = (y - s.yb) / (s.yt - s.yb), k = (y - s.yc) / s.hy, nn = k >= 0 ? CNT : CNB; return s.w * (1 - TM * yn) * Math.pow(1 - Math.pow(Math.min(ab(k), .999), nn), 1 / nn); };
+  const gTop = (t, x) => { const s = gS(t), ax = ab(x); let lo = s.yc, hi = s.yt - 1e-4; if (gx(t, lo) <= ax) return lo; for (let i = 0; i < 20; i++) { const m = (lo + hi) / 2; if (gx(t, m) > ax) lo = m; else hi = m; } return (lo + hi) / 2; };
   const axis = p => new V3(0, p.y, p.z), up1 = p => new V3(0, p.y - 1, p.z), th = P.rth ?? .085, mt = m => m / L;
   // glass between the pillars: scan the roof line for where a window fits, leave the B-pillar, build one panel per run
   const sideRuns = m => { const yL = P.belt + .035 - m, tB = P.ct0 + (P.ct1 - P.ct0) * (P.bpil ?? .5), pw = (P.pw ?? .032) - mt(m), runs = []; let cur = null;
@@ -113,7 +114,7 @@ function buildCar(P, id) {
   const baseF = (() => { for (let k = 0; k <= 200; k++) { const t = P.ct1 - k / 200 * (P.ct1 - P.ct0); if (Rc(t) - Tp(t) > .075) return t; } return P.ct1 - .05; })(), topF = P.ct1 - P.fw + .015;
   const baseR = (() => { for (let k = 0; k <= 200; k++) { const t = P.ct0 + k / 200 * (P.ct1 - P.ct0); if (Rc(t) - Tp(t) > .075) return t; } return P.ct0 + .05; })(), topR = P.ct0 + P.rw - .012;
   const wind = (m, off, kind) => {
-    if (baseF > topF + .02) addG(gridGeo((u, s) => { const t = lerp(topF - mt(m), baseF + mt(m), u), w = gS(t).w, x = (s * 2 - 1) * (w * (.8 - .04 * (1 - u)) + m); return new V3(x, gTop(t, x), zt(t)); }, 12, 12, off, up1), kind);
+    if (baseF > topF + .02) addG(gridGeo((u, s) => { const t = lerp(topF - mt(m * (kind === 'body' ? 3.2 : 1)), baseF + mt(m), u), w = gS(t).w, x = (s * 2 - 1) * (w * (.8 - .04 * (1 - u)) + m); return new V3(x, gTop(t, x), zt(t)); }, 12, 12, off, up1), kind);
     if (topR > baseR + .015) addG(gridGeo((u, s) => { const t = lerp(baseR - mt(m), topR + mt(m), u), w = gS(t).w, x = (s * 2 - 1) * (w * .78 + m); return new V3(x, gTop(t, x), zt(t)); }, 8, 12, off, up1), kind); };
   sideGlass(.022, .0035, 'body'); wind(.022, .0035, 'body');            // black rubber frames
   sideGlass(0, .0085, 'window'); wind(0, .0085, 'window');              // the glass
@@ -137,7 +138,7 @@ function buildCar(P, id) {
   const zf = zt(1), lampY = P.hood - .17, round = P.lamps === 'round';
   for (const sx of [-1, 1]) {
     if (round) { for (const o of [0, .22]) { add(mesh(new THREE.CylinderGeometry(.12, .12, .06, 22).rotateX(Math.PI / 2), 'silver', sx * (hw * .5 + o), lampY, zf - .04)); add(mesh(new THREE.CircleGeometry(.1, 20), 'front', sx * (hw * .5 + o), lampY, zf - .005)); } }
-    else { const lp = ell(.2, .052, .06, 'front', sx * hw * .6, lampY, zf - .045); lp.rotation.y = -sx * .42; add(lp); const bz = rbox(.36, .105, .06, 'body', sx * hw * .6, lampY, zf - .075); bz.rotation.y = -sx * .42; add(bz); add(rbox(.22, .018, .03, 'front', sx * hw * .56, lampY - .1, zf - .03)); }
+    else { const lp = rbox(.34, .07, .045, 'front', sx * hw * .6, lampY, zf - .035); lp.rotation.y = -sx * .35; add(lp); const bz = rbox(.4, .115, .05, 'body', sx * hw * .6, lampY, zf - .06); bz.rotation.y = -sx * .35; add(bz); const dr = rbox(.3, .014, .04, 'front', sx * hw * .58, lampY - .085, zf - .03); dr.rotation.y = -sx * .35; add(dr); }
     const tl = rbox(.44, .07, .05, 'rear', sx * hw * .6, P.deck - .15, z0 + .015); tl.rotation.y = sx * .3; add(tl); add(rbox(.07, .06, .12, 'accent', sx * hw * .9, P.belt - .1, zf - .35)); add(ell(.05, .045, .03, 'front', sx * hw * .8, P.clr + .16, zf - .03)); }
   add(rbox(hw * .8, .13, .06, 'body', 0, P.hood - .3, zf - .005)); for (let q = 0; q < 3; q++) add(rbox(hw * .76, .012, .02, 'trim', 0, P.hood - .34 + q * .035, zf + .026));
   add(rbox(hw * 1.34, .1, .07, 'body', 0, P.clr + .14, zf - .02)); for (let q = 0; q < 3; q++) add(rbox(hw * 1.26, .01, .02, 'trim', 0, P.clr + .11 + q * .03, zf + .018));
@@ -161,27 +162,35 @@ function buildCar(P, id) {
   if (P.bed) { const bl = (P.ct0 - .02) * L; for (const sx of [-1, 1]) add(rbox(.06, .34, bl, 'paint', sx * (hw - .05), P.deck + .17, zt(P.ct0 / 2))); add(rbox(hw * 2 - .1, .34, .06, 'paint', 0, P.deck + .17, z0 + .03)); add(rbox(hw * 2 - .1, .34, .06, 'paint', 0, P.deck + .17, zt(P.ct0 - .02)));
     add(rbox(hw * 1.5, .08, .1, 'body', 0, P.roof + .1, zt(P.ct1 - .14))); for (const sx of [-.55, -.18, .18, .55]) add(ell(.07, .07, .04, 'front', sx * hw * .9, P.roof + .1, zt(P.ct1 - .14) + .07)); add(rbox(hw * 1.5, .12, .14, 'silver', 0, P.clr + .22, zf));
     const sw = wheelGroup(R * .92, P.tw, 8); sw.rotation.y = Math.PI / 2; sw.position.set(0, P.deck + R * .92 - .06, z0 + .85); sw.rotation.z = .35; body.add(sw); for (const sx of [-1, 1]) body.add(bar([sx * (hw - .2), P.deck + .3, zt(P.ct0) - .05], [sx * (hw - .2), P.deck + .95, zt(P.ct0) - .05], .03, 'silver')); body.add(bar([-hw + .2, P.deck + .95, zt(P.ct0) - .05], [hw - .2, P.deck + .95, zt(P.ct0) - .05], .03, 'silver')); }
-  if (P.cargo) { const cl = (P.ct0 - .02) * L; add(rbox(P.W * .98, 1.95, cl, 'paint', 0, P.belt + .95 + .02, z0 + cl / 2 + .02, 8)); for (let i = 0; i < 5; i++) add(rbox(P.W * .99, 1.5, .03, 'trim', 0, P.belt + .95, z0 + cl * (i + .5) / 5 + .02, 12));
-    if (P.extra === 'fire') { add(rbox(1.2, .1, .22, 'accent', 0, P.roof + .1, zt(P.ct0 + .08))); for (const sx of [-1, 1]) { add(rbox(.1, .08, .1, 'front', sx * .5, P.roof + .17, zt(P.ct0 + .08))); add(bar([sx * .5, P.belt + 2.0, z0 + .4], [sx * .5, P.belt + 2.0, z0 + cl - .3], .04, 'silver')); } for (let q = 0; q < 8; q++) add(bar([-.5, P.belt + 2.0, z0 + .5 + q * .42], [.5, P.belt + 2.0, z0 + .5 + q * .42], .025, 'silver')); } }
+  if (P.cargo) { const cl = (P.ct0 - .02) * L; add(rbox(P.W * .98, 1.5, cl, 'paint', 0, P.belt + .8, z0 + cl / 2 + .02, 8)); for (let i = 0; i < 5; i++) add(rbox(P.W * .99, 1.1, .03, 'trim', 0, P.belt + .8, z0 + cl * (i + .5) / 5 + .02, 12));
+    if (P.extra === 'fire') { add(rbox(1.2, .1, .22, 'accent', 0, P.roof + .1, zt(P.ct0 + .08))); for (const sx of [-1, 1]) { add(rbox(.1, .08, .1, 'front', sx * .5, P.roof + .17, zt(P.ct0 + .08))); add(bar([sx * .5, P.belt + 1.6, z0 + .4], [sx * .5, P.belt + 1.6, z0 + cl - .3], .04, 'silver')); } for (let q = 0; q < 8; q++) add(bar([-.5, P.belt + 1.6, z0 + .5 + q * .42], [.5, P.belt + 1.6, z0 + .5 + q * .42], .025, 'silver')); } }
   if (P.extra === 'taxi') { add(rbox(.62, .17, .3, 'stripe', 0, P.roof + .1, zt((P.ct0 + P.ct1) / 2))); add(rbox(.44, .05, .02, 'body', 0, P.roof + .1, zt((P.ct0 + P.ct1) / 2) + .16)); }
   if (P.extra === 'police') { add(rbox(1.0, .09, .24, 'body', 0, P.roof + .08, zt((P.ct0 + P.ct1) / 2))); add(rbox(.4, .08, .22, 'front', -.28, P.roof + .15, zt((P.ct0 + P.ct1) / 2))); add(rbox(.4, .08, .22, 'accent', .28, P.roof + .15, zt((P.ct0 + P.ct1) / 2))); }
   root.userData.door = [(P.clr + P.belt) / 2 + .03, zt(dB != null ? dB : (dF + dR) / 2)]; bakeBody(body); return root;
 }
 function buildF1(P, id) {
-  const root = new THREE.Group(); root.name = 'sty:' + id; const body = new THREE.Group(); body.name = 'body'; root.add(body); const add = m => { if (m) body.add(m); }, v2 = P.v === 2;
-  const L = 4.0, z0 = -L / 2, zt = t => z0 + t * L, hw = .36, R = .42, tw = .44;
-  const Wp = t => hw * (t > .74 ? .3 + .7 * Math.pow(1 - (t - .74) / .26, .6) : t < .1 ? .62 + .38 * Math.sqrt(Math.max(0, 1 - Math.pow((.1 - t) / .1, 2))) : 1);
-  const Tp = curve([[0, .56], [.1, .72], [.26, .78], [.4, .64], [.55, .6], [.76, .5], [1, .36]]), st = [], N = 44;
-  for (let i = 0; i < N; i++) { const t = .5 - .5 * Math.cos(i / (N - 1) * Math.PI); st.push({ z: zt(t), w: Wp(t), yb: .15, yt: Tp(t), nt: 2.8, nb: 3.4 }); }
-  const bg = loftGeo(st, 36); bg.computeVertexNormals(); add(mesh(bg, 'paint'));
-  add(rbox(.34, .06, .56, 'body', 0, Tp(.5) + .005, zt(.5) + .05)); add(ell(.14, .14, .15, 'accent', 0, Tp(.5) + .1, zt(.5) - .02)); add(ell(.09, .05, .05, 'window', 0, Tp(.5) + .12, zt(.5) + .1));
-  const rh = mesh(new THREE.TorusGeometry(.27, .03, 8, 20, Math.PI), 'silver', 0, Tp(.34) - .02, zt(.34)); add(rh); add(rbox(.5, .3, .6, 'trim', 0, .78, zt(.12))); for (let q = 0; q < 4; q++) add(bar([(q - 1.5) * .09, .85, zt(.16)], [(q - 1.5) * .12, .62, z0 - .06], .035, 'silver'));
-  const rd = mesh(new THREE.CircleGeometry(.17, 28).rotateX(-Math.PI / 2), 'stripe', 0, Tp(.84) + .006, zt(.84)); add(rd);
-  add(rbox(.34, .1, .02, 'window', 0, Tp(.56) + .08, zt(.62)).rotateX?.(-.4) || null);
-  const wxs = hw + tw / 2 + .1, fz = 1.3, rz = -1.2;
-  for (const [sz, key, z] of [[1, 'F', fz], [-1, 'R', rz]]) for (const sx of [1, -1]) { const w = wheelGroup(R, tw, P.spokes); w.name = 'wheel_' + key + (sx > 0 ? 'L' : 'R'); w.position.set(sx * wxs, R, z); root.add(w);
-    add(bar([sx * hw * .9, .3, z + .12], [sx * (wxs - tw / 2 - .02), R + .04, z], .016, 'silver')); add(bar([sx * hw * .9, .42, z - .12], [sx * (wxs - tw / 2 - .02), R - .02, z + .02], .016, 'silver')); }
-  add(rbox(1.3, .03, .32, 'paint', 0, .12, zt(.97))); for (const sx of [-1, 1]) add(rbox(.03, .18, .38, 'paint', sx * .66, .17, zt(.97)));
-  if (v2) { add(rbox(1.0, .035, .3, 'paint', 0, .98, z0 - .03)); for (const sx of [-1, 1]) add(rbox(.03, .36, .36, 'paint', sx * .5, .82, z0 - .03)); add(rbox(.06, .3, .1, 'trim', 0, .78, z0 + .1)); }
-  root.userData.exhaust = [[-.1, .6, z0 - .06], [.1, .6, z0 - .06]]; root.userData.door = [.5, .1]; bakeBody(body); return root;
+  const root = new THREE.Group(); root.name = 'sty:' + id; const body = new THREE.Group(); body.name = 'body'; root.add(body); const add = m => { if (m) body.add(m); }, v2 = P.v === 2, V3 = THREE.Vector3;
+  const L = 4.3, z0 = -L / 2, zt = t => z0 + t * L, hw = .42, Rf = .36, Rr = .41, twf = .34, twr = .44, t0 = .3;
+  const Wp = curve([[t0, hw * .8], [.38, hw], [.58, hw], [.8, hw * .62], [.95, hw * .34], [1, hw * .26]]), Tp = curve([[t0, .66], [.38, .76], [.55, .72], [.7, .58], [.9, .44], [1, .38]]), Bp = curve([[t0, .2], [.9, .2], [1, .24]]);
+  const st = [], N = 40; for (let i = 0; i < N; i++) { const t = t0 + (1 - t0) * (.5 - .5 * Math.cos(i / (N - 1) * Math.PI)); st.push({ z: zt(t), w: Wp(t), yb: Bp(t), yt: Tp(t), nt: 2.8, nb: 3.2 }); }
+  const bg = loftGeo(st, 40); bg.computeVertexNormals(); add(mesh(bg, 'paint'));
+  const topAt = t => Tp(t), zc = zt(.47);
+  add(ell(.2, .02, .36, 'body', 0, topAt(.47) + .012, zc)); add(ell(.13, .14, .14, 'accent', 0, topAt(.47) + .1, zc - .02)); add(ell(.09, .035, .07, 'window', 0, topAt(.47) + .13, zc + .1)); add(rbox(.5, .14, .22, 'trim', 0, topAt(.47) + .03, zc - .3));           // cockpit opening, helmet with its visor, the driver's shoulders
+  add(ell(.17, .06, .1, 'body', 0, .42, zt(1) - .04)); add(rbox(.34, .02, .02, 'silver', 0, .5, zt(1) - .02));                         // nose intake
+  add(rbox(.05, .17, .06, 'stripe', -.2, topAt(.62) + .03, zt(.62))); add(rbox(.05, .17, .06, 'stripe', .2, topAt(.62) + .03, zt(.62)));
+  add(mesh(new THREE.CircleGeometry(.2, 28).rotateX(-Math.PI / 2), 'stripe', 0, topAt(.86) + .012, zt(.86)));                           // number roundel on the nose
+  add(mesh(new THREE.TorusGeometry(.3, .03, 8, 22, Math.PI), 'silver', 0, topAt(.38) - .02, zt(.33)));                                    // roll hoop
+  for (const sx of [-1, 1]) add(bar([sx * .28, topAt(.36) - .02, zt(.33)], [sx * .12, .96, zt(.3)], .028, 'silver'));
+  // engine, gearbox and tubular frame, left open like the reference
+  add(rbox(.6, .46, .9, 'trim', 0, .56, zt(.17))); add(rbox(.56, .06, .8, 'silver', 0, .8, zt(.17))); add(rbox(.34, .34, .46, 'trim', 0, .48, zt(.03)));
+  for (let q = 0; q < 6; q++) add(mesh(new THREE.CylinderGeometry(.045, .05, .22, 10), 'silver', (q % 3 - 1) * .15, .94, zt(.17) + (q < 3 ? -.2 : .2)));
+  for (let q = 0; q < 4; q++) add(bar([(q - 1.5) * .12, .68, zt(.1)], [(q - 1.5) * .14, .46, z0 - .1], .045, 'silver'));
+  for (const sx of [-1, 1]) { add(bar([sx * .3, .3, zt(.3)], [sx * .32, .62, zt(.14)], .02, 'silver')); add(bar([sx * .3, .3, z0 + .2], [sx * .26, .7, zt(.2)], .02, 'silver')); }
+  const fz = 1.4, rz = -1.2;
+  for (const [key, z] of [['F', fz], ['R', rz]]) { const R = key === 'F' ? Rf : Rr, tw = key === 'F' ? twf : twr, wxs = hw + tw / 2 + .12;       // narrower tyres in front, wider and a little taller at the back
+    for (const sx of [1, -1]) { const w = wheelGroup(R, tw, P.spokes); w.name = 'wheel_' + key + (sx > 0 ? 'L' : 'R'); w.position.set(sx * wxs, R, z); root.add(w);
+      add(bar([sx * hw * .85, .3, z + .16], [sx * (wxs - tw / 2 - .02), R + .05, z], .02, 'silver')); add(bar([sx * hw * .85, .46, z - .16], [sx * (wxs - tw / 2 - .02), R - .04, z + .02], .02, 'silver')); add(bar([sx * hw * .9, .38, z], [sx * (wxs - tw / 2 - .02), R + .1, z], .013, 'silver')); } }
+  for (const sx of [-1, 1]) add(ell(.05, .04, .04, 'stripe', sx * .34, topAt(.55) + .1, zt(.58)));
+  if (v2) { add(rbox(1.5, .035, .34, 'paint', 0, .16, zt(.99))); for (const sx of [-1, 1]) add(rbox(.03, .2, .4, 'paint', sx * .76, .22, zt(.99))); add(rbox(1.1, .04, .32, 'paint', 0, 1.0, z0 - .02)); for (const sx of [-1, 1]) add(rbox(.03, .4, .38, 'paint', sx * .55, .84, z0 - .02)); }
+  root.userData.exhaust = [[-.1, .55, z0 - .1], [.1, .55, z0 - .1]]; root.userData.door = [.62, zc]; bakeBody(body); return root;
 }
