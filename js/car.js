@@ -17,6 +17,7 @@ export function tuneOf(spec, t) {
 }
 export const PAINTS = [0x0f5c4a, 0x8a1c2b, 0x2b2f8a, 0xff9d2e, 0xd81e2c, 0xff6a13, 0xf2c200, 0x2fb457, 0x19a7ce, 0x1f6feb, 0x7b3fe4, 0xff4fa3, 0xf2f2f2, 0x1c1f26];
 
+const ab2 = Math.abs, smooth2 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const wrap = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 const WK = ['FL', 'FR', 'RL', 'RR'];
@@ -70,15 +71,21 @@ export async function loadCars() {
 const shared = {};
 // The livery is painted by the shader from the body's own shape, so its edges are crisp on any model: a roof panel, twin stripes
 // nose to tail, and a white roundel on each door for the race number.
+let TYT = null;
+function tyreTextMat() {      // printed sidewall lettering, drawn once on a ring-shaped decal
+  if (TYT) return TYT; const cv = document.createElement('canvas'); cv.width = cv.height = 256; const k = cv.getContext('2d'); k.translate(128, 128); k.fillStyle = '#fff'; k.font = '900 19px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle';
+  for (const [base, txt] of [[0, 'TAFHEET RACING'], [Math.PI, 'SUPER · 2026']]) for (let i = 0; i < txt.length; i++) { k.save(); k.rotate(base + (i - (txt.length - 1) / 2) * .17); k.translate(0, -113); k.fillText(txt[i], 0, 0); k.restore(); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; TYT = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: .9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }); TYT.name = 'tyretext'; return TYT;
+}
 export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
 function livery(m) {
-  const U = m.userData.liv = { uH: { value: 1 }, uL: { value: new THREE.Color(0xf2f2ee) }, uRoof: { value: 0 }, uStripe: { value: 0 }, uDoor: { value: 0 }, uFlash: { value: 0 }, uNose: { value: 0 }, uL2: { value: new THREE.Color(0x1c57c8) }, uZ: { value: 2 } };
+  const U = m.userData.liv = { uH: { value: 1 }, uL: { value: new THREE.Color(0xf2f2ee) }, uRoof: { value: 0 }, uStripe: { value: 0 }, uDoor: { value: 0 }, uFlash: { value: 0 }, uNose: { value: 0 }, uL2: { value: new THREE.Color(0x1c57c8) }, uZ: { value: 2 }, uDy: { value: .8 }, uDz: { value: -.1 } };
   m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U);
     sh.vertexShader = 'varying vec3 vOP; varying vec3 vON;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vOP = position; vON = normal;');
-    sh.fragmentShader = 'varying vec3 vOP; varying vec3 vON; uniform float uH, uRoof, uStripe, uDoor, uFlash, uNose, uZ; uniform vec3 uL, uL2;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    sh.fragmentShader = 'varying vec3 vOP; varying vec3 vON; uniform float uH, uRoof, uStripe, uDoor, uFlash, uNose, uZ, uDy, uDz; uniform vec3 uL, uL2;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       float lr = smoothstep(uH * .86, uH * .88, vOP.y) * step(.55, abs(vON.y)) * uRoof;
       float ls = (1. - smoothstep(.06, .07, abs(abs(vOP.x) - .19))) * step(.25, abs(vON.y)) * uStripe;
-      float ld = (1. - smoothstep(.3, .315, length(vec2(vOP.z + .1, vOP.y - uH * .5)))) * step(.7, abs(vON.x)) * uDoor;
+      float ld = (1. - smoothstep(.3, .315, length(vec2(vOP.z - uDz, vOP.y - uDy)))) * step(.7, abs(vON.x)) * uDoor;
       float lf = uFlash * step(.55, abs(vON.x)) * (1. - smoothstep(.15, .19, abs(vOP.y * 1.7 - vOP.z * .8 - uH * .3)));
       float ln = uNose * step(uZ * .5, vOP.z) * step(.2, vON.y + abs(vON.z));
       diffuseColor.rgb = mix(mix(mix(diffuseColor.rgb, uL, max(lr, ls)), uL2, max(lf, ln)), vec3(.96), ld);`); };
@@ -91,8 +98,9 @@ function mats(color) {
     shared.rimDark = new THREE.MeshStandardMaterial({ color: 0x2a2c30, metalness: .8, roughness: .4 });
     shared.body = new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: .6, metalness: .2 });
     shared.trim = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: .45, metalness: .5 });
-    shared.window = new THREE.MeshStandardMaterial({ color: 0x1a2836, roughness: .1, metalness: .1, envMapIntensity: .9 });      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
+    shared.window = new THREE.MeshStandardMaterial({ color: 0x27405a, roughness: .07, metalness: .35, envMapIntensity: 1.5 });      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
     shared.front = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3d0, emissiveIntensity: 1.1 });
+    shared.tyretext = tyreTextMat();
     shared.vcol = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .5, metalness: .05 });      // parts that keep the colours the model was drawn with
     shared.stripe = new THREE.MeshPhysicalMaterial({ color: 0xf2f3f5, metalness: .2, roughness: .35, clearcoat: 1, clearcoatRoughness: .1 });      // painted stripes and race numbers
     shared.silver = new THREE.MeshStandardMaterial({ color: 0xb9bdc4, metalness: .85, roughness: .32 });
@@ -109,7 +117,8 @@ function mats(color) {
 }
 
 export class Car {
-  constructor(spec, color = spec.color, name = 'Driver', up, look, tune) {
+  constructor(spec, color = spec.color, name = 'Driver', up, look, tune, wantLight = false) {
+    this.wantLight = wantLight;
     this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
     this.fuel = 1; this.fuelK = 1; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; this.partK = 1; this.pace = 1; this.bopP = 1; this.bopG = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
     this.dirt = 0; this.dirtShown = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
@@ -130,13 +139,14 @@ export class Car {
     }
     const w = this.wheels; { const L = w.FL.z - w.RL.z, fw = spec.fw || .5; this.a = L * (1 - fw); this.b = L * fw; } this.tw = w.FL.x; this.R = w.RL.y;      // centre of mass placed by the car's real front/rear weight split
     { const B = TUNE.body[spec.body] || TUNE.body.coupe; this.T = { w: TUNE.toy.w * B.w, h: TUNE.toy.h * B.h, l: TUNE.toy.l * B.l, wheel: TUNE.toy.wheel * B.wheel }; }
-    { const T = this.T; chassis.scale.set(T.w, T.h, T.l); for (const k in w) { const q = w[k]; q.mesh.scale.setScalar(T.wheel); q.y *= T.wheel; q.x *= T.w; q.z *= T.l; q.pivot.position.set(q.x, q.y, q.z); } this.rideY = this.R * (T.wheel - 1); this.R *= T.wheel; }
+    { const T = this.T; chassis.scale.set(T.w, T.h, T.l); for (const k in w) { const q = w[k]; q.mesh.scale.setScalar(T.wheel); q.y *= T.wheel; q.x *= T.w; q.z *= T.l; q.pivot.position.set(q.x, q.y, q.z); } this.rideY = this.R * (T.wheel - T.h); this.R *= T.wheel; }
     const box = new THREE.Box3().setFromObject(chassis);
     { if (!LAMP.aoTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const k = c.getContext('2d'), g = k.createRadialGradient(32, 32, 6, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,.85)'); g.addColorStop(.6, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); k.fillStyle = g; k.fillRect(0, 0, 64, 64); LAMP.aoTex = new THREE.CanvasTexture(c); LAMP.aoM = new THREE.MeshBasicMaterial({ map: LAMP.aoTex, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); }
       const ao = new THREE.Mesh(new THREE.PlaneGeometry((box.max.x - box.min.x) * 1.45, (box.max.z - box.min.z) * 1.25), LAMP.aoM); ao.rotation.x = -Math.PI / 2; ao.position.set(0, .03, (box.max.z + box.min.z) / 2); ao.renderOrder = 1; root.add(ao); }   // soft contact shadow: the car sits on the road instead of floating
     this.tn = tuneOf(spec, tune); this.wear = this.tn.wear; this.dress(look);
     this.hw0 = (box.max.x - box.min.x) / 2; this.zf0 = box.max.z; this.makeLamps();
     { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
+    this.door = proto.userData.door ? proto.userData.door.slice() : null;
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
     this.I = spec.mass * this.a * this.b * spec.yawK; this.h = .5;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
@@ -350,7 +360,7 @@ export class Car {
       put(ext(pts, .02).rotateX(-Math.PI / 2), dark, 0, y0 - .012, 0);                                                                                         // a blade cut to the plan shape of this bumper
       for (const sx of [-1, 1]) put(across([[-.1, 0], [.1, 0], [.1, .05], [-.04, .075]], .012), dark, sx * (xs[2] + .03), y0 + .005, zs[2] + .1); }           // dive planes
     part = 'skirt';
-    if (L.skirt) { const zr = this.wheels.RL.z + this.R + .07, zf = this.wheels.FL.z - this.R - .07, y0 = low(zr, zf), xs = side(zr, zf, y0, y0 + .22);
+    if (L.skirt) { const zr = this.wheels.RL.z / this.T.l + this.R / this.T.wheel + .07, zf = this.wheels.FL.z / this.T.l - this.R / this.T.wheel - .07, y0 = low(zr, zf), xs = side(zr, zf, y0, y0 + .22);
       for (const sx of [-1, 1]) { const me = put(ext([[-.04, 0], [.05, 0], [.058, .016], [.0, .075], [-.04, .075]], zf - zr), dark, sx * (xs - .012), y0 - .012, zr); me.scale.x = sx; } }   // a wedge under the sill, arch to arch
     part = 'scoop';
     if (L.scoop) { let ry = 0, rz = 0; for (let i = 0; i < V.length; i += 3) if (Math.abs(V[i]) < maxX * .3 && V[i + 2] > minZ + .9 && V[i + 2] < maxZ - 1.1 && V[i + 1] > ry) { ry = V[i + 1]; rz = V[i + 2]; }
@@ -360,10 +370,10 @@ export class Car {
     if (L.pipe) { const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe2e6, metalness: 1, roughness: .16, side: THREE.DoubleSide }), inner = new THREE.MeshBasicMaterial({ color: 0x060606 });
       let spots = this.exhL; if (!spots) { const yl = low(minZ, minZ + .35) + .12, tw = side(minZ, minZ + .3, 0, 9); spots = []; for (const sx of [-1, 1]) { const x0 = sx * tw * .5; let zr = 9; for (let i = 0; i < V.length; i += 3) if (Math.abs(V[i] - x0) < .16 && V[i + 1] < yl + .2 && V[i + 2] < zr) zr = V[i + 2]; spots.push([x0, yl, zr]); } }   // no pipes on the model: sit them in the rear valance, flush with the bodywork there
       for (const [x, y, z] of spots) { put(new THREE.CylinderGeometry(.058, .05, .15, 20, 1, true).rotateX(Math.PI / 2), chrome, x, y, z - .035); put(new THREE.CircleGeometry(.047, 18), inner, x, y, z + .02).rotation.y = Math.PI; } }   // a larger polished tip over each of the car's own pipes
-    this.m.paint.userData.liv.uH.value = top(minZ, maxZ, 9); this.m.paint.userData.liv.uZ.value = maxZ;
+    this.m.paint.userData.liv.uH.value = top(minZ, maxZ, 9); this.m.paint.userData.liv.uZ.value = maxZ; { const U2 = this.m.paint.userData.liv, dr = this.door; U2.uDy.value = dr ? dr[0] : U2.uH.value * .5; U2.uDz.value = dr ? dr[1] : -.1; }
     part = 'num';
     if (L.num) { const key = 'n' + L.num; if (!LAMP[key]) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const k = cv.getContext('2d'); k.fillStyle = '#111'; k.font = '900 ' + (L.num > 9 ? 78 : 96) + 'px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(String(L.num), 64, 70); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; LAMP[key] = new THREE.MeshBasicMaterial({ map: t, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }); }
-      const hTop = top(minZ, maxZ, 9), xs = side(-.5, .3, hTop * .35, hTop * .65); for (const sx of [-1, 1]) { const p = put(new THREE.PlaneGeometry(.46, .46), LAMP[key], sx * (xs + .012), hTop * .5, -.1); p.rotation.y = sx * Math.PI / 2; p.castShadow = false; } }
+      const hTop = top(minZ, maxZ, 9), dy = this.door ? this.door[0] : hTop * .5, dz = this.door ? this.door[1] : -.1, xs = side(dz - .12, dz + .12, dy - .12, dy + .12); for (const sx of [-1, 1]) { const p = put(new THREE.PlaneGeometry(.46, .46), LAMP[key], sx * (xs + .012), dy, dz); p.rotation.y = sx * Math.PI / 2; p.castShadow = false; } }
     // ---- upgrades you can see: engine = bonnet vents (and an intake at level 3), tyres = wider rubber, armour = nose bar, nitro = blue bottles on the tail
     part = 'up'; { const U = this.up || {}, by = z => top(z - .15, z + .15, maxX * .5);
       if (U.eng) for (const sx of [-1, 1]) for (let q = 0; q < U.eng; q++) put(new THREE.BoxGeometry(.2, .012, .035), dark, sx * .27, by(maxZ * .5 - q * .09) + .008, maxZ * .5 - q * .09);
@@ -372,13 +382,20 @@ export class Car {
       if (U.nitro) { const blue = new THREE.MeshStandardMaterial({ color: 0x1c6fe0, metalness: .6, roughness: .3 }), y = low(minZ, minZ + .3) + .16; for (let q = 0; q < U.nitro; q++) put(new THREE.CylinderGeometry(.035, .035, .16, 12).rotateX(Math.PI / 2), blue, (q - (U.nitro - 1) / 2) * .1, y + .1, minZ - .02); }
       for (const k in this.wheels) this.wheels[k].mesh.scale.x = this.T.wheel * (1 + .09 * (U.tyre || 0)); }
     part = 'glow';
-    if (L.glow) {        // Underglow. No visible tubes: the LED strips are tucked under the sills, and what you see is their light on the road,
-      // brightest in a line along each side and fading out. It tints the surface it falls on rather than painting over it.
-      if (!LAMP.glowTex) { const c = document.createElement('canvas'); c.width = 128; c.height = 256; const k = c.getContext('2d'); k.fillStyle = '#000'; k.fillRect(0, 0, 128, 256); k.filter = 'blur(9px)'; k.strokeStyle = '#fff'; k.lineWidth = 9; const rr = (x, y, w, h, r) => { k.beginPath(); k.moveTo(x + r, y); k.arcTo(x + w, y, x + w, y + h, r); k.arcTo(x + w, y + h, x, y + h, r); k.arcTo(x, y + h, x, y, r); k.arcTo(x, y, x + w, y, r); k.closePath(); };
-        rr(40, 44, 48, 168, 16); k.stroke(); k.filter = 'blur(22px)'; k.globalAlpha = .55; k.lineWidth = 20; rr(40, 44, 48, 168, 16); k.stroke(); k.fillStyle = '#fff'; k.globalAlpha = .3; k.fill(); LAMP.glowTex = new THREE.CanvasTexture(c); }
-      const col = new THREE.Color(GLOWS[L.glow]), len = maxZ - minZ, geo = new THREE.PlaneGeometry(W * 2.66, len * 1.52), at = m => { const p = new THREE.Mesh(geo, m); p.rotation.x = -Math.PI / 2; p.position.set(0, .03 - this.rideY / this.T.h, (minZ + maxZ) / 2); p.userData.part = 'glow'; A.add(p); return p; };
-      at(new THREE.MeshBasicMaterial({ map: LAMP.glowTex, color: col.clone().multiplyScalar(2.6), transparent: true, depthWrite: false, fog: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.OneFactor, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7 }));
-      this.glowPool = at(new THREE.MeshBasicMaterial({ map: LAMP.glowTex, color: col, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7, fog: false }));
+    if (L.glow) {        // Underglow: an LED strip under each sill and across the nose and tail, and the light they throw onto the road: brightest right
+      // beside the car and fading away smoothly, drawn from the car's own footprint so it has no edges. A real light under the floor
+      // (garage preview) lights the wheels and the ground.
+      const col = new THREE.Color(GLOWS[L.glow]), len = maxZ - minZ, ex = 1.1, PW = W + ex * 2, PL = len + ex * 2, hx = W / 2 - .08, hz = len / 2 - .22, rr = .5, NX = 96, NZ = Math.round(96 * PL / PW), gy = .03 - this.rideY / this.T.h;
+      const cv = document.createElement('canvas'); cv.width = NX; cv.height = NZ; const k2 = cv.getContext('2d'), im = k2.createImageData(NX, NZ);
+      for (let yy = 0; yy < NZ; yy++) for (let xx = 0; xx < NX; xx++) { const px = (xx / (NX - 1) - .5) * PW, pz = (yy / (NZ - 1) - .5) * PL, qx = ab2(px) - (hx - rr), qz = ab2(pz) - (hz - rr), d = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - rr;
+        const I = d > 0 ? Math.exp(-d / .34) * (1 - smooth2(ex * .55, ex, d)) : .42, o = (yy * NX + xx) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = 255; im.data[o + 3] = Math.round(255 * I); }
+      k2.putImageData(im, 0, 0); const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      const halo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PL), new THREE.MeshBasicMaterial({ map: tex, color: col.clone().multiplyScalar(1.7), transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7, fog: false }));
+      halo.rotation.x = -Math.PI / 2; halo.position.set(0, gy, (minZ + maxZ) / 2); halo.userData.part = 'glow'; A.add(halo); this.glowPool = halo;
+      const led = new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(2.6), fog: false }), y0 = gy + .045;
+      for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, len * .62, 8).rotateX(Math.PI / 2), led); m.position.set(sx * (W / 2 - .2), y0, (minZ + maxZ) / 2); m.userData.part = 'glow'; A.add(m); }
+      for (const z of [minZ + .32, maxZ - .32]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, W * .7, 8).rotateZ(Math.PI / 2), led); m.position.set(0, y0, z); m.userData.part = 'glow'; A.add(m); }
+      if (this.wantLight) { const pl = new THREE.PointLight(col, 4.5, 6, 1.4); pl.position.set(0, .22 - this.rideY / this.T.h, (minZ + maxZ) / 2); pl.userData.part = 'glow'; A.add(pl); }
     } else this.glowPool = null;
     const rimM = L.rim ? new THREE.MeshStandardMaterial({ color: RIMS[L.rim], metalness: .9, roughness: .26 }) : null;
     const shaded = m => { const q = m.clone(); q.vertexColors = true; return q; }, rimS = rimM ? shaded(rimM) : null, rim0 = shaded(this.m.rim);

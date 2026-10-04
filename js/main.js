@@ -84,7 +84,7 @@ function applyTheme(th) {
 // ---------------- garage (menu backdrop) ----------------
 const garage = new THREE.Group(); scene.add(garage);
 {
-  const floor = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.8, .25, 48), new THREE.MeshStandardMaterial({ color: 0x23252b, metalness: .6, roughness: .35 }));
+  const floor = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.8, .25, 48), new THREE.MeshStandardMaterial({ color: 0x23252b, metalness: .5, roughness: .6 }));
   floor.position.y = -.125; floor.receiveShadow = true; garage.add(floor);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(4.75, .06, 8, 64), new THREE.MeshBasicMaterial({ color: 0xffc21a })); ring.rotation.x = Math.PI / 2; ring.position.y = .01; garage.add(ring);
   const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 32), new THREE.MeshStandardMaterial({ color: 0x17181c, roughness: .9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -.25; ground.receiveShadow = true; garage.add(ground);
@@ -92,7 +92,7 @@ const garage = new THREE.Group(); scene.add(garage);
 let garageCar = null;
 function showGarageCar() {
   if (garageCar) { garage.remove(garageCar.root); garageCar.dispose(); }
-  const spec = CARS[sel.car]; garageCar = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id), tuneSet(spec.id)); garageCar.root.rotation.y = garageSpin; garageCar.root.scale.setScalar(1 / TUNE.toy.w); garage.add(garageCar.root); carThumb();
+  const spec = CARS[sel.car]; garageCar = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id), tuneSet(spec.id), true); garageCar.root.rotation.y = garageSpin; garageCar.root.scale.setScalar(1 / TUNE.toy.w); garage.add(garageCar.root); carThumb();
 }
 let garageSpin = .6, tuneFocus = '';
 // What a set-up does, in numbers. Each figure is worked out from the car's real data (power, mass, drag, tyre grip, downforce)
