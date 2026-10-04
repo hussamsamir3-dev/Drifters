@@ -4,6 +4,7 @@
 #   - every triangle is given a material from its palette colour and position: paint, second paint tone, glass, trim, lights, stripes
 import json,numpy as np,struct,base64
 from PIL import Image
+from soften import soften
 P='newcars/asset_of_low-poly_cars_part_2'; g=json.load(open(P+'/scene.gltf')); buf=open(P+'/scene.bin','rb').read()
 tex=np.array(Image.open(P+'/textures/Material.001_baseColor.png').convert('RGB')).astype(int); TH,TW=tex.shape[:2]
 def acc(i):
@@ -93,8 +94,9 @@ def bake(name,srcname):
     kind[yel|((b_>180)&(g_>180)&(r_<170))]='front'
     kind[red]='rear'; kind[red&(C[:,2]>0)]='accent'                              # red at the nose is trim, not a brake light
     kind[(r_>200)&(g_<80)&(b_<40)&body&(C[:,2]>-1.2)]='accent'
-    wk=np.where(lum<=30,'tire',np.where((r_>200)&(g_<80),'accent','rim7')).astype(object)
-    kids=[]; prims=[prim(V,N,tri[body&(kind==k)],k,VL) for k in sorted(set(kind[body]))]
+    tl_=({'FordGT':70}).get(name,30)          # this model draws its rubber in dark grey rather than black
+    wk=np.where(lum<=tl_,'tire',np.where((r_>200)&(g_<80),'accent','rim7')).astype(object)
+    kids=[]; Vb,Nb,Fb,par,att=soften(V,tri[body],{'l':VL},linear=1,iters=6); kb=kind[body][par]; prims=[prim(Vb,Nb,Fb[kb==k],k,att['l']) for k in sorted(set(kb))]
     meshes.append(dict(name=name+'_body',primitives=prims)); nodes.append(dict(name='body',mesh=len(meshes)-1)); kids.append(len(nodes)-1)
     for t in tyres:
         c=T(np.array([axle[t]]))[0]; k=('F' if c[2]>0 else 'R')+('L' if c[0]>0 else 'R'); sel=np.array([wheel_of.get(l)==t for l in tl])
