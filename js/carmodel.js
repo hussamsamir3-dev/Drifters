@@ -57,23 +57,23 @@ function wheelGroup(R, w, spokes = 10) {
 // gt3: teardrop plan (narrow nose, wide hips), canopy set back, huge rear fenders, swan-neck wing.  lmp: long low capsule, covered wheels, open cockpit, tail fin.
 // stock: tall boxy saloon with a flat roof and spoiler.  muscle: long bulged hood, short deck, small set-back cabin.  roadster: open vintage sports car.
 const A = {
-  wrc: { L: 3.5, W: 1.98, wb: 2.2, R: .42, tw: .3, clr: .22, belt: .8, hood: .9, deck: .96, roof: 1.4, ct0: .03, ct1: .67, rw: .08, fw: .27, flare: .1, flareR: .13, nose: .12, tail: .06, wing: 'rallyroof', vents: 2, scoop: 1, bigGrille: 1, lamps: 'wedge', sun: 7, spokes: 10, nt: 4.6, doors: 2, gw: .97, tm: .09 },
-  gt3: { L: 4.2, W: 2.05, wb: 2.5, R: .45, tw: .38, clr: .16, belt: .76, hood: .86, deck: .92, roof: 1.28, ct0: .27, ct1: .64, rw: .14, fw: .17, flare: .1, flareF: .1, flareR: .2, nosew: .1, nose: .2, tail: .1, wing: 'swan', lamps: 'gt3', vents: 2, spokes: 12, nt: 3.6, doors: 1, b: 0, diffuser: 1, gw: .86, tm: .17 },
-  lmp: { L: 4.7, W: 2.1, wb: 3.0, R: .4, tw: .4, clr: .14, belt: .68, hood: .62, deck: .74, roof: 1.0, ct0: .44, ct1: .62, rw: .1, fw: .1, flare: .08, nose: .22, tail: .16, fh: .8, wing: 'lmp', spokes: 10, nt: 3.0, open: 1, cover: 1, doors: 1, b: 0, diffuser: 1 },
-  stock: { L: 4.3, W: 1.95, wb: 2.7, R: .42, tw: .3, clr: .2, belt: .84, hood: .92, deck: .94, roof: 1.34, ct0: .2, ct1: .6, rw: .12, fw: .17, flare: .07, nose: .1, tail: .06, wing: 'stock', bigGrille: 1, spokes: 8, nt: 5.2, trunk: 1, doors: 2, gw: .96, tm: .08 },
-  muscle: { L: 4.2, W: 1.9, wb: 2.6, R: .42, tw: .34, clr: .21, belt: .8, hood: .9, deck: .88, roof: 1.3, ct0: .22, ct1: .58, rw: .12, fw: .16, flare: .09, nose: .12, tail: .08, wing: 'none', lamps: 'round', bumper: 'chrome', bulge: 1, spokes: 10, nt: 4.2, trunk: 1, doors: 1, b: 0 },
-  roadster: { L: 3.9, W: 1.8, wb: 2.3, R: .4, tw: .3, clr: .2, belt: .8, hood: .86, deck: .84, roof: 1.12, ct0: .32, ct1: .58, rw: .1, fw: .12, flare: .1, nose: .16, tail: .12, wing: 'none', lamps: 'round', bumper: 'chrome', spokes: 10, nt: 3.4, open: 1, doors: 1, b: 0 },
-  trophy: { L: 4.5, W: 2.1, wb: 2.9, R: .56, tw: .4, clr: .42, belt: 1.0, hood: 1.06, deck: .98, roof: 1.7, ct0: .46, ct1: .7, rw: .05, fw: .12, flare: .12, nose: .13, tail: .06, wing: 'none', bed: 1, spokes: 8, nt: 4.4, doors: 2 },
+  wrc: { L: 3.2, W: 1.96, wb: 2.05, R: .42, tw: .3, clr: .24, belt: 1.0, hood: 1.04, deck: 1.1, roof: 1.62, ct0: .03, ct1: .65, rw: .08, fw: .27, flare: .1, flareR: .12, nose: .16, tail: .08, nw: .62, tw0: .8, noseh: .9, wing: 'rallyroof', vents: 2, scoop: 1, bigGrille: 1, lamps: 'wedge', sun: 7, spokes: 10, nt: 5.4, doors: 2, gw: .97, tm: .09 },
+  gt3: { L: 3.8, W: 2.04, wb: 2.35, R: .45, tw: .38, clr: .2, belt: .95, hood: 1.0, deck: 1.05, roof: 1.5, ct0: .25, ct1: .64, rw: .15, fw: .18, flare: .1, flareF: .1, flareR: .18, nosew: .06, nose: .2, tail: .12, nw: .55, tw0: .7, noseh: .86, wing: 'swan', lamps: 'gt3', vents: 2, spokes: 12, nt: 4.6, doors: 1, b: 0, diffuser: 1, gw: .93, tm: .12 },
+  lmp: { L: 4.4, W: 2.05, wb: 2.85, R: .4, tw: .4, clr: .16, belt: .78, hood: .72, deck: .86, roof: 1.12, ct0: .44, ct1: .62, rw: .1, fw: .1, flare: .08, nose: .22, tail: .16, fh: .86, wing: 'lmp', spokes: 10, nt: 3.4, open: 1, cover: 1, doors: 1, b: 0, diffuser: 1 },
+  stock: { L: 3.7, W: 1.98, wb: 2.4, R: .42, tw: .3, clr: .24, belt: 1.0, hood: 1.06, deck: 1.06, roof: 1.6, ct0: .2, ct1: .6, rw: .12, fw: .17, flare: .07, nose: .1, tail: .06, wing: 'stock', bigGrille: 1, spokes: 8, nt: 6, trunk: 1, doors: 2, gw: .96, tm: .08 },
+  muscle: { L: 3.9, W: 1.92, wb: 2.45, R: .42, tw: .34, clr: .23, belt: .96, hood: 1.04, deck: 1.0, roof: 1.5, ct0: .23, ct1: .58, rw: .12, fw: .16, flare: .09, nose: .12, tail: .08, wing: 'none', lamps: 'round', bumper: 'chrome', bulge: 1, spokes: 10, nt: 5, trunk: 1, doors: 1, b: 0 },
+  roadster: { L: 3.6, W: 1.84, wb: 2.2, R: .4, tw: .3, clr: .22, belt: .94, hood: .98, deck: .94, roof: 1.3, ct0: .34, ct1: .58, rw: .1, fw: .12, flare: .1, nose: .16, tail: .12, wing: 'none', lamps: 'round', bumper: 'chrome', spokes: 10, nt: 4.4, open: 1, doors: 1, b: 0 },
+  trophy: { L: 4.2, W: 2.14, wb: 2.7, R: .56, tw: .42, clr: .44, belt: 1.16, hood: 1.24, deck: 1.1, roof: 1.92, ct0: .46, ct1: .7, rw: .05, fw: .12, flare: .12, nose: .13, tail: .06, wing: 'none', bed: 1, spokes: 8, nt: 5, doors: 2 },
   f1: { f1: 1, wing: 'none', spokes: 5 },
   f1m: { f1m: 1, wing: 'none', spokes: 5 },
 };
 const STYLE = {
-  Ford: ['wrc', {}], Sterrato: ['wrc', { clr: .34, R: .47, tw: .36, W: 2.04, L: 3.55, roof: 1.6 }], Mazda: ['wrc', { L: 3.6, W: 1.98, ct1: .62, roof: 1.5 }],
-  Audi: ['stock', { L: 4.2, W: 1.92 }], Mercedes: ['stock', {}], M8: ['stock', { L: 4.4 }],
+  Ford: ['wrc', {}], Sterrato: ['wrc', { clr: .36, R: .46, tw: .34, W: 2.04, L: 3.35, roof: 1.7 }], Mazda: ['wrc', { L: 3.4, W: 1.98, ct1: .63 }],
+  Audi: ['stock', { L: 3.8, W: 1.96 }], Mercedes: ['stock', {}], M8: ['stock', { L: 3.9 }],
   Mustang: ['muscle', {}], Mustang2: ['roadster', {}],
-  BMW: ['gt3', {}], AMG: ['gt3', { L: 4.3, roof: 1.3 }], Porsche: ['gt3', { L: 4.15, W: 2.1, roof: 1.24 }], GTR: ['gt3', { ct0: .3, roof: 1.32 }],
-  FordGT: ['lmp', {}], Lambo: ['lmp', { L: 4.5 }], Artura: ['lmp', {}], Ferrari: ['lmp', { L: 4.8 }], Zenvo: ['lmp', { W: 2.14 }], P1GTR: ['lmp', { L: 4.6 }],
-  LandRover: ['trophy', {}], Urus: ['trophy', { W: 2.14, roof: 1.76 }],
+  BMW: ['gt3', {}], AMG: ['gt3', { L: 3.9, roof: 1.52 }], Porsche: ['gt3', { L: 3.85, W: 2.08, roof: 1.46 }], GTR: ['gt3', { ct0: .3, roof: 1.54 }],
+  FordGT: ['lmp', {}], Lambo: ['lmp', { L: 4.3 }], Artura: ['lmp', {}], Ferrari: ['lmp', { L: 4.5 }], Zenvo: ['lmp', { W: 2.1 }], P1GTR: ['lmp', { L: 4.4 }],
+  LandRover: ['trophy', {}], Urus: ['trophy', { W: 2.2, roof: 1.98 }],
   F1: ['f1', { v: 1 }], F1b: ['f1m', {}],
 };
 export const hasOwnWing = id => { const [k, o] = STYLE[id] || ['stock', {}], w = o.wing || A[k].wing; return w && w !== 'none' ? 1 : 0; };
@@ -89,9 +89,9 @@ function buildCar(P, id) {
   const root = new THREE.Group(); root.name = 'sty:' + id; const body = new THREE.Group(); body.name = 'body'; root.add(body); const add = m => { if (m) body.add(m); }, addG = (g, k) => { if (g) body.add(mesh(g, k)); }, V3 = THREE.Vector3;
   const L = P.L, hw = P.W / 2, z0 = -L / 2, zt = t => z0 + t * L, R = P.R, ra = R + .055, tr = (-P.wb / 2 - z0) / L, tfw = (P.wb / 2 - z0) / L, wdT = ra * 1.2 / L, nf = P.nose, nr = P.tail, lerp = (a, b, u) => a + (b - a) * u;
   const bump = (t, c) => { const d = (t - c) / wdT; return ab(d) < 1 ? .5 * (1 + Math.cos(d * Math.PI)) : 0; };
-  const Wp = t => { let w = hw; if (t > 1 - nf) { const u = (t - 1 + nf) / nf; w *= .52 + .48 * Math.sqrt(Math.max(0, 1 - u * u)); } if (t < nr) { const u = (nr - t) / nr; w *= .56 + .44 * Math.sqrt(Math.max(0, 1 - u * u)); } if (P.nosew) w *= 1 - P.nosew * sstep(.3, 1, t); return w + (P.flareR ?? P.flare) * bump(t, tr) + (P.flareF ?? P.flare) * bump(t, tfw); };
+  const Wp = t => { let w = hw; if (t > 1 - nf) { const u = (t - 1 + nf) / nf; w *= (P.nw ?? .6) + (1 - (P.nw ?? .6)) * Math.sqrt(Math.max(0, 1 - u * u)); } if (t < nr) { const u = (nr - t) / nr; w *= (P.tw0 ?? .72) + (1 - (P.tw0 ?? .72)) * Math.sqrt(Math.max(0, 1 - u * u)); } if (P.nosew) w *= 1 - P.nosew * sstep(.3, 1, t); return w + (P.flareR ?? P.flare) * bump(t, tr) + (P.flareF ?? P.flare) * bump(t, tfw); };
   const t1 = Math.max(.07, P.ct0 + .02), nt = P.nt || 4.6;
-  const Tp0 = curve([[0, P.deck * .85], [.05, P.deck], [t1, P.deck], [t1 + .07, P.belt], [P.ct1 - .05, P.belt], [P.ct1, P.hood], [1 - nf * .4, P.hood + (P.bulge || 0) * .3], [1, P.hood * .8]]);
+  const Tp0 = curve([[0, P.deck * .96], [.05, P.deck], [t1, P.deck], [t1 + .07, P.belt], [P.ct1 - .05, P.belt], [P.ct1, P.hood], [1 - nf * .4, P.hood + (P.bulge || 0) * .3], [1, P.hood * (P.noseh ?? .9)]]);
   const Tp = t => { const bw = Math.max(bump(t, tr), bump(t, tfw)); return Math.max(Tp0(t), Tp0(t) + ((P.fh ?? (2 * R + .1)) - Tp0(t)) * bw); };
   const Bp = curve([[0, P.clr + .08], [.06, P.clr], [.94, P.clr], [1, P.clr + .07]]);
   const yTop = t => Math.max(Tp(t), Bp(t) + .22);
@@ -136,15 +136,15 @@ function buildCar(P, id) {
   // ---- raised flare lip round each wheel arch, in body colour
   if (!P.cover) for (const [sz, t] of [[1, tfw], [-1, tr]]) for (const sx of [-1, 1]) { const a0 = Math.asin(clamp((P.clr + .035 - R) / (ra + .02), -1, 1)); addG(gridGeo((u, v) => { const a = lerp(a0, Math.PI - a0, u), rr = ra + .018 + (v - .5) * .05, z = sz * P.wb / 2 + Math.cos(a) * rr, tt = (z - z0) / L, y = Math.min(R + Math.sin(a) * rr, yTop(tt) - .05); return new V3(sx * bx(tt, y), y, z); }, 26, 1, .012, axis), 'paint'); }
   // ---- wheels
-  const wx = t => Wp(t) - P.tw / 2 + .03;
+  const wx = t => Wp(t) - P.tw / 2 + .01;
   for (const [sz, key, t] of [[1, 'F', tfw], [-1, 'R', tr]]) for (const sx of [1, -1]) { const w = wheelGroup(R, P.tw, P.spokes); w.name = 'wheel_' + key + (sx > 0 ? 'L' : 'R'); w.position.set(sx * wx(t), R, sz * P.wb / 2); root.add(w); }
   // ---- front end: lamps, grille, intake, splitter; rear: tail lamps, bumper, pipes
-  const zf = zt(1), lampY = P.hood - .17, round = P.lamps === 'round';
+  const zf = zt(1), zl = (() => { for (let k = 0; k <= 80; k++) { const t = 1 - k / 400; if (Wp(t) >= hw * .6) return zt(t); } return zt(1); })(), lampY = P.hood - .17, round = P.lamps === 'round';
   for (const sx of [-1, 1]) {
-    if (round) { for (const o of [0, .22]) { add(mesh(new THREE.CylinderGeometry(.12, .12, .06, 22).rotateX(Math.PI / 2), 'silver', sx * (hw * .5 + o), lampY, zf - .04)); add(mesh(new THREE.CircleGeometry(.1, 20), 'front', sx * (hw * .5 + o), lampY, zf - .005)); } }
-    else if (P.lamps === 'wedge') { const lp = rbox(.5, .1, .05, 'front', sx * hw * .6, lampY + .02, zf - .03); lp.rotation.y = -sx * .5; add(lp); const bz = rbox(.58, .15, .05, 'body', sx * hw * .6, lampY + .02, zf - .06); bz.rotation.y = -sx * .5; add(bz); const dr = rbox(.36, .02, .04, 'front', sx * hw * .56, lampY - .11, zf - .035); dr.rotation.y = -sx * .5; add(dr); }
-    else if (P.lamps === 'gt3') { add(ell(.19, .12, .07, 'front', sx * hw * .56, lampY + .03, zf - .1)); add(mesh(new THREE.TorusGeometry(.17, .025, 8, 24).scale(1, .65, 1), 'body', sx * hw * .56, lampY + .03, zf - .06)); add(ell(.1, .05, .04, 'front', sx * hw * .74, P.clr + .2, zf - .12)); }
-    else { const lp = rbox(.34, .07, .045, 'front', sx * hw * .6, lampY, zf - .035); lp.rotation.y = -sx * .35; add(lp); const bz = rbox(.4, .115, .05, 'body', sx * hw * .6, lampY, zf - .06); bz.rotation.y = -sx * .35; add(bz); const dr = rbox(.3, .014, .04, 'front', sx * hw * .58, lampY - .085, zf - .03); dr.rotation.y = -sx * .35; add(dr); }
+    if (round) { for (const o of [0, .22]) { add(mesh(new THREE.CylinderGeometry(.12, .12, .06, 22).rotateX(Math.PI / 2), 'silver', sx * (hw * .5 + o), lampY, zl - .04)); add(mesh(new THREE.CircleGeometry(.1, 20), 'front', sx * (hw * .5 + o), lampY, zl - .005)); } }
+    else if (P.lamps === 'wedge') { const lp = rbox(.5, .1, .05, 'front', sx * hw * .6, lampY + .02, zl - .03); lp.rotation.y = -sx * .5; add(lp); const bz = rbox(.58, .15, .05, 'body', sx * hw * .6, lampY + .02, zl - .06); bz.rotation.y = -sx * .5; add(bz); const dr = rbox(.36, .02, .04, 'front', sx * hw * .56, lampY - .11, zl - .035); dr.rotation.y = -sx * .5; add(dr); }
+    else if (P.lamps === 'gt3') { const lp = rbox(.42, .08, .05, 'front', sx * hw * .58, lampY + .02, zl - .03); lp.rotation.y = -sx * .4; add(lp); const bz = rbox(.48, .12, .05, 'body', sx * hw * .58, lampY + .02, zl - .055); bz.rotation.y = -sx * .4; add(bz); add(rbox(.26, .016, .04, 'front', sx * hw * .62, lampY - .1, zl - .03)); }
+    else { const lp = rbox(.34, .07, .045, 'front', sx * hw * .6, lampY, zl - .035); lp.rotation.y = -sx * .35; add(lp); const bz = rbox(.4, .115, .05, 'body', sx * hw * .6, lampY, zl - .06); bz.rotation.y = -sx * .35; add(bz); const dr = rbox(.3, .014, .04, 'front', sx * hw * .58, lampY - .085, zl - .03); dr.rotation.y = -sx * .35; add(dr); }
     const tl = rbox(.44, .07, .05, 'rear', sx * hw * .6, P.deck - .15, z0 + .015); tl.rotation.y = sx * .3; add(tl); add(rbox(.07, .06, .12, 'accent', sx * hw * .9, P.belt - .1, zf - .35)); add(ell(.05, .045, .03, 'front', sx * hw * .8, P.clr + .16, zf - .03)); }
   add(rbox(hw * .8, .13, .06, 'body', 0, P.hood - .3, zf - .005)); if (P.bigGrille) { add(rbox(hw * 1.45, .3, .08, 'body', 0, P.clr + .24, zf - .02)); add(rbox(hw * .9, .03, .05, 'trim', 0, P.clr + .42, zf + .02)); for (const sx of [-1, 1]) add(rbox(.2, .16, .06, 'body', sx * hw * .82, P.clr + .22, zf - .1)); } for (let q = 0; q < 3; q++) add(rbox(hw * .76, .012, .02, 'trim', 0, P.hood - .34 + q * .035, zf + .026));
   add(rbox(hw * 1.34, .1, .07, 'body', 0, P.clr + .14, zf - .02)); for (let q = 0; q < 3; q++) add(rbox(hw * 1.26, .01, .02, 'trim', 0, P.clr + .11 + q * .03, zf + .018));
