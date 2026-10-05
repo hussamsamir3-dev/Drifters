@@ -7,15 +7,15 @@ export const TUNE = {
   tyre: {
     // lateral force curve: force = cap * sin(C * atan(B * slip)). Fronts peak near 11° and fall away ~25% when over-driven
     // (that is the understeer you feel); rears are stiffer and hold their force deep into a slide, which keeps slides catchable.
-    frontB: 13.5, frontC: 1.45,
+    frontB: 13.5, frontC: 1.36,
     rearB: 9.5, rearC: 1.35,
-    driveShare: .45, brakeShare: .38,    // braking uses only part of the grip budget too, so you can brake and turn                    // how much of the drive force competes with cornering in the tyre's grip budget
+    driveShare: .32, brakeShare: .38,    // braking uses only part of the grip budget too, so you can brake and turn                    // how much of the drive force competes with cornering in the tyre's grip budget
     loadSens: .3,                       // how much an axle loses when cornering load shifts to the outside tyres
     wornGrip: .72,                      // grip multiplier of a fully worn tyre (fresh = 1)
     wear: { base: .0011, slip: .011, spin: .008, lock: .03, offroad: .002 },   // per second, scaled by what the tyre is doing
     wetLossSlick: .27, wetLossWet: .07, dryLossWet: .07,
   },
-  steer: { lock: .76, speedK: .038, rate: 6.6, rateSpeedK: .02, returnRate: 7.5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
+  steer: { lock: .76, speedK: .085, rate: 6.6, rateSpeedK: .02, returnRate: 7.5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
   // Stability assist. `counter` adds automatic counter-steer in a slide, `power` eases the throttle as the slide angle grows.
   assist: { off: 0, low: .4, medium: .7, full: 1 },
   surface: { kerbGrip: .95, grassDrag: .15, roadDrag: .03, airDrag: .25 },
@@ -24,12 +24,12 @@ export const TUNE = {
   damage: { threshold: 3.5, scale: 34, enginePowerLoss: .4, steerPull: .05 },
   // ---- easy-to-drive set-up ----
   gripScale: 1.282,                     // with this, each car's `grip` is its real cornering grip in g on dry tarmac                       // overall tyre grip. Raise for a more planted car, lower for a looser one
-  rearBias: 1.12,                       // rear grip relative to front. Higher = safer, more understeer
+  rearBias: 1.0,                       // rear grip relative to front. Higher = safer, more understeer
   powerSlide: .85,                      // how much full throttle loosens the rear (0 = never, 1 = a lot)
   slideAid: .75,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
   assistYawDamp: .6,
   // Drift: hold full steering lock with the throttle on and the rear lets go on purpose. rearCut = how much rear grip is released, build/decay = how fast it comes and goes (1/s).
-  slowTurn: .15,                         // extra front bite while the car is slowing (lifting or braking): the nose tucks in
+  slowTurn: .22,                         // extra front bite while the car is slowing (lifting or braking): the nose tucks in
   drift: { rearCut: .18, build: 3.2, decay: 5, minSpeed: 10 },
   enginePower: 1.22,                    // all engines: more torque than the rear tyres can take in the low gears
   shock: { minHit: 7, perMs: .08, max: 1.6 },   // a hard hit switches the driving aids off for up to this many seconds
@@ -63,58 +63,58 @@ export const CARS = [
   // Eighteen rally cars (models: "1965-2002 Rally Cars" by supercarmodels, CC BY 4.0). Figures are real: hp, mass kg, 0-100 km/h (s), top speed cap (km/h),
   // drive layout and front weight share (fw). Handling numbers follow the layout: mid- and rear-engined cars are tail-happy (rear < 1), front-drive cars safe (rear > 1).
   { id: 'Mini', snd: '01_Turbo_Inline4', idle: 1000, red: 7000, turbo: 0, pops: '', cyl: 4, name: 'Mini Cooper S', ar: 'ميني كوبر إس', cls: 'Classic · FWD', price: 0, color: 0xd9201c,
-    cap: 150, acc: 5.0, grip: 0.88, rear: 1.08, loose: 0.25, off: 0.72, mass: 640, drive: 'fwd', brake: 0.95, aero: 0.1, rollF: 0.62, yawK: 0.82, hp: 90, cda: 0.55, fw: 0.62, engine: '1.3 L four', sprint: 10.8,
+    cap: 159, acc: 6.5, grip: 0.88, rear: 0.96, loose: 0.25, off: 0.72, mass: 640, drive: 'fwd', brake: 0.95, aero: 0.1, rollF: 0.54, yawK: 0.82, hp: 117, cda: 0.55, fw: 0.62, engine: '1.3 L four', sprint: 8.5,
     blurb: 'The giant-killer of the 1960s. Tiny, light and front-drive: carry your speed, brake late and it rotates beautifully. The one to learn in.' },
   { id: 'Escort', snd: '01_Turbo_Inline4', idle: 950, red: 8000, turbo: 0, pops: 'pop', cyl: 4, name: 'Ford Escort RS1800', ar: 'فورد إسكورت آر إس١٨٠٠', cls: 'Classic · RWD', price: 0, color: 0xf1f1f1,
-    cap: 185, acc: 9.6, grip: 0.93, rear: 0.97, loose: 0.65, off: 0.72, mass: 960, drive: 'rwd', brake: 0.95, aero: 0.18, rollF: 0.57, yawK: 0.98, hp: 250, cda: 0.72, fw: 0.53, engine: '2.0 L four', sprint: 5.6,
+    cap: 196, acc: 12.5, grip: 0.93, rear: 1.14, loose: 0.65, off: 0.72, mass: 960, drive: 'rwd', brake: 0.95, aero: 0.18, rollF: 0.48, yawK: 0.98, hp: 325, cda: 0.72, fw: 0.53, engine: '2.0 L four', sprint: 4.4,
     blurb: 'The Mk2 rally legend: rear-drive, light and loud. It slides on throttle and forgives a clumsy hand.' },
   { id: 'Fulvia', snd: '02_Boxer_Flat4', idle: 950, red: 7200, turbo: 0, pops: 'pop', cyl: 4, name: 'Lancia Fulvia HF', ar: 'لانشيا فولفيا', cls: 'Classic · FWD', price: 400, color: 0xeb0d0d,
-    cap: 170, acc: 6.1, grip: 0.9, rear: 1.06, loose: 0.25, off: 0.72, mass: 920, drive: 'fwd', brake: 0.95, aero: 0.12, rollF: 0.6, yawK: 0.9, hp: 130, cda: 0.66, fw: 0.6, engine: '1.6 L V4', sprint: 8.8,
+    cap: 180, acc: 7.9, grip: 0.9, rear: 0.96, loose: 0.25, off: 0.72, mass: 920, drive: 'fwd', brake: 0.95, aero: 0.12, rollF: 0.54, yawK: 0.9, hp: 169, cda: 0.66, fw: 0.6, engine: '1.6 L V4', sprint: 6.9,
     blurb: 'A front-drive classic with a narrow V4. Beautifully balanced, but short on power: win it in the corners.' },
   { id: 'Fiat131', snd: '01_Turbo_Inline4', idle: 900, red: 7600, turbo: 0, pops: 'pop', cyl: 4, name: 'Fiat 131 Abarth', ar: 'فيات ١٣١ أبارث', cls: 'Classic · RWD', price: 800, color: 0x1d3a8a,
-    cap: 190, acc: 10, grip: 0.94, rear: 0.97, loose: 0.65, off: 0.72, mass: 980, drive: 'rwd', brake: 0.95, aero: 0.2, rollF: 0.57, yawK: 1.0, hp: 230, cda: 0.72, fw: 0.52, engine: '2.0 L four', sprint: 5.2,
+    cap: 201, acc: 12.5, grip: 0.94, rear: 1.14, loose: 0.65, off: 0.72, mass: 980, drive: 'rwd', brake: 0.95, aero: 0.2, rollF: 0.48, yawK: 1.0, hp: 299, cda: 0.72, fw: 0.52, engine: '2.0 L four', sprint: 4.1,
     blurb: 'The Abarth-tuned workhorse that won three world titles. Torquey, rear-drive and tail-happy on a trailed brake.' },
   { id: 'Alpine', snd: '01_Turbo_Inline4', idle: 950, red: 7600, turbo: 0, pops: 'pop', cyl: 4, name: 'Alpine A110', ar: 'ألبين إيه١١٠', cls: 'Classic · RWD', price: 1500, color: 0x1f5fa6,
-    cap: 195, acc: 10, grip: 0.95, rear: 0.93, loose: 0.65, off: 0.72, mass: 700, drive: 'rwd', brake: 0.98, aero: 0.2, rollF: 0.55, yawK: 0.88, hp: 180, cda: 0.55, fw: 0.4, engine: '1.8 L four', sprint: 5.2,
+    cap: 207, acc: 12.5, grip: 0.95, rear: 1.09, loose: 0.65, off: 0.72, mass: 700, drive: 'rwd', brake: 0.98, aero: 0.2, rollF: 0.48, yawK: 0.88, hp: 234, cda: 0.55, fw: 0.4, engine: '1.8 L four', sprint: 4.1,
     blurb: 'A featherweight with the engine hung out the back. Huge traction out of corners, but lift mid-turn and the tail comes round.' },
   { id: 'P911', snd: '02_Boxer_Flat4', idle: 900, red: 7200, turbo: 0, pops: 'pop', cyl: 6, name: 'Porsche 911 SC RS', ar: 'بورش ٩١١', cls: 'Classic · RWD', price: 2500, color: 0xf4f4f4,
-    cap: 215, acc: 9.6, grip: 0.96, rear: 0.92, loose: 0.65, off: 0.74, mass: 1050, drive: 'rwd', brake: 1.0, aero: 0.25, rollF: 0.55, yawK: 0.95, hp: 255, cda: 0.72, fw: 0.38, engine: '3.0 L flat six', sprint: 5.6,
+    cap: 228, acc: 12.5, grip: 0.96, rear: 1.08, loose: 0.65, off: 0.74, mass: 1050, drive: 'rwd', brake: 1.0, aero: 0.25, rollF: 0.48, yawK: 0.95, hp: 332, cda: 0.72, fw: 0.38, engine: '3.0 L flat six', sprint: 4.4,
     blurb: 'Rear-engined and rear-drive: all the weight sits behind the axle. Brake in a straight line, then trust the traction.' },
   { id: 'Stratos', snd: '07_TwinTurbo_V6', idle: 1000, red: 7800, turbo: 0, pops: 'pop', cyl: 6, name: 'Lancia Stratos HF', ar: 'لانشيا ستراتوس', cls: 'Classic · RWD', price: 3500, color: 0xf7f7f7,
-    cap: 220, acc: 10, grip: 0.98, rear: 0.96, loose: 0.65, off: 0.74, mass: 980, drive: 'rwd', brake: 1.0, aero: 0.35, rollF: 0.56, yawK: 0.9, hp: 280, cda: 0.6, fw: 0.42, engine: '2.4 L V6', sprint: 4.5,
+    cap: 233, acc: 12.5, grip: 0.98, rear: 1.13, loose: 0.65, off: 0.74, mass: 980, drive: 'rwd', brake: 1.0, aero: 0.35, rollF: 0.48, yawK: 0.9, hp: 364, cda: 0.6, fw: 0.42, engine: '2.4 L V6', sprint: 3.5,
     blurb: 'The first purpose-built rally car: a wedge with a mid-mounted V6. Razor sharp on turn-in, nervous on the limit.' },
   { id: 'E30', snd: '01_Turbo_Inline4', idle: 950, red: 7600, turbo: 0, pops: 'pop', cyl: 4, name: 'BMW M3 E30', ar: 'بي إم دبليو إم٣ إي٣٠', cls: 'Group A · RWD', price: 2200, color: 0xe5e5e5,
-    cap: 205, acc: 9.2, grip: 1.0, rear: 0.98, loose: 0.65, off: 0.78, mass: 1100, drive: 'rwd', brake: 1.1, aero: 0.3, rollF: 0.57, yawK: 1.0, hp: 300, cda: 0.7, fw: 0.52, engine: '2.3 L four', sprint: 5.9,
+    cap: 217, acc: 12.0, grip: 1.0, rear: 1.16, loose: 0.65, off: 0.78, mass: 1100, drive: 'rwd', brake: 1.1, aero: 0.3, rollF: 0.48, yawK: 1.0, hp: 390, cda: 0.7, fw: 0.52, engine: '2.3 L four', sprint: 4.6,
     blurb: 'The boxy Group A tarmac weapon. Rear-drive, high-revving and beautifully balanced.' },
   { id: 'R5', snd: '01_Turbo_Inline4', idle: 1000, red: 7800, turbo: 1, pops: 'crackle', cyl: 4, name: 'Renault 5 Turbo', ar: 'رينو ٥ تيربو', cls: 'Group B · RWD', price: 3000, color: 0xd30000,
-    cap: 205, acc: 10, grip: 0.96, rear: 0.92, loose: 0.65, off: 0.78, mass: 1000, drive: 'rwd', brake: 1.05, aero: 0.3, rollF: 0.58, yawK: 0.88, hp: 350, cda: 0.65, fw: 0.38, engine: '1.4 L turbo four', sprint: 4.3,
+    cap: 217, acc: 12.5, grip: 0.96, rear: 1.08, loose: 0.65, off: 0.78, mass: 1000, drive: 'rwd', brake: 1.05, aero: 0.3, rollF: 0.48, yawK: 0.88, hp: 455, cda: 0.65, fw: 0.38, engine: '1.4 L turbo four', sprint: 3.4,
     blurb: 'A hot hatch turned inside out: the engine sits behind the seats, driving the rear. Quick, lively and unforgiving.' },
   { id: 'Celica', snd: '01_Turbo_Inline4', idle: 900, red: 7300, turbo: 1, pops: 'crackle', cyl: 4, name: 'Toyota Celica GT-Four', ar: 'تويوتا سيليكا', cls: 'Group A · AWD', price: 3800, color: 0xf9f9f8,
-    cap: 225, acc: 10.8, grip: 1.03, rear: 1.02, loose: 0.38, off: 0.82, mass: 1260, drive: 'awd', brake: 1.1, aero: 0.4, rollF: 0.56, yawK: 1.03, hp: 300, cda: 0.74, fw: 0.58, engine: '2.0 L turbo four', sprint: 5.0,
+    cap: 238, acc: 14.0, grip: 1.03, rear: 0.98, loose: 0.38, off: 0.82, mass: 1260, drive: 'awd', brake: 1.1, aero: 0.4, rollF: 0.5, yawK: 1.03, hp: 390, cda: 0.74, fw: 0.58, engine: '2.0 L turbo four', sprint: 3.9,
     blurb: 'A four-wheel-drive Group A champion. Stable under power, a little heavy on the nose.' },
   { id: 'Delta', snd: '01_Turbo_Inline4', idle: 900, red: 7300, turbo: 1, pops: 'crackle', cyl: 4, name: 'Lancia Delta Integrale', ar: 'لانشيا دلتا إنتجرالي', cls: 'Group A · AWD', price: 4200, color: 0xe5e5e5,
-    cap: 215, acc: 10.4, grip: 1.0, rear: 1.03, loose: 0.38, off: 0.82, mass: 1180, drive: 'awd', brake: 1.1, aero: 0.45, rollF: 0.58, yawK: 1.0, hp: 300, cda: 0.72, fw: 0.6, engine: '2.0 L turbo four', sprint: 5.2,
+    cap: 228, acc: 13.5, grip: 1.0, rear: 0.98, loose: 0.38, off: 0.82, mass: 1180, drive: 'awd', brake: 1.1, aero: 0.45, rollF: 0.5, yawK: 1.0, hp: 390, cda: 0.72, fw: 0.6, engine: '2.0 L turbo four', sprint: 4.1,
     blurb: 'Six world titles in a boxy hatchback. Grip everywhere and an AWD system that drags you out of any corner.' },
   { id: 'Impreza', snd: '02_Boxer_Flat4', idle: 900, red: 7400, turbo: 1, pops: 'crackle', cyl: 4, name: 'Subaru Impreza 555', ar: 'سوبارو إمبريزا', cls: 'Group A · AWD', price: 4500, color: 0x1b2f78,
-    cap: 225, acc: 11.5, grip: 1.05, rear: 1.02, loose: 0.38, off: 0.82, mass: 1230, drive: 'awd', brake: 1.12, aero: 0.55, rollF: 0.56, yawK: 1.03, hp: 300, cda: 0.72, fw: 0.56, engine: '2.0 L turbo boxer', sprint: 4.7,
+    cap: 238, acc: 15.0, grip: 1.05, rear: 0.98, loose: 0.38, off: 0.82, mass: 1230, drive: 'awd', brake: 1.12, aero: 0.55, rollF: 0.5, yawK: 1.03, hp: 390, cda: 0.72, fw: 0.56, engine: '2.0 L turbo boxer', sprint: 3.7,
     blurb: 'The 555: a rumbling turbo boxer and a famously neutral chassis. A rally icon.' },
   { id: 'Lancer', snd: '01_Turbo_Inline4', idle: 900, red: 7200, turbo: 1, pops: 'crackle', cyl: 4, name: 'Mitsubishi Lancer Evo', ar: 'ميتسوبيشي لانسر إيفو', cls: 'Group A · AWD', price: 4500, color: 0xc9202b,
-    cap: 225, acc: 12.0, grip: 1.05, rear: 1.03, loose: 0.38, off: 0.82, mass: 1230, drive: 'awd', brake: 1.12, aero: 0.5, rollF: 0.57, yawK: 1.04, hp: 300, cda: 0.72, fw: 0.57, engine: '2.0 L turbo four', sprint: 4.5,
+    cap: 238, acc: 15, grip: 1.05, rear: 0.98, loose: 0.38, off: 0.82, mass: 1230, drive: 'awd', brake: 1.12, aero: 0.5, rollF: 0.5, yawK: 1.04, hp: 390, cda: 0.72, fw: 0.57, engine: '2.0 L turbo four', sprint: 3.5,
     blurb: 'Sharp, grippy and brutally quick on turn-in. The Evo rewards precision.' },
   { id: 'EscortCos', snd: '01_Turbo_Inline4', idle: 900, red: 7000, turbo: 1, pops: 'crackle', cyl: 4, name: 'Ford Escort Cosworth', ar: 'فورد إسكورت كوسورث', cls: 'Group A · AWD', price: 5000, color: 0xf1f1f1,
-    cap: 225, acc: 11.0, grip: 1.03, rear: 1.02, loose: 0.38, off: 0.82, mass: 1230, drive: 'awd', brake: 1.1, aero: 0.7, rollF: 0.56, yawK: 1.03, hp: 300, cda: 0.8, fw: 0.55, engine: '2.0 L turbo four', sprint: 4.9,
+    cap: 238, acc: 14.3, grip: 1.03, rear: 0.98, loose: 0.38, off: 0.82, mass: 1230, drive: 'awd', brake: 1.1, aero: 0.7, rollF: 0.5, yawK: 1.03, hp: 390, cda: 0.8, fw: 0.55, engine: '2.0 L turbo four', sprint: 3.9,
     blurb: 'The whale-tail Escort: a big wing, AWD and a Cosworth turbo four. Planted at speed.' },
   { id: 'P205', snd: '01_Turbo_Inline4', idle: 1000, red: 8200, turbo: 1, pops: 'crackle', cyl: 4, name: 'Peugeot 205 T16', ar: 'بيجو ٢٠٥ تي١٦', cls: 'Group B · AWD', price: 6500, color: 0xe5e5e5,
-    cap: 215, acc: 12.5, grip: 1.0, rear: 1.02, loose: 0.38, off: 0.78, mass: 1100, drive: 'awd', brake: 1.05, aero: 0.5, rollF: 0.58, yawK: 0.93, hp: 450, cda: 0.65, fw: 0.43, engine: '1.8 L turbo four', sprint: 3.4,
+    cap: 228, acc: 15, grip: 1.0, rear: 0.98, loose: 0.38, off: 0.78, mass: 1100, drive: 'awd', brake: 1.05, aero: 0.5, rollF: 0.5, yawK: 0.93, hp: 585, cda: 0.65, fw: 0.43, engine: '1.8 L turbo four', sprint: 2.7,
     blurb: "A mid-engined Group B monster in a hatchback's clothes. Savage acceleration with a short, twitchy wheelbase." },
   { id: 'RS200', snd: '01_Turbo_Inline4', idle: 1000, red: 8000, turbo: 1, pops: 'crackle', cyl: 4, name: 'Ford RS200', ar: 'فورد آر إس٢٠٠', cls: 'Group B · AWD', price: 8000, color: 0xf5f6f6,
-    cap: 220, acc: 12.5, grip: 1.0, rear: 1.0, loose: 0.38, off: 0.78, mass: 1180, drive: 'awd', brake: 1.05, aero: 0.55, rollF: 0.57, yawK: 0.98, hp: 450, cda: 0.75, fw: 0.42, engine: '1.8 L turbo four', sprint: 3.2,
+    cap: 233, acc: 15, grip: 1.0, rear: 0.98, loose: 0.38, off: 0.78, mass: 1180, drive: 'awd', brake: 1.05, aero: 0.55, rollF: 0.5, yawK: 0.98, hp: 585, cda: 0.75, fw: 0.42, engine: '1.8 L turbo four', sprint: 2.5,
     blurb: 'Purpose-built for Group B: mid-engine, four-wheel-drive and ferociously fast. Launches like nothing else.' },
   { id: 'Quattro', snd: '09_Rally_Inline5', idle: 1000, red: 7800, turbo: 1, pops: 'crackle', cyl: 5, name: 'Audi Sport Quattro S1', ar: 'أودي سبورت كواترو إس١', cls: 'Group B · AWD', price: 9000, color: 0xf2c200,
-    cap: 215, acc: 12.5, grip: 0.98, rear: 1.0, loose: 0.38, off: 0.78, mass: 1090, drive: 'awd', brake: 1.05, aero: 0.8, rollF: 0.57, yawK: 1.0, hp: 480, cda: 0.85, fw: 0.58, engine: '2.1 L turbo five', sprint: 3.1,
+    cap: 228, acc: 15, grip: 0.98, rear: 0.98, loose: 0.38, off: 0.78, mass: 1090, drive: 'awd', brake: 1.05, aero: 0.8, rollF: 0.5, yawK: 1.0, hp: 624, cda: 0.85, fw: 0.58, engine: '2.1 L turbo five', sprint: 2.4,
     blurb: 'The car that put four-wheel-drive on the map. A five-cylinder warble, a huge wing and a nose-heavy chassis.' },
   { id: 'S4', snd: '01_Turbo_Inline4', idle: 1000, red: 8200, turbo: 1, pops: 'crackle', cyl: 4, name: 'Lancia Delta S4', ar: 'لانشيا دلتا إس٤', cls: 'Group B · AWD', price: 11000, color: 0xeaeaea,
-    cap: 230, acc: 12.5, grip: 1.0, rear: 1.0, loose: 0.38, off: 0.78, mass: 900, drive: 'awd', brake: 1.05, aero: 0.75, rollF: 0.58, yawK: 0.95, hp: 480, cda: 0.75, fw: 0.44, engine: '1.8 L twin-charged four', sprint: 3.0,
+    cap: 244, acc: 15, grip: 1.0, rear: 0.98, loose: 0.38, off: 0.78, mass: 900, drive: 'awd', brake: 1.05, aero: 0.75, rollF: 0.5, yawK: 0.95, hp: 624, cda: 0.75, fw: 0.44, engine: '1.8 L twin-charged four', sprint: 2.4,
     blurb: 'Supercharged and turbocharged, barely 900 kg: the most extreme rally car ever built. Fearsome.' },
 ];
 // Power at the wheels (W) and the speed where it balances air drag and rolling resistance: the car's real top speed.

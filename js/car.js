@@ -24,44 +24,6 @@ const LAMP = {};
 const DUST = [new THREE.Color(0x5a4630), new THREE.Color(0xc9a66b)];
 let protos = null;
 
-// Three vehicles built here from shaped parts (rounded extrusions, plates, cylinders) rather than loaded from a file.
-function buildProcedural() {
-  const K = {}, mat = n => K[n] || (K[n] = Object.assign(new THREE.MeshBasicMaterial(), { name: n }));
-  const ext = (pts, w, bevel) => { const sh = new THREE.Shape(); pts.forEach(([z, y], i) => i ? sh.lineTo(-z, y) : sh.moveTo(-z, y)); const b = bevel ?? .07; return new THREE.ExtrudeGeometry(sh, { depth: w - b * 2, bevelEnabled: b > 0, bevelSize: b, bevelThickness: b, bevelSegments: 4, curveSegments: 10 }).rotateY(Math.PI / 2).translate(-(w - b * 2) / 2, 0, 0); };   // side profile [z forward, y up] swept across the body with rounded edges
-  const mk = (geo, kind, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat(kind)); m.position.set(x, y, z); return m; };
-  const bx = (w, h, l, kind, x, y, z, r = .04) => mk(ext([[-l / 2, -h / 2], [l / 2, -h / 2], [l / 2, h / 2], [-l / 2, h / 2]], w, Math.min(r, w / 2 - .001, h / 2 - .001)), kind, x, y, z);
-  const wheel = (r, w, spokes = 6) => { const g = new THREE.Group(); g.add(mk(new THREE.CylinderGeometry(r, r, w, 28, 1).rotateZ(Math.PI / 2), 'tire'), mk(new THREE.TorusGeometry(r - .06, .06, 8, 28).rotateY(Math.PI / 2), 'tire', w / 2 - .02), mk(new THREE.TorusGeometry(r - .06, .06, 8, 28).rotateY(Math.PI / 2), 'tire', -w / 2 + .02), mk(new THREE.CylinderGeometry(r * .64, r * .64, w + .02, 20).rotateZ(Math.PI / 2), 'rim7'));
-    for (const sx of [-1, 1]) { g.add(mk(new THREE.CylinderGeometry(r * .2, r * .2, .05, 12).rotateZ(Math.PI / 2), 'silver', sx * (w / 2 + .02))); for (let i = 0; i < spokes; i++) { const s = mk(new THREE.BoxGeometry(.03, r * .56, .07), 'silver', sx * (w / 2 + .015), 0, 0); s.geometry = s.geometry.clone().translate(0, r * .34, 0).rotateX(i / spokes * Math.PI * 2); g.add(s); } } return g; };
-  const car = (id, body, wb, tf, tr2, rf, rr, wf, wr, exhaust) => { const P = new THREE.Group(); P.name = id; const b = new THREE.Group(); b.name = 'body'; for (const m of body) b.add(m); P.add(b);
-    for (const [n, x, z, r, w] of [['FL', tf, wb / 2, rf, wf], ['FR', -tf, wb / 2, rf, wf], ['RL', tr2, -wb / 2, rr, wr], ['RR', -tr2, -wb / 2, rr, wr]]) { const g = wheel(r, w, id === 'proc:f1' ? 5 : 6); g.name = 'wheel_' + n; g.position.set(x, r, z); P.add(g); } P.userData.exhaust = exhaust; protos[id] = P; };
-  // ---- Formula car: tub, needle nose, sidepods, airbox, halo, floor, front and rear wings, open wheels
-  car('proc:f1', [
-    bx(1.5, .04, 3.9, 'body', 0, .1, -.1, .02), mk(ext([[-1.5, .14], [1.1, .14], [1.9, .2], [2.62, .22], [2.62, .3], [1.6, .46], [.5, .58], [-.2, .6], [-1.5, .5]], .56, .1), 'paint'),
-    mk(ext([[-1.9, .16], [-.3, .16], [-.3, .9], [-.7, .98], [-1.9, .5]], .34, .1), 'paint'), mk(ext([[-1.3, .14], [.55, .14], [.75, .32], [.55, .52], [-1.3, .4]], .5, .12), 'paint', .5), mk(ext([[-1.3, .14], [.55, .14], [.75, .32], [.55, .52], [-1.3, .4]], .5, .12), 'paint', -.5),
-    bx(.4, .16, .2, 'body', .5, .34, .72, .03), bx(.4, .16, .2, 'body', -.5, .34, .72, .03), mk(new THREE.TorusGeometry(.27, .035, 8, 20, Math.PI).rotateX(-Math.PI / 2).rotateZ(0), 'trim', 0, .72, .22), bx(.05, .26, .06, 'trim', 0, .6, .5, .01),
-    mk(new THREE.SphereGeometry(.15, 14, 10), 'accent', 0, .7, .05), bx(.24, .2, .02, 'body', 0, .9, -.28, 0),
-    bx(1.86, .035, .42, 'paint', 0, .13, 2.5, .012), bx(1.86, .03, .2, 'stripe', 0, .2, 2.42, .01), bx(.03, .24, .5, 'paint', .93, .2, 2.48, .01), bx(.03, .24, .5, 'paint', -.93, .2, 2.48, .01),
-    bx(1.02, .04, .4, 'paint', 0, .92, -1.95, .012), bx(1.02, .035, .22, 'stripe', 0, 1.02, -2.06, .01), bx(.035, .62, .56, 'paint', .51, .74, -1.95, .012), bx(.035, .62, .56, 'paint', -.51, .74, -1.95, .012), bx(.1, .5, .12, 'trim', 0, .62, -1.9, .02),
-    bx(.3, .09, .06, 'rear', 0, .42, -2.02, .02), bx(1.3, .1, .5, 'body', 0, .2, -1.95, .03),
-    ...[1, -1].flatMap(s => [bx(.5, .03, .06, 'trim', s * .55, .34, 1.72, .01), bx(.5, .03, .06, 'trim', s * .55, .3, 1.9, .01), bx(.46, .03, .06, 'trim', s * .52, .36, -1.72, .01)])],
-    3.6, .8, .78, .34, .36, .36, .44, [[0, .4, -2.05]]);
-  // ---- Pickup truck: bonnet, cab and open bed, with arches, grille, bumpers, glass and lamps
-  car('proc:truck', [
-    mk(ext([[-2.75, .52], [2.6, .52], [2.72, .7], [2.7, 1.08], [1.1, 1.2], [.55, 1.86], [-.75, 1.9], [-.95, 1.2], [-2.75, 1.2]], 1.96, .12), 'paint'),
-    bx(1.66, .5, 1.5, 'body', 0, 1.02, -1.86, .04), bx(1.98, .1, .1, 'trim', 0, 1.22, -2.72, .03), ...[1, -1].map(s => bx(.1, .1, 1.78, 'trim', s * .94, 1.22, -1.86, .03)),
-    mk(ext([[.62, 1.22], [1.02, 1.22], [.56, 1.8]], 1.7, .0), 'window', 0, 0, .03), mk(ext([[-.92, 1.24], [-.72, 1.84], [-.7, 1.84], [-.9, 1.24]], 1.6, 0), 'window'),
-    ...[1, -1].flatMap(s => [bx(.03, .5, 1.02, 'window', s * .985, 1.52, -.1, .01), bx(.05, .7, .06, 'paint', s * .985, 1.5, -.14, .01), bx(.3, .14, .1, 'front', s * .72, .98, 2.7, .03), bx(.1, .3, .06, 'rear', s * .9, 1.0, -2.76, .02),
-      mk(new THREE.TorusGeometry(.5, .09, 8, 18, Math.PI).rotateY(Math.PI / 2), 'body', s * .92, .5, 1.72), mk(new THREE.TorusGeometry(.5, .09, 8, 18, Math.PI).rotateY(Math.PI / 2), 'body', s * .92, .5, -1.72), bx(.12, .05, .2, 'silver', s * 1.06, 1.3, .86, .02), bx(.1, .08, 2.2, 'body', s * .98, .5, 0, .03)]),
-    bx(1.5, .34, .08, 'trim', 0, .9, 2.72, .03), bx(2.02, .22, .22, 'silver', 0, .56, 2.72, .06), bx(2.02, .2, .2, 'silver', 0, .58, -2.76, .06), bx(1.2, .08, .9, 'body', 0, 1.24, 1.9, .03)],
-    3.44, .86, .86, .46, .46, .34, .34, [[.6, .44, -2.82]]);
-  // ---- Minibus: one tall rounded box with a sloped nose, a band of windows, sliding-door line, roof rack and bumpers
-  car('proc:bus', [
-    mk(ext([[-2.35, .4], [2.2, .4], [2.42, .62], [2.42, 1.0], [2.05, 1.96], [1.6, 2.08], [-2.3, 2.08], [-2.42, 1.9], [-2.42, .6]], 1.86, .14), 'paint'),
-    mk(ext([[2.34, 1.14], [2.02, 1.9], [2.0, 1.9], [2.3, 1.14]], 1.56, 0), 'window'), mk(ext([[-2.43, 1.3], [-2.43, 1.86], [-2.45, 1.86], [-2.45, 1.3]], 1.4, 0), 'window'),
-    ...[1, -1].flatMap(s => [...[1.46, .52, -.42, -1.36].map(z => bx(.03, .56, .78, 'window', s * .94, 1.58, z, .01)), bx(.02, 1.1, .03, 'body', s * .945, 1.0, .06, 0), bx(.3, .16, .1, 'front', s * .62, .86, 2.42, .03), bx(.12, .34, .06, 'rear', s * .8, 1.1, -2.44, .02), bx(.12, .06, .22, 'silver', s * 1.0, 1.34, 1.9, .02), bx(.04, .05, 3.6, 'silver', s * .6, 2.14, -.2, .01)]),
-    ...[1.2, .1, -1.0, -1.9].map(z => bx(1.3, .04, .05, 'silver', 0, 2.14, z, .01)), bx(1.9, .2, .18, 'body', 0, .5, 2.4, .06), bx(1.9, .2, .18, 'body', 0, .5, -2.42, .06), bx(1.1, .22, .06, 'trim', 0, .86, 2.44, .02), bx(1.5, .06, .05, 'stripe', 0, 1.1, 2.44, .01)],
-    2.9, .8, .8, .36, .36, .26, .26, [[.5, .34, -2.46]]);
-}
 export async function loadCars() {
   // The eighteen rally cars live in one file. Every car is a group: a textured body (glass split out) and four separate wheel objects.
   const gltf = await new GLTFLoader().parseAsync(await getAsset('cars.glb'), '');
@@ -157,7 +119,7 @@ export class Car {
     { if (!LAMP.aoTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const k = c.getContext('2d'), g = k.createRadialGradient(32, 32, 6, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,.85)'); g.addColorStop(.6, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); k.fillStyle = g; k.fillRect(0, 0, 64, 64); LAMP.aoTex = new THREE.CanvasTexture(c); LAMP.aoM = new THREE.MeshBasicMaterial({ map: LAMP.aoTex, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); }
       const ao = new THREE.Mesh(new THREE.PlaneGeometry((box.max.x - box.min.x) * 1.45, (box.max.z - box.min.z) * 1.25), LAMP.aoM); ao.rotation.x = -Math.PI / 2; ao.position.set(0, .03, (box.max.z + box.min.z) / 2); ao.renderOrder = 1; root.add(ao); }   // soft contact shadow: the car sits on the road instead of floating
     this.tn = tuneOf(spec, tune); this.wear = this.tn.wear; this.dress(look);
-    this.hw0 = (box.max.x - box.min.x) / 2; this.zf0 = box.max.z; this.makeLamps();
+    this.hw0 = (box.max.x - box.min.x) / 2; this.zf0 = box.max.z; this.zr0 = -box.min.z; this.pd = proto.userData; this.makeLamps();
     { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
     this.door = proto.userData.door ? proto.userData.door.slice() : null;
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
@@ -227,8 +189,8 @@ export class Car {
     if (this._thr > .7 && thr < .1 && this.rpm > .5) { this.backfire = .24; this.popEvt = 1; } if (this.shiftEvt > 0 && this.rpm > .6 && thr > .6) this.backfire = Math.max(this.backfire || 0, .12); this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
     const bf = rev ? 0 : Math.min(brk * s.brake * m * g, m * Math.abs(vf) / dt);
     this.braking = brk > .1 && !rev;
-    const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? .42 : 0;
-    const capF = muF * gripK * Nf * ltF * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
+    const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? .38 : 0;
+    const capF = muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.08 : 1) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
@@ -444,11 +406,20 @@ export class Car {
       const g = document.createElement('canvas'); g.width = g.height = 64; const gk = g.getContext('2d'), gr = gk.createRadialGradient(32, 32, 1, 32, 32, 32); gr.addColorStop(0, 'rgba(255,248,225,1)'); gr.addColorStop(.25, 'rgba(255,240,200,.55)'); gr.addColorStop(1, 'rgba(255,240,200,0)'); gk.fillStyle = gr; gk.fillRect(0, 0, 64, 64);
       LAMP.glareM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(g), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }); LAMP.glare = new THREE.PlaneGeometry(.7, .7);
     }
-    const mk = sx => { const g = new THREE.Group(); g.position.set(sx * this.hw0 * .64, .56, this.zf0 - .04);
-      const fan = new THREE.Mesh(LAMP.fan, LAMP.fanM); fan.rotation.x = -Math.PI / 2; fan.position.set(0, -.5, .3); fan.renderOrder = 3;
-      const glare = new THREE.Mesh(LAMP.glare, LAMP.glareM); glare.rotation.x = -Math.PI / 2; glare.position.y = .12;                // the lamp itself, seen from above
-      g.add(fan, glare); g.visible = false; this.root.add(g); return { g, ok: true }; };
-    this.lamps = [mk(1), mk(-1)]; this.lightsOn = false;
+    // Headlights and tail-lights sit exactly where each model has them: one lamp object per real lamp (four on the Escort, Fiat, Fulvia, E30, Delta, S4...).
+    // Each lamp gets its own glare disc, sized to the lamp, and a share of the beam on the road; the tail-lights glow red and flare on the brakes.
+    const T = this.T, LF = this.pd.lampsF, LR = this.pd.lampsR, nF = LF && LF.length ? LF.length : 2, share = Math.min(1, 1.2 / Math.max(1, nF / 2));
+    const lampSet = LF && LF.length ? LF : [[this.hw0 / T.w * .64, .56, this.zf0 / T.l - .04, .1], [-this.hw0 / T.w * .64, .56, this.zf0 / T.l - .04, .1]];
+    const mk = ([lx, ly, lz, lr]) => { const g = new THREE.Group(), y = ly * T.h; g.position.set(lx * T.w, y, lz * T.l); g.rotation.y = Math.sign(lx) * Math.min(.07, Math.abs(lx) * .1);
+      const fan = new THREE.Mesh(LAMP.fan, LAMP.fanM); fan.rotation.x = -Math.PI / 2; fan.position.set(0, -y + .06, .3); fan.scale.set(share * 1.08, 1, 1 - .07 * (nF > 2)); fan.renderOrder = 3;
+      const glare = new THREE.Mesh(LAMP.glare, LAMP.glareM); glare.rotation.x = -Math.PI / 2; glare.position.y = .1; glare.scale.setScalar(Math.max(.3, lr * T.w * 5.2));                // the lamp itself, seen from above
+      g.add(fan, glare); g.visible = false; this.root.add(g); return { g, ok: true, sx: lx >= 0 ? 1 : -1 }; };
+    this.lamps = lampSet.map(mk); this.lightsOn = false;
+    if (!LAMP.glareR) { const g = document.createElement('canvas'); g.width = g.height = 64; const gk = g.getContext('2d'), gr = gk.createRadialGradient(32, 32, 1, 32, 32, 32); gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(.3, 'rgba(255,30,20,.6)'); gr.addColorStop(1, 'rgba(255,20,10,0)'); gk.fillStyle = gr; gk.fillRect(0, 0, 64, 64);
+      LAMP.glareR = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(g), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }); }
+    this.rlMat = LAMP.glareR.clone(); this.rlMat.opacity = 0;
+    const rearSet = LR && LR.length ? LR : [[this.hw0 / T.w * .62, .62, -this.zr0 / T.l, .09], [-this.hw0 / T.w * .62, .62, -this.zr0 / T.l, .09]];
+    this.rlamps = rearSet.map(([lx, ly, lz, lr]) => { const m = new THREE.Mesh(LAMP.glare, this.rlMat); m.rotation.x = -Math.PI / 2; m.position.set(lx * T.w, ly * T.h + .12, lz * T.l); m.scale.setScalar(Math.max(.3, lr * T.w * 5)); this.root.add(m); return m; });
   }
   setLights(on) { this.lightsOn = on; for (const l of this.lamps) l.g.visible = on && l.ok; }
 
@@ -465,7 +436,7 @@ export class Car {
       if (zone === 'front') { P.engine = Math.min(1, P.engine + k * .9); if (corner) hitW(lx > 0 ? 0 : 1, k * 1.3); }
       else if (zone === 'rear') { P.gearbox = Math.min(1, P.gearbox + k * .9); if (corner) hitW(lx > 0 ? 2 : 3, k * 1.3); }
       else hitW(lx > 0 ? (lz > 0 ? 0 : 2) : (lz > 0 ? 1 : 3), k * 1.9); }
-    if (zone === 'front' && amt > .035) for (const i of amt > .22 ? [0, 1] : [lx > 0 ? 0 : 1]) if (this.lamps[i].ok) { this.lamps[i].ok = false; this.lamps[i].g.visible = false; this.glass = true; }   // smashed headlight
+    if (zone === 'front' && amt > .035) for (const i of this.lamps.map((_, k) => k).filter(k => amt > .22 || (this.lamps[k].sx > 0) === (lx > 0))) if (this.lamps[i].ok) { this.lamps[i].ok = false; this.lamps[i].g.visible = false; this.glass = true; }   // smashed headlight
     // parts tear off: a rear hit takes the wing and exhaust tips, a front hit the splitter, a side hit the skirts
     if (amt > .07 && this.addons) { const want = zone === 'rear' ? ['wing', 'pipe'] : zone === 'front' ? ['split'] : ['skirt']; for (const c of this.addons.children) if (want.includes(c.userData.part) && !c.userData.gone) { c.userData.gone = true; this.lost.push(c); } }
     const sn = Math.sin(this.th), cs = Math.cos(this.th), n = this.hitN, dx = n[0] * cs - n[1] * sn, dz = n[0] * sn + n[1] * cs, R = 1.5, depth = Math.min(.5, amt * 3.4);
@@ -500,7 +471,7 @@ export class Car {
     this.y += ((h[0] + h[1] + h[2] + h[3]) / 4 - this.y) * Math.min(1, dt * 25);
     this.pitch += (Math.atan2((h[2] + h[3] - h[0] - h[1]) / 2, this.a + this.b) - this.pitch) * k;
     this.roll += (Math.atan2((h[0] + h[2] - h[1] - h[3]) / 2, this.tw * 2) - this.roll) * k;
-    this.root.position.set(X, this.y, Z); this.root.rotation.set(this.pitch, TH + this.lead, this.roll);
+    this.root.position.set(X, this.y + (this.lift || 0), Z); this.root.rotation.set(this.pitch, TH + this.lead, this.roll);
     const mk = Math.sqrt(clamp(this.spec.mass / 1500, .5, 1.8)), stiff = this.spec.body === 'f1' ? .25 : this.spec.klass === 'Super' ? .6 : this.spec.klass === 'Utility' ? 1.5 : 1;
     this.rollD += (clamp(this.ayS * .017 * mk * stiff, -.16, .16) - this.rollD) * Math.min(1, dt * 6.5 / mk);
     this.pitchD += (clamp(-this.axS * .0095 * mk * stiff, -.09, .09) - this.pitchD) * Math.min(1, dt * 6.5 / mk);
@@ -515,7 +486,7 @@ export class Car {
       if (i < 2) w.pivot.rotation.y = this.steer;
       w.pivot.position.y = w.y + (this.wsurf[i] === GRASS && this.speed > 2 ? (Math.random() - .5) * .012 : 0);
     }
-    this.m.rear.emissiveIntensity = this.braking ? 2.4 : .5;
+    this.m.rear.emissiveIntensity = this.braking ? 2.4 : .5; if (this.rlMat) this.rlMat.opacity += ((this.braking ? 1 : this.lightsOn ? .5 : 0) - this.rlMat.opacity) * .35;
     if (Math.abs(this.dirt - this.dirtShown) > .03) { this.dirtShown = this.dirt; this.m.paint.color.copy(this.baseColor).lerp(DUST[track.def.theme === 'desert' ? 1 : 0], this.dirt * .6); this.m.paint.roughness = .32 + this.dirt * .5; this.m.paint.clearcoat = 1 - this.dirt * .8; }
   }
 

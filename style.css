@@ -411,3 +411,48 @@ body.touch #touch .t.on{background:rgba(255,194,26,.6);border-color:var(--yellow
 .tile:hover{border-color:var(--blue)}.tile.danger{border-color:rgba(227,38,46,.7);color:#ff8f95}
 .settings .seg{min-width:0}.settings .seg button{white-space:nowrap;font-size:12.5px;padding:7px 4px}
 .settings label{grid-template-columns:104px 1fr}
+
+/* ---------- touch controls v3: two big steering buttons on the left, big pedals on the right, sized to the screen ---------- */
+body.touch #steer{display:none}
+body.touch #touch{--bw:clamp(120px,17vw,210px);--gh:clamp(150px,38vh,290px);--bh:clamp(110px,27vh,210px);--sm:clamp(78px,11vw,124px);--gap:clamp(10px,1.6vw,20px);--pad:calc(14px + env(safe-area-inset-bottom))}
+body.touch #touch .t{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;font-style:normal;color:#fff;border:3px solid rgba(243,244,246,.5);background:rgba(23,24,28,.5);box-shadow:0 5px 0 rgba(0,0,0,.35);transition:transform .06s,background .06s}
+body.touch #touch .t b{font-weight:900;letter-spacing:.06em;font-size:clamp(15px,2.2vw,26px);pointer-events:none}
+body.touch #touch .t.on{transform:translateY(4px) scale(.97);box-shadow:0 1px 0 rgba(0,0,0,.35);background:rgba(255,194,26,.62);border-color:var(--yellow)}
+body.touch #touch .sl,body.touch #touch .sr{bottom:var(--pad);width:var(--bw);height:calc(var(--gh) * .8);border-radius:28px;font-size:clamp(46px,8vw,96px);line-height:1}
+body.touch #touch .sl{left:calc(14px + env(safe-area-inset-left))}
+body.touch #touch .sr{left:calc(14px + var(--bw) + var(--gap) + env(safe-area-inset-left))}
+body.touch #touch .g{right:calc(14px + env(safe-area-inset-right));bottom:var(--pad);width:var(--bw);height:var(--gh);border-radius:28px;border-color:rgba(47,180,87,.95);background:rgba(47,180,87,.32)}
+body.touch #touch .b{right:calc(14px + var(--bw) + var(--gap) + env(safe-area-inset-right));bottom:var(--pad);width:var(--bw);height:var(--bh);border-radius:28px;border-color:rgba(227,38,46,.95);background:rgba(227,38,46,.3)}
+body.touch #touch .h{right:calc(14px + var(--bw) + var(--gap) + env(safe-area-inset-right));bottom:calc(var(--pad) + var(--bh) + var(--gap));width:var(--sm);height:var(--sm);border-radius:50%}
+body.touch #touch .n{right:calc(14px + env(safe-area-inset-right));bottom:calc(var(--pad) + var(--gh) + var(--gap));width:var(--sm);height:var(--sm);border-radius:50%;border-color:var(--blue)}
+body.touch #touch .t.g.on{background:rgba(47,180,87,.75)}body.touch #touch .t.b.on{background:rgba(227,38,46,.7)}
+body.touch #pauseBtn{min-width:56px;min-height:48px;font-size:17px}
+/* on touch screens the gauge bar rides above the controls, in the free space between the two button groups */
+body.touch #hud .hg{bottom:auto !important;top:calc(8px + env(safe-area-inset-top));left:50% !important;right:auto !important;transform:translateX(-50%) scale(.82);transform-origin:top center}
+body.touch .cond{display:none}
+body.touch #pauseBtn{top:auto !important;bottom:calc(14px + env(safe-area-inset-bottom)) !important;left:50% !important;right:auto !important;transform:translateX(-50%) !important;min-width:84px;min-height:54px;font-size:18px;border-radius:16px}
+
+/* ---------- main menu motion: everything glides in, the logo flashes, the start button breathes ---------- */
+@keyframes mSlide{from{opacity:0;transform:translateX(-34px)}to{opacity:1;transform:none}}
+@keyframes mDrop{from{opacity:0;transform:translateY(-26px)}to{opacity:1;transform:none}}
+@keyframes mRise{from{opacity:0;transform:translateY(30px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes mBreathe{0%,100%{box-shadow:0 0 0 0 rgba(227,38,46,.0),0 6px 0 rgba(0,0,0,.35)}50%{box-shadow:0 0 26px 6px rgba(227,38,46,.55),0 6px 0 rgba(0,0,0,.35)}}
+@keyframes mShine{0%{background-position:-220% 0}60%,100%{background-position:220% 0}}
+@keyframes mFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+#menu .top .logo{animation:mDrop .7s cubic-bezier(.2,.9,.3,1) both}
+#menu .top .logo b{background:linear-gradient(100deg,#f3f4f6 38%,#ffc21a 50%,#f3f4f6 62%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mShine 5.5s ease-in-out infinite 1.2s}
+#menu .top .tabs button{animation:mDrop .6s cubic-bezier(.2,.9,.3,1) both;transition:transform .15s,color .15s,text-shadow .15s}
+#menu .top .tabs button:nth-child(1){animation-delay:.08s}#menu .top .tabs button:nth-child(2){animation-delay:.14s}#menu .top .tabs button:nth-child(3){animation-delay:.2s}
+#menu .top .tabs button:nth-child(4){animation-delay:.26s}#menu .top .tabs button:nth-child(5){animation-delay:.32s}#menu .top .tabs button:nth-child(6){animation-delay:.38s}
+#menu .top .tabs button:hover{transform:translateY(-2px);text-shadow:0 0 14px rgba(255,194,26,.7)}
+#menu .top .level,#menu .top .credits{animation:mDrop .7s .45s cubic-bezier(.2,.9,.3,1) both}
+#menu .left>div>*{animation:mSlide .55s cubic-bezier(.2,.9,.3,1) both}
+#menu .left>div>*:nth-child(1){animation-delay:.1s}#menu .left>div>*:nth-child(2){animation-delay:.16s}#menu .left>div>*:nth-child(3){animation-delay:.22s}#menu .left>div>*:nth-child(4){animation-delay:.28s}
+#menu .left>div>*:nth-child(5){animation-delay:.34s}#menu .left>div>*:nth-child(6){animation-delay:.4s}#menu .left>div>*:nth-child(7){animation-delay:.46s}#menu .left>div>*:nth-child(8){animation-delay:.52s}#menu .left>div>*:nth-child(n+9){animation-delay:.58s}
+#menu .seg button,#menu .btn,#menu .card{transition:transform .14s,background .14s,box-shadow .14s}
+#menu .seg button:hover,#menu .btn:hover{transform:translateY(-2px)}
+#menu .seg button:active,#menu .btn:active{transform:scale(.97)}
+#menu .start{animation:mRise .7s .5s cubic-bezier(.2,.9,.3,1) both,mBreathe 2.4s 1.4s ease-in-out infinite}
+#menu .start:hover{filter:brightness(1.12);transform:translateY(-3px)}
+#menu .right,#menu .carinfo{animation:mRise .8s .35s cubic-bezier(.2,.9,.3,1) both}
+@media (prefers-reduced-motion:reduce){#menu *{animation:none !important}}
