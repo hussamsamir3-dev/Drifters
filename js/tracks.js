@@ -2,9 +2,6 @@
 // Every track ends up with the same interface: a 3D group, a centre-line path,
 // and a grid that tells the physics what is under each wheel (road / kerb / grass / wall).
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { getAsset, getJSON } from './assets.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4;
@@ -20,8 +17,21 @@ export const TRACKS = [
   { id: 'nile', name: 'Nile Park Circuit', ar: 'حلبة النيل', type: 'proc', theme: 'day', laps: 3, width: 15, runoff: 6, pit: [90, 90], camYaw: .7,
     blurb: 'The home circuit. A full pit lane, a fast first sector, a chicane and two hairpins.',
     pts: [[40,0],[150,0],[210,20],[230,70],[200,115],[140,110],[110,80],[70,95],[60,140],[100,180],[80,225],[20,235],[-40,205],[-50,150],[-20,110],[-60,70],[-110,90],[-150,60],[-140,10],[-80,-5]] },
-  { id: 'lider', name: 'Lider Karting Club', ar: 'نادي ليدر', type: 'glb', theme: 'day', laps: 3,
-    blurb: 'Your scanned kart circuit. Tight, technical, tyre walls everywhere.' },
+  { id: 'monza', name: 'Monza Park', ar: 'حديقة مونزا', type: 'proc', theme: 'day', laps: 3, width: 16, runoff: 9, pit: [90, 100], camYaw: .35,
+    blurb: 'The temple of speed. Two huge straights, flat-out sweepers and chicanes where races are won on the brakes. Layout inspired by Monza.',
+    pts: [[-109,-133],[-93,-133],[-77,-133],[-61,-133],[-45,-133],[-29,-133],[-13,-133],[3,-133],[19,-133],[35,-133],[51,-133],[67,-133],[83,-131],[99,-127],[111,-118],[123,-107],[139,-103],[154,-107],[166,-118],[179,-128],[192,-136],[208,-141],[224,-139],[239,-135],[254,-129],[267,-120],[279,-109],[289,-97],[297,-83],[302,-68],[307,-52],[309,-36],[310,-20],[310,-4],[316,11],[325,23],[335,36],[340,51],[337,67],[327,79],[315,91],[304,102],[291,111],[277,119],[263,127],[248,133],[233,139],[218,144],[202,148],[186,151],[170,151],[155,149],[139,144],[124,139],[108,135],[93,132],[77,132],[63,139],[47,142],[32,136],[16,134],[1,139],[-15,140],[-29,132],[-41,122],[-57,119],[-73,118],[-89,118],[-105,117],[-121,117],[-137,117],[-153,117],[-169,118],[-185,118],[-201,117],[-217,117],[-233,116],[-249,114],[-265,110],[-280,103],[-294,96],[-307,87],[-319,76],[-329,63],[-337,49],[-341,34],[-343,18],[-344,2],[-344,-14],[-344,-30],[-342,-46],[-338,-62],[-332,-76],[-322,-89],[-311,-101],[-298,-110],[-284,-118],[-269,-124],[-254,-128],[-238,-131],[-222,-132],[-206,-133],[-190,-133],[-174,-133],[-158,-133],[-142,-133],[-126,-133]] },
+  { id: 'spa', name: 'Spa Ardennes', ar: 'سبا أردين', type: 'proc', theme: 'day', laps: 3, width: 15, runoff: 7, pit: [80, 100], camYaw: .6,
+    blurb: 'A long diagonal blast through the forest, a hairpin at each end and a fast, flowing return. Layout inspired by Spa-Francorchamps.',
+    pts: [[-179,134],[-195,133],[-211,133],[-227,133],[-243,132],[-259,131],[-275,130],[-290,126],[-305,120],[-318,111],[-328,99],[-335,84],[-336,68],[-331,54],[-321,41],[-307,32],[-292,27],[-277,25],[-261,27],[-245,29],[-229,29],[-214,24],[-199,17],[-187,8],[-173,-1],[-158,-6],[-145,-15],[-131,-23],[-118,-32],[-104,-40],[-91,-48],[-77,-57],[-63,-65],[-50,-74],[-36,-82],[-23,-91],[-9,-99],[4,-108],[18,-116],[31,-124],[45,-133],[58,-141],[72,-149],[86,-157],[100,-165],[114,-173],[128,-180],[142,-187],[157,-192],[173,-196],[189,-197],[205,-196],[220,-192],[234,-184],[246,-173],[254,-160],[258,-144],[266,-131],[277,-120],[286,-107],[293,-92],[297,-77],[299,-61],[299,-45],[296,-29],[291,-14],[283,0],[272,11],[259,20],[244,26],[228,25],[213,21],[198,17],[182,13],[166,11],[150,10],[135,12],[119,16],[104,22],[91,30],[78,40],[68,52],[60,66],[55,81],[55,97],[57,113],[51,127],[38,136],[24,143],[8,147],[-7,147],[-22,140],[-37,137],[-53,139],[-68,135],[-84,131],[-100,132],[-115,133],[-131,133],[-147,134],[-163,134]] },
+  { id: 'silverstone', name: 'Silverstone Airfield', ar: 'مطار سيلفرستون', type: 'proc', theme: 'day', laps: 3, width: 16, runoff: 10, pit: [90, 110], camYaw: .3,
+    blurb: 'Fast and open: sweeping esses, the Hangar straight, a long run back down Wellington and the tight Luffield hairpin. Layout inspired by Silverstone.',
+    pts: [[-328,59],[-328,43],[-328,27],[-328,11],[-328,-5],[-328,-21],[-328,-37],[-328,-53],[-328,-69],[-328,-85],[-329,-101],[-328,-117],[-327,-133],[-325,-149],[-321,-165],[-314,-179],[-304,-192],[-292,-203],[-278,-211],[-263,-216],[-248,-219],[-232,-222],[-216,-225],[-200,-228],[-184,-229],[-169,-227],[-154,-219],[-139,-216],[-124,-221],[-110,-228],[-94,-228],[-80,-220],[-65,-216],[-50,-221],[-36,-230],[-20,-232],[-5,-228],[11,-227],[27,-228],[43,-229],[59,-231],[75,-232],[91,-233],[107,-234],[123,-234],[139,-235],[155,-236],[171,-236],[187,-237],[203,-238],[219,-238],[235,-239],[251,-240],[267,-241],[283,-241],[299,-241],[315,-238],[330,-232],[343,-223],[355,-212],[363,-199],[368,-183],[372,-168],[374,-152],[374,-136],[374,-120],[373,-104],[375,-88],[381,-73],[387,-59],[386,-43],[381,-28],[378,-12],[379,4],[380,20],[377,36],[374,52],[370,67],[366,83],[355,94],[341,101],[325,105],[309,105],[293,105],[277,106],[262,110],[248,119],[238,131],[234,146],[236,162],[235,178],[229,193],[219,205],[204,211],[188,212],[172,212],[156,212],[140,212],[124,211],[108,211],[92,211],[76,211],[60,211],[44,211],[28,211],[12,211],[-4,211],[-20,211],[-36,211],[-52,211],[-68,211],[-84,211],[-100,211],[-116,211],[-133,211],[-149,211],[-165,211],[-181,211],[-197,211],[-213,211],[-229,211],[-243,219],[-251,232],[-252,248],[-255,264],[-264,277],[-279,284],[-295,284],[-309,279],[-320,267],[-324,251],[-325,235],[-325,219],[-326,203],[-327,187],[-327,171],[-328,155],[-328,139],[-328,123],[-328,107],[-328,91],[-328,75]] },
+  { id: 'interlagos', name: 'Interlagos Hills', ar: 'تلال إنترلاغوس', type: 'proc', theme: 'coast', laps: 3, width: 15, runoff: 7, pit: [80, 100], camYaw: .5,
+    blurb: 'Anti-clockwise and relentless: a flat-out back straight, a downhill sweep into the infield and the hairpin back out. Layout inspired by Interlagos.',
+    pts: [[25,132],[41,132],[57,132],[73,132],[89,132],[105,132],[121,132],[137,132],[153,132],[169,131],[185,131],[201,130],[216,125],[230,117],[240,104],[243,89],[241,73],[245,58],[255,46],[268,35],[282,29],[296,22],[310,13],[322,2],[330,-11],[334,-27],[334,-43],[332,-59],[326,-74],[318,-87],[308,-100],[297,-111],[283,-120],[268,-126],[253,-130],[237,-134],[222,-136],[206,-138],[190,-139],[174,-140],[158,-141],[142,-142],[126,-143],[110,-144],[94,-145],[78,-146],[62,-147],[46,-147],[30,-148],[14,-148],[-2,-149],[-18,-149],[-34,-149],[-50,-149],[-66,-149],[-82,-148],[-98,-148],[-114,-147],[-130,-147],[-146,-146],[-162,-145],[-178,-143],[-194,-141],[-210,-139],[-226,-135],[-241,-130],[-255,-122],[-268,-113],[-279,-101],[-286,-87],[-289,-72],[-289,-56],[-288,-40],[-284,-24],[-275,-11],[-262,-2],[-247,4],[-231,7],[-215,7],[-199,6],[-183,6],[-167,5],[-151,5],[-135,4],[-119,3],[-103,2],[-88,-1],[-72,-3],[-56,-5],[-40,-5],[-24,-4],[-8,-1],[7,2],[23,7],[37,15],[48,26],[53,41],[50,56],[40,69],[25,74],[9,76],[-7,77],[-23,76],[-39,76],[-55,76],[-71,75],[-87,74],[-103,73],[-119,73],[-135,73],[-151,74],[-167,75],[-183,79],[-197,86],[-208,98],[-212,113],[-208,128],[-198,140],[-183,145],[-167,145],[-151,144],[-135,143],[-119,143],[-103,142],[-87,141],[-71,139],[-55,138],[-39,137],[-23,135],[-7,134],[9,133]] },
+  { id: 'marina', name: 'Marina Bay Night', ar: 'مارينا باي ليلاً', type: 'proc', theme: 'night', laps: 4, width: 14, runoff: 4, pit: [70, 90], camYaw: .25,
+    blurb: 'A street circuit under floodlights: ninety-degree corners, walls on both sides and chicanes to punish any mistake. Layout inspired by Marina Bay.',
+    pts: [[-31,150],[-15,150],[1,150],[17,150],[33,150],[49,150],[65,150],[81,150],[97,150],[113,150],[129,150],[144,145],[156,134],[170,126],[186,126],[199,134],[210,146],[224,153],[240,155],[256,151],[269,143],[278,130],[280,114],[281,98],[281,82],[282,66],[281,50],[273,36],[264,23],[259,8],[260,-8],[265,-22],[275,-35],[282,-49],[283,-65],[281,-81],[281,-97],[279,-113],[273,-128],[262,-139],[247,-145],[231,-144],[215,-145],[199,-145],[183,-144],[167,-144],[151,-144],[135,-144],[119,-144],[103,-144],[87,-144],[71,-146],[57,-154],[44,-163],[29,-167],[13,-165],[0,-157],[-13,-147],[-28,-143],[-44,-143],[-60,-144],[-76,-144],[-92,-144],[-108,-144],[-124,-144],[-140,-144],[-156,-145],[-172,-146],[-188,-146],[-204,-146],[-220,-146],[-236,-146],[-252,-145],[-268,-143],[-281,-135],[-289,-121],[-291,-105],[-291,-89],[-291,-73],[-292,-57],[-286,-42],[-276,-30],[-269,-16],[-268,0],[-273,16],[-283,28],[-291,42],[-292,57],[-290,73],[-287,89],[-282,104],[-275,119],[-265,131],[-253,142],[-238,148],[-223,151],[-207,151],[-191,151],[-175,150],[-159,150],[-143,150],[-127,150],[-111,150],[-95,150],[-79,150],[-63,150],[-47,150]] },
   { id: 'giza', name: 'Giza Sand Ring', ar: 'حلبة الجيزة', type: 'proc', theme: 'desert', laps: 3, width: 16, runoff: 9,
     blurb: 'Fast sweepers under the pyramids. Sand runoff eats your speed.',
     pts: [[60,-6],[120,-10],[200,30],[230,110],[180,170],[100,150],[60,200],[-20,230],[-110,200],[-140,120],[-80,70],[-120,0],[-60,-40],[0,0]] },
@@ -161,34 +171,6 @@ function addStart(track) {
   track.group.add(g);
 }
 
-// ---------- GLB track (Lider) ----------
-const S = 2.2;   // world scale: turns the kart circuit into a car-sized circuit
-async function buildLider(track, onProgress) {
-  const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  const [glb, meta, bin] = await Promise.all([getAsset('lider.glb', onProgress), getJSON('lider.json'), getAsset('lider.bin')]);
-  const gltf = await loader.parseAsync(glb, '');
-  const sc = gltf.scene; sc.scale.setScalar(S);
-  sc.traverse(o => {
-    if (!o.isMesh) return;
-    o.receiveShadow = true; o.frustumCulled = !o.isInstancedMesh;
-    const m = o.material, nm = m.name || '';
-    if (nm === '02_-_Default_0') { o.visible = false; return; }           // original sky dome: we draw our own sky
-    if (m.map) m.map.anisotropy = 8;
-    if (m.transparent || m.alphaTest > 0 || /Trees|green|fence|wire/.test(nm)) { m.alphaTest = Math.max(m.alphaTest, 0.4); m.transparent = false; m.depthWrite = true; m.side = THREE.DoubleSide; }
-    if (/racetrack|conc|kerb/.test(nm)) { m.roughness = Math.min(m.roughness, 0.92); }
-    o.castShadow = !o.isInstancedMesh ? !/racetrack|grass|green|conc|kerb|road_marking|bitumen|GROOVE|skids|dust|decal|Cracks/.test(nm) : true;
-  });
-  track.group.add(sc);
-  const N = meta.w * meta.h, raw = new Uint8Array(bin, 0, N), h16 = new Int16Array(bin.slice(N, N + N * 2));
-  const surf = new Uint8Array(N), hgt = new Float32Array(N);
-  for (let i = 0; i < N; i++) { const v = raw[i]; surf[i] = v === 255 ? WALL : v === 200 ? ROAD : v === 100 ? KERB : GRASS; hgt[i] = h16[i] / 100 * S; }
-  track.grid = { w: meta.w, h: meta.h, x0: meta.x0 * S, z0: meta.z0 * S, cell: S / meta.ppm, surf, hgt };
-  let pts = resampleClosed(meta.path.map(p => [p[0] * S, p[1] * S]), 2);
-  const shift = Math.round(30 * S / 2); pts = pts.slice(shift).concat(pts.slice(0, shift));   // start line on the main straight
-  track.finishPath(pts);
-  track.bounds = 420;
-}
-
 // ---------- procedural tracks ----------
 function ribbon(path, offL, offR, y, vScale, closed = true, mask = null) {
   const pos = [], uv = [], idx = [], n = path.length; let d = 0, vi = 0, prev = false;
@@ -234,6 +216,7 @@ function instanced1(geo, mat, list, shadow = true) {
   if (list.length && !list.some(t => (t.sx || 1) > 8)) { let x = 0, z = 0; for (const t of list) { x += t.x; z += t.z; } CULL.push({ m, x: x / list.length, z: z / list.length }); }
   return m;
 }
+
 
 function buildProc(track) {
   const def = track.def, th = track.theme, hw = (def.width * 1.2) / 2, B = hw + def.runoff, G = track.group;
@@ -503,8 +486,8 @@ function buildProc(track) {
 
 export async function loadTrack(id, onProgress) {
   const def = TRACKS.find(t => t.id === id), track = new Track(def);
-  if (def.type === 'glb') await buildLider(track, onProgress); else buildProc(track);
-  track.cullables = def.type === 'glb' ? [] : CULL;
+  buildProc(track);
+  track.cullables = CULL;
   addStart(track);
   // minimap bounds
   let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const p of track.path) { a = Math.min(a, p.x); b = Math.max(b, p.x); c = Math.min(c, p.z); d = Math.max(d, p.z); }

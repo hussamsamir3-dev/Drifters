@@ -11,7 +11,6 @@ import { GLOWS } from './car.js';
 import { Post } from './post.js';
 import { GameAudio, ENGINE_SETS } from './audio.js';
 import { Room, hasSupabase, submitLap, topLaps } from './net.js';
-import { getJSON } from './assets.js';
 import { CHAPTERS, EVENTS, goalText, starsFor, levelOf, xpFor, dailyFor } from './career.js';
 
 const $ = id => document.getElementById(id);
@@ -1031,9 +1030,7 @@ const sel = { rivals: 5, wx: 'random', tab: 'quick', ev: 0, ch: 0, mode: 'race',
 const menuPaths = {};
 async function menuPath(def) {
   if (menuPaths[def.id]) return menuPaths[def.id];
-  let pts;
-  if (def.type === 'glb') { const m = await getJSON('lider.json'); pts = m.path.map(p => ({ x: p[0] * 2.2, z: p[1] * 2.2 })); }
-  else pts = resampleClosed(def.pts, 5);
+  const pts = resampleClosed(def.pts, 5);
   let len = 0; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; len += Math.hypot(q.x - p.x, q.z - p.z); });
   return menuPaths[def.id] = { pts, len };
 }

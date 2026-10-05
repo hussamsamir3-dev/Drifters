@@ -4,13 +4,13 @@ const duel = (name, car, skill) => [{ name, car, skill }];
 export const CHAPTERS = [
   { name: 'Shubra Nights', text: 'Uncle Hamdi left you two things: a garage in Shubra with a leaking roof, and an unpaid entry to the Pharaoh\u2019s Cup. Amm Saber, his old mechanic, thinks you should sell the first and forget the second.',
     events: [
-      { id: 's1', title: 'First laps', mode: 'trial', track: 'lider', laps: 3, goal: { type: 'lap', v: [82, 72, 64] },
+      { id: 's1', title: 'First laps', mode: 'trial', track: 'interlagos', laps: 3, goal: { type: 'lap', v: [125, 108, 95] },
         intro: [['Amm Saber', 'Your uncle drove this circuit every Thursday for twenty years. Show me one clean lap and I\u2019ll stop telling you to sell the place.'], ['Amm Saber', 'Brake before the corner, not in it. And stay off the grass \u2014 I only have one set of tyres.']],
         win: 'Amm Saber wipes his hands and says nothing. He is already ordering parts.', lose: 'Amm Saber: \u201cThe stopwatch doesn\u2019t lie. Again.\u201d' },
-      { id: 's2', title: 'Club night', mode: 'race', track: 'lider', laps: 3, diff: 0, goal: { type: 'pos', v: [3, 2, 1] },
+      { id: 's2', title: 'Club night', mode: 'race', track: 'monza', laps: 3, diff: 0, goal: { type: 'pos', v: [3, 2, 1] },
         intro: [['Amm Saber', 'Club night. Five locals who all knew Hamdi. Finish on the podium and people will start saying your name instead of his.'], ['Zizo', 'New kid in the old man\u2019s car? Cute. Try not to hold us up.']],
         win: 'Three people you have never met shake your hand. One of them asks if the garage is open tomorrow.', lose: 'Zizo waves from the podium. It is not a friendly wave.' },
-      { id: 's3', title: 'Zizo\u2019s dare', mode: 'race', track: 'lider', laps: 3, diff: 1, rivals: duel('Zizo', 'E30', .93), goal: { type: 'pos', v: [1, 1, 1] },
+      { id: 's3', title: 'Zizo\u2019s dare', mode: 'race', track: 'silverstone', laps: 3, diff: 1, rivals: duel('Zizo', 'E30', .93), goal: { type: 'pos', v: [1, 1, 1] },
         intro: [['Zizo', 'One on one. You win, I put your name on the Cup list myself. I win, the garage sign comes down.'], ['Amm Saber', 'He\u2019s fast on the straights and sloppy everywhere else. That big saloon eats its rear tyres. Be patient.']],
         win: 'Zizo: \u201cFine. You\u2019re on the list. Don\u2019t make me regret it.\u201d', lose: 'Zizo: \u201cLeave the sign up one more week. I want a rematch crowd.\u201d' } ] },
   { name: 'Sand and Stone', text: 'The Cup\u2019s second round runs in the shadow of the pyramids. The sand gets everywhere, and the regulars here slide their cars on purpose.',
