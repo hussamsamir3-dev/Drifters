@@ -732,6 +732,7 @@ function updateRace(dt) {
   adaptQuality(dt);
 }
 
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
 function updateCamera(dt) {
   if (camera.view && camera.view.enabled && (R.attract || !CAMS[camMode].fixed)) camera.clearViewOffset();
   const me0 = R.player, pitWant = R.pit && (R.pit.busy || (me0.inPit && Math.hypot(me0.x - R.pit.x, me0.z - R.pit.z) < 18)) ? 1 / 1.5 : 1; R.pitZ = (R.pitZ ?? 1) + (pitWant - (R.pitZ ?? 1)) * (1 - Math.exp(-dt * 2.5)); const pz = R.pitZ;      // pit stop: the camera moves in 50% closer
@@ -741,11 +742,19 @@ function updateCamera(dt) {
   if (R.marker) { R.marker.position.y = me.top + 1.5 + Math.sin(R.t * 4) * .12; R.marker.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
-    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz;
+    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz * (1 + .25 * clamp(sp / 40, 0, 1));      // pulls back a little with speed to show more road
     cam.look.x += (lx - cam.look.x) * k; cam.look.z += (lz - cam.look.z) * k; cam.look.y += (me.y - cam.look.y) * k;
     camera.position.set(cam.look.x - Math.sin(yaw) * m.d * z, cam.look.y + m.h * z * (1 - .45 * intro), cam.look.z - Math.cos(yaw) * m.d * z); if (hitPulse > .02) { const a = hitPulse * 1.1; camera.position.x += (Math.random() - .5) * a; camera.position.y += (Math.random() - .5) * a; camera.position.z += (Math.random() - .5) * a; }   // a short, small jolt when your car hits something
     camera.lookAt(cam.look); cam.pos.copy(camera.position); cam.yaw = yaw;
-    { const Wd = renderer.domElement.width, Hd = renderer.domElement.height, sh = (.08 + .2 * clamp(sp / 25, 0, 1)) * (1 - intro); camera.setViewOffset(Wd, Hd, 0, -Hd * sh, Wd, Hd); }      // lens shift: the car rides low on the screen and the road ahead fills the frame
+    {   // Look where the car is going. The travel direction (velocity, blended with the track tangent 28 m ahead, so it looks into corners) is found on the screen,
+      // and the frame is shifted so the car sits near the OPPOSITE edge: the road ahead fills the screen whichever way the car points.
+      const Wd = renderer.domElement.width, Hd = renderer.domElement.height; camera.clearViewOffset(); camera.updateMatrixWorld(true);
+      let dx = sp > 2 ? me.vx / sp : Math.sin(me.th), dz = sp > 2 ? me.vz / sp : Math.cos(me.th); const pa = tr.path[(me.idx + Math.round(28 / tr.spacing)) % tr.n]; const pb = window.__camPath ?? .38; dx = dx * (1 - pb) + pa.tx * pb; dz = dz * (1 - pb) + pa.tz * pb; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      const a = _v1.set(X, me.y, Z).project(camera), b = _v2.set(X + dx * 20, me.y, Z + dz * 20).project(camera); let sx = (b.x - a.x) * camera.aspect, sy = b.y - a.y; const sl = Math.hypot(sx, sy) || 1; sx /= sl; sy /= sl;
+      const k2 = 1 - Math.exp(-dt * 2.6); cam.dX = (cam.dX ?? 0) + (sx - (cam.dX ?? 0)) * k2; cam.dY = (cam.dY ?? 1) + (sy - (cam.dY ?? 1)) * k2;
+      const f = (.3 + .7 * clamp(sp / 18, 0, 1)) * (1 - intro), tgx = -cam.dX * .7 * f, tgy = -cam.dY * .62 * f, ex = tgx - a.x, ey = tgy - a.y;      // where the car should sit, minus where it is
+      cam.sx = (cam.sx ?? 0) + (ex - (cam.sx ?? 0)) * k2; cam.sy = (cam.sy ?? 0) + (ey - (cam.sy ?? 0)) * k2;
+      camera.setViewOffset(Wd, Hd, -cam.sx * Wd / 2, cam.sy * Hd / 2, Wd, Hd); }
     if (Math.abs(camera.fov - m.fov) > .05) { camera.fov = cam.fov = m.fov; camera.updateProjectionMatrix(); }
     shake = 0; return;
   }
@@ -1309,5 +1318,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();
