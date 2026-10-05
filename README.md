@@ -119,3 +119,7 @@ mesh), so it cannot just be dropped in. Send the model and it can be baked the s
 
 
 - All vehicles are generated in code by `js/carmodel.js`, one builder per racing class (rally hatch, GT3 coupe, prototype, stock car, muscle car, roadster, trophy truck, modern and vintage open-wheel). No external car models are used.
+
+## Credits
+- Cars: This work is based on "1965-2002 Rally Cars" (https://sketchfab.com/3d-models/1965-2002-rally-cars-2146acc1e3de409baf46d03a070d0526) by supercarmodels (https://sketchfab.com/supercarmodels), licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). The models were split into bodies and wheels and given paint recolouring for this game.
+- Track "Karting Club Lider" by Nikita Teploukhov (CC BY-NC 4.0, non-commercial use only).

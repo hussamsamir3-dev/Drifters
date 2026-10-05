@@ -23,7 +23,7 @@ const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
 // ---------------- save game ----------------
 const KEY = 'tafheet.v1';
-const save = { trace: {}, evol: .7, dev: false, devGod: false, devScale: 1, boxDay: '', v9: 0, tc: true, abs: true, sens: 1, v7: 0, lang: 'en', zoom: 2.25, units: 'kmh', mvol: .5, svol: .7, look: {}, tune: {}, gp: null, v5: 0, assist: 'full', rules: 'circuit', sectors: {}, up: {}, stats: {}, trophies: {}, gfx: 'auto', autoGas: false, story: {}, xp: 0, daily: '', streak: 0, credits: 0, owned: ['Mazda', 'Mustang'], car: 'Mazda', paint: {}, name: '', best: {}, bestDrift: {}, muted: false };
+const save = { trace: {}, evol: .7, dev: false, devGod: false, devScale: 1, boxDay: '', v9: 0, tc: true, abs: true, sens: 1, v7: 0, lang: 'en', zoom: 2.25, units: 'kmh', mvol: .5, svol: .7, look: {}, tune: {}, gp: null, v5: 0, assist: 'full', rules: 'circuit', sectors: {}, up: {}, stats: {}, trophies: {}, gfx: 'auto', autoGas: false, story: {}, xp: 0, daily: '', streak: 0, credits: 0, owned: ['Mini', 'Escort'], car: 'Mini', paint: {}, name: '', best: {}, bestDrift: {}, muted: false };
 try { Object.assign(save, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
 if (!save.name) save.name = 'Driver' + (100 + Math.random() * 900 | 0);
 { const q = new URLSearchParams(location.search).get('gfx'); if (['auto', 'high', 'medium', 'low'].includes(q)) save.gfx = q; }   // e.g. index.html?gfx=low
@@ -31,11 +31,10 @@ if (!save.v5) { save.autoGas = false; save.v5 = 1; }
 if (!save.v7) { save.zoom = 2.25; save.v7 = 1; }
 if (!save.v8) { save.assist = 'medium'; save.v8 = 1; }
 if (!save.v9) { save.zoom = 1.5; save.v9 = 1; }
-{ const ids = CARS.map(c => c.id); save.owned = (save.owned || []).filter(id => ids.includes(id)); for (const id of ['Mustang', 'Mazda']) if (!save.owned.includes(id)) save.owned.push(id); if (!ids.includes(save.car)) { save.car = 'Mazda'; if (!save.v19) save.credits = (save.credits || 0) + 4000; } save.v19 = 1; }   // the car list changed: keep what still exists, hand back credits for what does not   // automatic gas is now off unless switched on in the menu
+{ const ids = CARS.map(c => c.id); save.owned = (save.owned || []).filter(id => ids.includes(id)); for (const id of ['Mini', 'Escort']) if (!save.owned.includes(id)) save.owned.push(id); if (!ids.includes(save.car)) { save.car = 'Mini'; if (!save.v19) save.credits = (save.credits || 0) + 4000; } save.v19 = 1; }   // the car list changed: keep what still exists, hand back credits for what does not   // automatic gas is now off unless switched on in the menu
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
 const tx = s => save.lang === 'ar' && AR[s] != null ? AR[s] : s;
-const DEFRIM = { Ford: 3, Sterrato: 3, Mazda: 3, LandRover: 1, Urus: 1, Mustang: 1, Mustang2: 1, F1: 4 };      // class-typical wheels: bronze rally rims, white trophy and muscle wheels, gold vintage hubs
-const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: DEFRIM[id] ?? 0, tint: 0, glow: 0 });
+const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 });
 const tuneSet = id => save.tune[id] || (save.tune[id] = { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' });
 const racing = () => !!R && !R.attract;
 const paintOf = id => save.paint[id] ?? CARS.find(c => c.id === id).color;
@@ -214,9 +213,9 @@ async function startRace(o) {
   R.ais.set(me, mkAI(.95));     // used when the player's car goes on autopilot after the flag
   if (o.mode === 'race') {
     const base = [.80, .89, .97][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
-    const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5);
+    const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
-      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length], riv ? riv[i].name : names[i], undefined, { wing: Math.random() * 4 | 0, split: Math.random() * 2 | 0, rim: Math.random() * RIMS.length | 0, liv: [1, 3, 5, 10, 15, 7][Math.random() * 6 | 0], livc: Math.random() * LIVC.length | 0, livc2: Math.random() * LIVC.length | 0, num: 2 + (i * 7 + (Math.random() * 6 | 0)) % 97 });
+      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], undefined, { wing: s.wing ? 0 : Math.random() * 4 | 0, split: Math.random() * 2 | 0, rim: 0 }); livUsed.add(s.id);
       R.ais.set(car, mkAI(riv ? riv[i].skill : base + (4 - i) * .012 + Math.random() * .015)); car.assistK = .7; R.cars.push(car); placeOnGrid(car, i);
     }
     R.cars.push(me); placeOnGrid(me, count);
@@ -279,7 +278,7 @@ function progress(car) {
 function safetyCar(why) {
   if (!R || R.sc || !R.pro || R.mode !== 'race' || R.state !== 'go' || R.elim || R.cars.length < 4 || (R.scN || 0) >= 2 || R.t - (R.scT || -99) < 50) return;
   const lead = rank()[0]; if (lead.lap >= R.laps - 1 || !R.ais.size) return; const tr = R.track, i = (lead.idx + Math.round(60 / tr.spacing)) % tr.n, p = tr.path[i], th = Math.atan2(p.tx, p.tz);
-  const car = new Car(CARS.find(c => c.id === 'Audi'), 0xf3f4f6, 'Safety car', undefined, { wing: 0 }); car.reset(p.x, p.z, th); car.vx = Math.sin(th) * 18; car.vz = Math.cos(th) * 18; car.idx = i; car.fuelK = 0; car.wear = 0; car.dmgScale = 0; car.partK = 0; car.setLights(true); scene.add(car.root);
+  const car = new Car(CARS.find(c => c.id === 'E30'), 0xf3f4f6, 'Safety car', undefined, { wing: 0 }); car.reset(p.x, p.z, th); car.vx = Math.sin(th) * 18; car.vz = Math.cos(th) * 18; car.idx = i; car.fuelK = 0; car.wear = 0; car.dmgScale = 0; car.partK = 0; car.setLights(true); scene.add(car.root);
   const bar = new THREE.Mesh(new THREE.BoxGeometry(1.5, .12, .3), new THREE.MeshBasicMaterial({ color: 0xffa200 })); bar.position.y = car.top + .1; car.root.add(bar);
   const ai = Object.assign({}, R.ais.values().next().value, { brain: null, pitT: 0, lane: 0, off: 0, skill: .8, care: 1.5, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false } });
   R.sc = { car, ai, bar, t: 0, dur: 24 }; R.scN = (R.scN || 0) + 1; for (const c of R.cars) c.capV = 21; flash('Safety car', true, 2600); radio('Safety car is out' + (why ? ' for ' + why : '') + '. Hold position, no overtaking.', true); audio.beep(440, .5);
@@ -416,18 +415,70 @@ function tow(car) {
   car.reset(b.x, b.z, th); car.repair(); car.fuel = 1; car.idx = R.track.nearest(b.x, b.z); car.holdT = R.t + TUNE.parts.towSeconds; if (ai) ai.pitT = 0;
   if (car === R.player) { cam.yaw = car.th; flash('Towed to the pits  +' + TUNE.parts.towSeconds + 's', true, 2500); radio('Recovery truck has you. Rebuild will cost about ' + TUNE.parts.towSeconds + ' seconds.', true); } else flash(car.name + ' ' + tx('is towed in'), false, 1200);
 }
+// The AI's pit stop. A car that has crashed, worn its tyres out or run low on fuel brakes for the pit entry, drives the lane at the limiter
+// to its OWN numbered box, stops, is serviced, and rejoins. Boxes are never shared: a car whose box is taken uses the nearest free one.
+const PIT_LIMIT = 20;
+function aiNeedsPit(car) {
+  const P = car.parts, left = R.laps - Math.max(0, car.lap), lowFuel = car.fuelK > 0 && car.fuel < Math.max(.07, (car.fpl || .15) * 1.15);
+  const wrecked = car.health < .55 || P.engine > .35 || P.gearbox > .5 || P.wheels.some(w => w > .45) || car.dmg.front > .6 || car.dmg.rear > .6 || car.dmg.left > .6 || car.dmg.right > .6;      // a crash
+  const critical = car.health < .35 || P.engine > .6 || P.gearbox > .75 || P.wheels.some(w => w > .7);
+  if (left <= 1 && !critical) return false;                                    // last lap: only stop if the car is truly broken
+  return wrecked || car.tyre < .3 || lowFuel;
+}
 function aiPit(car, ai, dt) {
-  const P = car.parts, lowFuel = car.fuelK > 0 && car.fuel < Math.max(.07, (car.fpl || .15) * 1.15);       // not enough for another lap
-  if (!(car.health < .4 || P.engine > .6 || P.gearbox > .7 || P.wheels.some(w => w > .7) || car.tyre < .28 || lowFuel || ai.pitT > 0)) return;
-  const box = ai.box || R.pit, dx = box.x - car.x, dz = box.z - car.z, d = Math.hypot(dx, dz), f = dx * Math.sin(car.th) + dz * Math.cos(car.th);
-  if (d > 60 || (f < -1 && !ai.pitT)) return;
-  const vw = d < 3 ? 0 : Math.min(28, Math.sqrt(12 * (d - 2)));
-  ai.inp.steer = d > 2.5 ? clamp(wrap(Math.atan2(dx, dz) - car.th) * 2.5, -1, 1) : 0; ai.inp.throttle = car.speed < vw ? .7 : 0; ai.inp.brake = car.speed > vw + 1 && car.vf > 2 ? 1 : 0; ai.inp.nitro = false;
-  if (d < 3.4 && car.speed < 4) {
-    car.vx *= .8; car.vz *= .8; ai.inp.throttle = 0;
-    if (!ai.pitT) ai.pitNeed = pitJobs(car).reduce((a, j) => a + j[1], 0);
-    ai.pitT = (ai.pitT || 0) + dt;
-    if (ai.pitT > ai.pitNeed) { car.repair(); car.fuel = 1; car.wetTyres = R.wet > .4; ai.pitT = 0; R.aiPits = (R.aiPits || 0) + 1; }
+  const tr = R.track, n = tr.n;
+  if (!tr.pitBoxes) {                                                          // a track without a pit lane keeps one shared service box
+    const P = car.parts; if (!(car.health < .4 || P.engine > .6 || P.gearbox > .7 || P.wheels.some(w => w > .7) || car.tyre < .28 || ai.pitT > 0)) return;
+    const box = R.pit, dx = box.x - car.x, dz = box.z - car.z, d = Math.hypot(dx, dz), f = dx * Math.sin(car.th) + dz * Math.cos(car.th); if (d > 60 || (f < -1 && !ai.pitT)) return;
+    const vw = d < 3 ? 0 : Math.min(28, Math.sqrt(12 * (d - 2))); ai.inp.steer = d > 2.5 ? clamp(wrap(Math.atan2(dx, dz) - car.th) * 2.5, -1, 1) : 0; ai.inp.throttle = car.speed < vw ? .7 : 0; ai.inp.brake = car.speed > vw + 1 && car.vf > 2 ? 1 : 0; ai.inp.nitro = false;
+    if (d < 3.4 && car.speed < 4) { car.vx *= .8; car.vz *= .8; ai.inp.throttle = 0; if (!ai.pitT) ai.pitNeed = pitJobs(car).reduce((a, j) => a + j[1], 0); ai.pitT = (ai.pitT || 0) + dt; if (ai.pitT > ai.pitNeed) { car.repair(); car.fuel = 1; car.wetTyres = R.wet > .4; ai.pitT = 0; R.aiPits = (R.aiPits || 0) + 1; } }
+    return;
+  }
+  const p = tr.path, sp = car.speed, hw = tr.pitHw, inZone = i => i >= tr.pitIn || i <= tr.pitOut;
+  const idxAhead = (a, b) => ((b - a) % n + n) % n;                            // nodes from a forward to b
+  if (!ai.pitState) {
+    if (R.t < 10 || car.stranded || (ai.pitCool || 0) > R.t || !aiNeedsPit(car)) return;
+    // choose a box: the car's own, or the nearest free one that is not the player's or the rival's
+    const taken = new Set(); for (const [c2, a2] of R.ais) if (c2 !== car && a2.pitState && a2.pitBox) taken.add(a2.pitBox);
+    const off = new Set([R.myBox, R.rivBox]); let b = ai.box; const ok = q => !taken.has(q) && !off.has(tr.pitBoxes.indexOf(q));
+    if (!ok(b)) { b = tr.pitBoxes.filter(ok).sort((x, y) => idxAhead(car.idx, x.idx) - idxAhead(car.idx, y.idx))[0]; if (!b) return; }
+    ai.pitBox = b; ai.pitState = 'in'; ai.pitNeed = pitJobs(car).reduce((a, j) => a + j[1], 0); ai.pitOff = null; ai.svcT = 0; R.aiPitCalls = (R.aiPitCalls || 0) + 1;
+  }
+  const b = ai.pitBox, inp = ai.inp, pi = car.idx, laneOff = hw + 2.3;
+  ai.pitT = ai.pitT || .001;                                                   // tells the stuck-car logic this car is busy
+  const lat = i => { const q = p[i]; return (car.x - q.x) * q.tz - (car.z - q.z) * q.tx; };
+  const cap = vt => { if (sp > vt + .8) { inp.throttle = 0; inp.brake = clamp((sp - vt) / 5, .25, 1); } else if (sp > vt - .5) { inp.throttle = Math.min(inp.throttle, .25); inp.brake = 0; } };
+  const steerTo = (x, z, k = 2.4) => { inp.steer = clamp(wrap(Math.atan2(x - car.x, z - car.z) - car.th) * k, -1, 1); };
+  const laneDrive = (target, vmax) => {                                       // follow the lane, ease sideways, keep a gap to the car in front
+    if (ai.pitOff == null) ai.pitOff = lat(pi); ai.pitOff += (target - ai.pitOff) * Math.min(1, dt * 1.4);
+    const L = Math.round((6 + sp * .28) / tr.spacing), q = p[(pi + L) % n]; steerTo(q.x + q.tz * ai.pitOff, q.z - q.tx * ai.pitOff);
+    let v = vmax; const sn = Math.sin(car.th), cs = Math.cos(car.th); for (const o of R.cars) { if (o === car || o.out) continue; const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn + dz * cs, l = dx * cs - dz * sn; if (f > 0 && f < 14 && Math.abs(l) < 2.2) v = Math.min(v, Math.max(0, o.speed + (f - 7) * .5)); }
+    inp.throttle = sp < v ? (sp < v - 3 ? .8 : .45) : 0; inp.brake = 0; cap(v); inp.nitro = false; inp.hand = false;
+  };
+  if (ai.pitState === 'in') {                                                  // racing on: brake so as to arrive at the lane at the limit, then turn in
+    const dIn = idxAhead(pi, tr.pitIn) * tr.spacing;
+    if (inZone(pi) && dIn > n * tr.spacing * .5) ai.pitState = 'lane';
+    else { if (dIn < 120) cap(Math.sqrt(PIT_LIMIT * PIT_LIMIT + 2 * 9 * Math.max(0, dIn - 4))); if (dIn < 22) { const L = Math.round((7 + sp * .3) / tr.spacing), q = p[(pi + L) % n], o2 = Math.max(0, Math.min(1, 1 - dIn / 22)) * laneOff; steerTo(q.x + q.tz * o2, q.z - q.tx * o2); } return; }
+  }
+  if (ai.pitState === 'lane') {
+    const dBox = idxAhead(pi, b.idx) * tr.spacing; if (dBox > n * tr.spacing * .5 || dBox < 3) { ai.pitState = 'park'; }
+    else { laneDrive(laneOff, PIT_LIMIT); return; }
+  }
+  if (ai.pitState === 'park') {                                                // from the lane into the box, stopping on the mark
+    const dx = b.x - car.x, dz = b.z - car.z, d = Math.hypot(dx, dz), vt = d < 1.3 ? 0 : Math.min(9, Math.max(1.6, d * .9));
+    steerTo(b.x, b.z, 2.8); inp.throttle = sp < vt ? .5 : 0; inp.brake = sp > vt + .5 ? clamp((sp - vt) / 3, .3, 1) : 0; inp.nitro = false;
+    if (d < 2.6 && sp < 2.2) { ai.pitState = 'service'; ai.svcT = 0; } else if (d > 40) { ai.pitState = 'out'; }
+    if (ai.pitState === 'park') return;
+  }
+  if (ai.pitState === 'service') {                                             // wheels off, engine seen to, tyres and fuel: the same jobs and times as the player's stop
+    car.vx *= .7; car.vz *= .7; inp.throttle = 0; inp.brake = 1; inp.steer = 0; ai.svcT += dt;
+    if (ai.svcT >= ai.pitNeed) { car.repair(); car.fuel = 1; car.wetTyres = R.wet > .4; R.aiPits = (R.aiPits || 0) + 1; ai.pitState = 'out'; ai.pitOff = null; }
+    return;
+  }
+  if (ai.pitState === 'out') {                                                 // back along the lane at the limiter, then merge onto the track
+    const dOut = idxAhead(pi, tr.pitOut) * tr.spacing, left = inZone(pi) && dOut < n * tr.spacing * .5;
+    if (!left) { ai.pitState = null; ai.pitT = 0; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 50; return; }
+    laneDrive(dOut < 26 ? laneOff * Math.max(0, dOut / 26) * .6 : laneOff, dOut < 18 ? 26 : PIT_LIMIT);
   }
 }
 // ---------------- live race events: slipstream, overtakes, oil, bounties, speed traps, haze ----------------
@@ -1001,7 +1052,7 @@ async function refreshMenu() {
   $('musicVol').value = save.mvol * 100; $('sfxVol').value = save.svol * 100; $('engVol').value = save.evol * 100; setTxt('hUnit', save.units === 'mph' ? 'mph' : 'km/h');
   if (gpMode) { const g = save.gp && !save.gp.done ? save.gp : null; $('gpBox').innerHTML = '<h2>' + tx('Grand Prix') + '</h2><p>' + tx('Four rounds, eight drivers, points for every finish. The third round is wet.') + '</p><ol>' + GP_TRACKS.map((id, i) => { const t = TRACKS.find(x => x.id === id); return '<li class="' + (g && i < g.round ? 'done' : g && i === g.round ? 'on' : '') + '">' + (save.lang === 'ar' ? t.ar : t.name) + '</li>'; }).join('') + '</ol>' + (g ? '<p class="meta">' + Object.entries(g.pts).sort((a, b) => b[1] - a[1]).slice(0, 4).map((e, i) => (i + 1) + '. ' + e[0] + ' ' + e[1]).join(' · ') + '</p>' : ''); }
   { const sp2 = CARS[sel.car], L = lookOf(sp2.id), sw = (k, arr) => arr.map((c, i) => '<button data-k="' + k + '" data-v="' + i + '" class="' + (L[k] === i ? 'on' : '') + '" style="background:' + (c ? hex(c) : 'transparent') + '">' + (c ? '' : '×') + '</button>').join(''), sg = (k, labels) => labels.map((l, i) => '<button data-k="' + k + '" data-v="' + i + '" class="' + (L[k] === i ? 'on' : '') + '">' + tx(l) + '</button>').join('');
-    $('lookRows').innerHTML = '<h3>' + tx('Rear wing') + '</h3>' + (garageCar && garageCar.hasWing ? '<p class="note">' + tx('This car has its own wing.') + '</p>' : '<div class="seg wide four">' + sg('wing', ['None', 'Lip', 'GT wing', 'Race wing']) + '</div>') + '<h3>' + tx('Front splitter') + '</h3><div class="seg wide two">' + sg('split', ['Off', 'On']) + '</div><h3>' + tx('Extras') + '</h3><div class="seg wide">' + ['skirt', 'scoop', 'pipe'].map((k, i) => '<button data-k="' + k + '" data-v="' + (L[k] ? 0 : 1) + '" class="' + (L[k] ? 'on' : '') + '">' + tx(['Side skirts', 'Roof scoop', 'Exhaust tips'][i]) + '</button>').join('') + '</div><h3>' + tx('Livery') + '</h3><div class=\"seg wide\">' + [['Plain', 0], ['Stripes', 1], ['Roof', 3], ['Flash', 5], ['Nose', 10], ['Full', 15]].map(([n, v]) => '<button data-k=\"liv\" data-v=\"' + v + '\" class=\"' + (L.liv === v ? 'on' : '') + '\">' + tx(n) + '</button>').join('') + '</div><div class=\"paints\">' + sw('livc', LIVC) + '</div><div class=\"paints\">' + sw('livc2', LIVC) + '</div>' + '<h3>' + tx('Race number') + '</h3><div class="seg wide"><button data-k="num" data-v="' + Math.max(0, (L.num || 0) - 1) + '">−</button><button class="on">' + (L.num ? L.num : tx('None')) + '</button><button data-k="num" data-v="' + Math.min(99, (L.num || 0) + 1) + '">+</button></div><h3>' + tx('Wheels') + '</h3><div class="paints">' + sw('rim', RIMS) + '</div><h3>' + tx('Glass') + '</h3><div class="paints">' + sw('tint', TINTS) + '</div><h3>' + tx('Underglow') + '</h3><div class="paints">' + sw('glow', GLOWS) + '</div>';
+    $('lookRows').innerHTML = '<h3>' + tx('Rear wing') + '</h3>' + (garageCar && garageCar.hasWing ? '<p class="note">' + tx('This car has its own wing.') + '</p>' : '<div class="seg wide four">' + sg('wing', ['None', 'Lip', 'GT wing', 'Race wing']) + '</div>') + '<h3>' + tx('Front splitter') + '</h3><div class="seg wide two">' + sg('split', ['Off', 'On']) + '</div><h3>' + tx('Extras') + '</h3><div class="seg wide">' + ['skirt', 'scoop', 'pipe'].map((k, i) => '<button data-k="' + k + '" data-v="' + (L[k] ? 0 : 1) + '" class="' + (L[k] ? 'on' : '') + '">' + tx(['Side skirts', 'Roof scoop', 'Exhaust tips'][i]) + '</button>').join('') + '</div><h3>' + tx('Wheels') + '</h3><div class="paints">' + sw('rim', RIMS) + '</div><h3>' + tx('Glass') + '</h3><div class="paints">' + sw('tint', TINTS) + '</div><h3>' + tx('Underglow') + '</h3><div class="paints">' + sw('glow', GLOWS) + '</div>';
     const tn = tuneSet(sp2.id), TR = [['gear', 'Gearing', 'Top speed', 'Acceleration'], ['aero', 'Downforce', 'Less drag', 'More grip'], ['brake', 'Brake bias', 'Rearward', 'Forward'], ['susp', 'Balance', 'Agile', 'Stable']];
     $('tuneRows').innerHTML = TR.map(([k, n1, lo, hi]) => '<div class="trow2"><b>' + tx(n1) + '</b><span>' + tx(lo) + '</span><button data-k="' + k + '" data-d="-1">−</button><i>' + [-2, -1, 0, 1, 2].map(v => '<u class="' + (v === tn[k] ? 'on' : '') + '"></u>').join('') + '</i><button data-k="' + k + '" data-d="1">+</button><span>' + tx(hi) + '</span></div>').join('') + '<h3>' + tx('Tyre compound') + '</h3><div class="seg wide">' + ['soft', 'medium', 'hard'].map(c => '<button data-c="' + c + '" class="' + (tn.tyre === c ? 'on' : '') + '">' + tx(c[0].toUpperCase() + c.slice(1)) + '</button>').join('') + '</div><p class="note">' + tx('Soft tyres grip more and wear faster. Hard tyres last longer. Settings apply to this car only.') + '</p>' + tuneTable(sp2, tn, upOf(sp2.id)); }
 
@@ -1024,7 +1075,7 @@ async function refreshMenu() {
   $('carName').textContent = save.lang === 'ar' ? spec.ar : spec.name; $('carBlurb').textContent = spec.cls + (save.lang === 'ar' ? '' : '. ' + spec.blurb); $('carPic').style.display = sel.tab === 'garage' || sel.tab === 'tune' ? 'none' : ''; $('carSpec').textContent = tx(spec.klass) + ' ' + tx('class') + ' · ' + spec.hp + ' hp · ' + spec.mass.toLocaleString() + ' kg · ' + spec.engine + ' · 0–100 ' + (spec.sprint || '–') + ' s · ' + (save.units === 'mph' ? Math.round((spec.kmh || spec.top * 3.6) / 1.609) + ' mph' : (spec.kmh || Math.round(spec.top * 3.6)) + ' km/h');
   $('stSpeed').style.width = (spec.top - 40) / 30 * 100 + '%'; $('stAcc').style.width = (spec.acc - 6) / 7 * 100 + '%';
   $('stGrip').style.width = (spec.grip - .9) / .55 * 100 + '%'; $('stDrift').style.width = clamp((1.06 - spec.rear) * 4 + spec.loose * .6, .1, 1) * 100 + '%';
-  $('paints').innerHTML = PAINTS.map(p => `<button style="background:${hex(p)}" data-p="${p}" class="${paintOf(spec.id) === p ? 'on' : ''}" aria-label="Paint ${hex(p)}"></button>`).join('');
+  $('paints').innerHTML = [spec.color, ...PAINTS].map(p => `<button style="background:${hex(p)}" data-p="${p}" class="${paintOf(spec.id) === p ? 'on' : ''}" aria-label="Paint ${hex(p)}"></button>`).join('');
   const up = upOf(spec.id);
   $('ups').innerHTML = owned ? UPS.map(([k, label]) => { const l = up[k], cost = upCost(spec, l); return `<button data-k="${k}" ${l >= 3 || save.credits < cost ? 'disabled' : ''}><b>${label}</b><i>${'●'.repeat(l)}${'○'.repeat(3 - l)}</i><small>${l >= 3 ? 'Max' : cost.toLocaleString()}</small></button>`; }).join('') : '';
   show('tabTrophies', sel.tab === 'trophies');

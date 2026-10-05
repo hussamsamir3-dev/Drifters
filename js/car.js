@@ -1,6 +1,5 @@
 // Cars: models, tyre-model physics, wheel animation, effects, AI driver, network ghost.
 import * as THREE from 'three';
-import { buildStyled, hasOwnWing } from './carmodel.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GRASS, KERB, ROAD, WALL, PIT } from './tracks.js';
 import { getAsset } from './assets.js';
@@ -64,8 +63,10 @@ function buildProcedural() {
     2.9, .8, .8, .36, .36, .26, .26, [[.5, .34, -2.46]]);
 }
 export async function loadCars() {
-  protos = {};       // every vehicle is generated in carmodel.js, one builder per racing class
-  for (const s of CARS) { protos['sty:' + s.id] = buildStyled(s.id); s.model = 'sty:' + s.id; s.body = 'k'; s.wing = hasOwnWing(s.id); }
+  // The eighteen rally cars live in one file. Every car is a group: a textured body (glass split out) and four separate wheel objects.
+  const gltf = await new GLTFLoader().parseAsync(await getAsset('cars.glb'), '');
+  protos = {}; for (const g of gltf.scene.children) protos[g.name] = g;
+  for (const s of CARS) { const p = protos[s.id]; s.model = s.id; s.body = 'k'; s.wing = p && p.userData.wing ? 1 : 0; }
 }
 
 const shared = {};
@@ -76,6 +77,16 @@ function tyreTextMat() {      // printed sidewall lettering, drawn once on a rin
   if (TYT) return TYT; const cv = document.createElement('canvas'); cv.width = cv.height = 256; const k = cv.getContext('2d'); k.translate(128, 128); k.fillStyle = '#fff'; k.font = '900 19px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle';
   for (const [base, txt] of [[0, 'TAFHEET RACING'], [Math.PI, 'SUPER · 2026']]) for (let i = 0; i < txt.length; i++) { k.save(); k.rotate(base + (i - (txt.length - 1) / 2) * .17); k.translate(0, -113); k.fillText(txt[i], 0, 0); k.restore(); }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; TYT = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: .9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }); TYT.name = 'tyretext'; return TYT;
+}
+// The pack's cars carry their real liveries in a texture. Recolouring swaps only the car's main body colour for the chosen paint
+// (everything within a colour distance of the livery's base colour), so sponsors, stripes and numbers stay as drawn.
+function texMaterial(src, info, paintHex, recolor) {
+  const m = src.clone(); m.vertexColors = true; m.roughness = .46; m.metalness = .08; m.envMapIntensity = .55; m.side = THREE.DoubleSide; m.name = 'tex';
+  const b = info.base || [.9, .9, .9], U = m.userData.rc = { uBase: { value: new THREE.Color().setRGB(b[0], b[1], b[2], THREE.SRGBColorSpace) }, uPaint: { value: new THREE.Color(paintHex) }, uOn: { value: recolor ? 1 : 0 } };
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U); sh.fragmentShader = 'uniform vec3 uBase, uPaint; uniform float uOn;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    if (uOn > .5) { vec3 cs = pow(max(diffuseColor.rgb, vec3(0.)), vec3(.4545)), bs = pow(max(uBase, vec3(0.)), vec3(.4545)); float mm = 1. - smoothstep(.11, .22, distance(cs, bs));
+      float lr = dot(diffuseColor.rgb, vec3(.2126, .7152, .0722)) / max(dot(uBase, vec3(.2126, .7152, .0722)), .04); diffuseColor.rgb = mix(diffuseColor.rgb, uPaint * clamp(lr, .12, 1.5), mm); }`); };
+  m.customProgramCacheKey = () => 'texrc'; return m;
 }
 export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
 function livery(m) {
@@ -124,15 +135,17 @@ export class Car {
     this.dirt = 0; this.dirtShown = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
     const proto = protos[spec.model || spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
-    this.m = mats(color); this.wheels = {}; this.bodyMeshes = [];
+    this.m = mats(color); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
+    if (proto.userData.rim != null) { const rm = this.m.rim.clone(); rm.color.setHex(proto.userData.rim); this.m.rim = rm; }      // each car's own wheel colour
     this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dmgScale = 1; this.wear = 1;
     for (const child of proto.children) {
       const c = child.clone(true);
       c.traverse(o => {
         if (!o.isMesh) return; o.castShadow = true;
         const n = o.userData.kind = o.material.name;
-        o.material = n === 'paint' ? this.m.paint : n === 'tire' ? this.m.tire : n === 'rim7' ? this.m.rim : n === 'rim6' ? this.m.rimDark : this.m[n] || this.m.body;
-        if (o.geometry.attributes.color) { const k = o.material.uuid; this.vc = this.vc || {}; if (!this.vc[k]) { const src = o.material; this.vc[k] = src.clone(); this.vc[k].vertexColors = true; if (src.userData.liv) { this.vc[k].userData.liv = src.userData.liv; this.vc[k].onBeforeCompile = src.onBeforeCompile; this.vc[k].customProgramCacheKey = () => 'liveryvc'; } } o.material = this.vc[k]; }   // models that carry their own panel shading keep it
+        if (n === 'tex') { this.texCar = true; this.tex = this.tex || {}; const k = o.material.uuid; o.material = this.tex[k] || (this.tex[k] = texMaterial(o.material, proto.userData, color, color !== spec.color)); }
+        else o.material = n === 'paint' ? this.m.paint : n === 'tire' ? this.m.tire : n === 'rim7' ? this.m.rim : n === 'rim6' ? this.m.rimDark : this.m[n] || this.m.body;
+        if (n !== 'tex' && o.geometry.attributes.color) { const k = o.material.uuid; this.vc = this.vc || {}; if (!this.vc[k]) { const src = o.material; this.vc[k] = src.clone(); this.vc[k].vertexColors = true; if (src.userData.liv) { this.vc[k].userData.liv = src.userData.liv; this.vc[k].onBeforeCompile = src.onBeforeCompile; this.vc[k].customProgramCacheKey = () => 'liveryvc'; } } o.material = this.vc[k]; }   // models that carry their own panel shading keep it
       });
       if (c.name.startsWith('body')) { chassis.add(c); c.traverse(o => { if (o.isMesh) { o.geometry = o.geometry.clone(); o.userData.orig = o.geometry.attributes.position.array.slice(); this.bodyMeshes.push(o); } }); }
       else { const pivot = new THREE.Group(); pivot.position.copy(c.position); c.position.set(0, 0, 0); pivot.add(c); root.add(pivot); this.wheels[c.name.slice(6, 8)] = { pivot, mesh: c, x: pivot.position.x, y: pivot.position.y, z: pivot.position.z }; }
@@ -378,7 +391,7 @@ export class Car {
       for (const [x, y, z] of spots) { put(new THREE.CylinderGeometry(.058, .05, .15, 20, 1, true).rotateX(Math.PI / 2), chrome, x, y, z - .035); put(new THREE.CircleGeometry(.047, 18), inner, x, y, z + .02).rotation.y = Math.PI; } }   // a larger polished tip over each of the car's own pipes
     this.m.paint.userData.liv.uH.value = top(minZ, maxZ, 9); this.m.paint.userData.liv.uZ.value = maxZ; { const U2 = this.m.paint.userData.liv, dr = this.door; U2.uDy.value = dr ? dr[0] : U2.uH.value * .5; U2.uDz.value = dr ? dr[1] : -.1; U2.uAsp.value = this.T.l / this.T.h; }
     part = 'num';
-    if (L.num) { const key = 'n' + L.num; if (!LAMP[key]) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const k = cv.getContext('2d'); k.fillStyle = '#111'; k.font = '900 ' + (L.num > 9 ? 78 : 96) + 'px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(String(L.num), 64, 70); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; LAMP[key] = new THREE.MeshBasicMaterial({ map: t, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }); }
+    if (L.num && !this.texCar) { const key = 'n' + L.num; if (!LAMP[key]) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const k = cv.getContext('2d'); k.fillStyle = '#111'; k.font = '900 ' + (L.num > 9 ? 78 : 96) + 'px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(String(L.num), 64, 70); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; LAMP[key] = new THREE.MeshBasicMaterial({ map: t, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }); }
       const hTop = top(minZ, maxZ, 9), dy = this.door ? this.door[0] : hTop * .5, dz = this.door ? this.door[1] : -.1, xs = side(dz - .12, dz + .12, dy - .12, dy + .12); for (const sx of [-1, 1]) { const p = put(new THREE.PlaneGeometry(.46, .46), LAMP[key], sx * (xs + .012), dy, dz); p.rotation.y = sx * Math.PI / 2; p.castShadow = false; } }
     // ---- upgrades you can see: engine = bonnet vents (and an intake at level 3), tyres = wider rubber, armour = nose bar, nitro = blue bottles on the tail
     part = 'up'; { const U = this.up || {}, by = z => top(z - .15, z + .15, maxX * .5);
@@ -610,19 +623,47 @@ export function aiDrive(car, track, ai, cars, dt) {
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
   // drift the racing line towards the inside of the coming corner, and around slower cars
   const ap = p[(car.idx + look + Math.round(34 / track.spacing)) % n], inside = clamp(tgt.k * 300, -1, 1), setup = clamp(ap.k * 300, -1, 1);
-  let want = (inside - setup * .85 * (1 - Math.abs(inside))) * ai.wide * 1.2 + ai.lane * (1 - Math.abs(inside)) + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);   // racing line: out wide before the corner, down to the apex, let it run out
-  let brakeFor = 0; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
+  // Apex rules, taken from the track's own corners: brake in a straight line, swing out wide on the approach, turn in LATE, clip the apex after the
+  // middle of the corner and get on the power, then run out to the edge of the road on the exit. In an S-bend the exit of one corner blends into the entry of the next.
+  const ix = (car.idx + look + 7) % n, T0 = .005, kk = i => p[(i % n + n) % n].k, W = ai.max * .72, sm = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  const corner = from => {
+    let s = from, q = 0; const sg = Math.sign(kk(from));
+    if (Math.abs(kk(from)) > T0) { while (q++ < 50 && Math.abs(kk(s - 1)) > T0 && Math.sign(kk(s - 1)) === sg) s--; }
+    else { s = -1; for (q = 1; q <= 50; q++) if (Math.abs(kk(from + q)) > T0) { s = from + q; break; } if (s < 0) return null; }
+    const dir = Math.sign(kk(s)); let e = s; q = 0; while (q++ < 70 && Math.abs(kk(e + 1)) > T0 * .7 && Math.sign(kk(e + 1)) === dir) e++;
+    return { s, e, dir, len: e - s + 1, inside: from >= s && from <= e };
+  };
+  let lineOff = 0, wsum = 0, cd = 0;
+  {
+    const c1 = corner(ix), ua = .6 + (ai.apexU ?? (ai.apexU = (Math.random() - .5) * .12));          // where in the corner this driver clips the apex (about 60%: a late apex)
+    if (c1) {
+      const d = c1.inside ? 0 : (c1.s - ix) * track.spacing; let o1, w1;
+      if (c1.inside) { const u = (ix - c1.s) / Math.max(1, c1.len); o1 = u < ua ? -c1.dir * W * (.9 - 1.75 * sm(u / ua)) : c1.dir * W * (.85 - .7 * sm((u - ua) / (1 - ua))); w1 = 1; }      // wide -> apex -> unwinding out
+      else { o1 = -c1.dir * W * .9 * clamp((75 - d) / 45, 0, 1); w1 = clamp((75 - d) / 30, 0, 1); }                                                                                           // swing out on the approach
+      lineOff += o1 * w1; wsum += w1; if (d < 70 || c1.inside) cd = c1.dir;
+    }
+    if (!(c1 && c1.inside)) {                                                                    // the corner just behind: track out to the edge
+      let b = ix, qd = 0; while (qd < 40 && Math.abs(kk(b)) <= T0) { b--; qd++; }
+      if (qd > 0 && qd < 40) { const dirb = Math.sign(kk(b)), dm = qd * track.spacing, w0 = clamp(1 - dm / 70, 0, 1); lineOff += -dirb * W * .9 * sm(dm / 14) * w0; wsum += w0; }
+    }
+  }
+  let want = lineOff / Math.max(1, wsum) + ai.lane * (1 - clamp(wsum, 0, 1)) + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
+  let brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
     if (o === car || o.out) continue; const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0, pk = o.isPlayer ? 1.75 : 1;      // the player gets a wider berth than other AI cars
     if (f < -3.5) { if (o.isPlayer) { if (f > -13 && Math.abs(l) < 3.2 && o.vx * sn0 + o.vz * cs0 > car.vf + 1.5) want += (l > 0 ? -1 : 1) * 2.4; continue; }       // a faster player behind: move over and let them through, never defend the line
       if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + 1 && Math.abs(setup) > .3) want += setup * 1.4 * ai.care; continue; }   // a faster car behind before a corner: cover the inside
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
+    if (f > 0 && f < 26 && Math.abs(l) < 2.3 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 6.5, -3) * .9);      // keep a gap: never faster than closes the distance gently
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
-    else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) want += (l > 0 ? -1 : 1) * 1.3 * ai.care * pk;                                                // alongside: leave a car's width
+    else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
+      if (cd && l * cd > 0) { want += -cd * 2.4 * ai.care * pk; brakeFor = Math.max(brakeFor, .1); }          // that car holds the inside: it owns the apex, so give it the room
+      else want += (l > 0 ? -1 : 1) * 1.3 * ai.care * pk;                                                      // otherwise leave a car's width
+    }
   }
-  ai.off += (clamp(want, -ai.max, ai.max) - ai.off) * Math.min(1, dt * 1.5);
+  ai.off += (clamp(want, -ai.max, ai.max) - ai.off) * Math.min(1, dt * 2.7);
   const tx = tgt.x + tgt.tz * ai.off, tz = tgt.z - tgt.tx * ai.off;
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
@@ -638,6 +679,7 @@ export function aiDrive(car, track, ai, cars, dt) {
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16);
+  v = Math.min(v, vFollow);
   const inp = ai.inp; inp.steer = clamp(ef * 2.4, -1, 1);
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;
   if (sp > 8 && Math.abs(car.beta) > .1) inp.throttle *= Math.abs(car.beta) > .25 ? .15 : .5;   // feather the throttle when the tail steps out

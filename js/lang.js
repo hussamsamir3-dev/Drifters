@@ -28,6 +28,7 @@ export const AR = {
   'Livery': 'الطلاء', 'Plain': 'سادة', 'Stripes': 'خطوط', 'Roof': 'السقف', 'Roof + stripes': 'سقف وخطوط', 'Race number': 'رقم السباق', 'None': 'بدون', 'Effect of this set-up': 'أثر هذا الضبط', 'Stock': 'الأصلي', 'Now': 'الآن', 'Utility': 'خدمية', 'Formula': 'فورمولا',
   'Flash': 'وميض', 'Nose': 'الأنف', 'Full': 'كامل',
   'Game mode': 'نمط اللعب', 'Rules': 'القواعد', 'Today': 'اليوم', 'Race setup': 'إعداد السباق', 'Difficulty': 'الصعوبة', 'Weather': 'الطقس', 'Profile': 'الملف الشخصي', 'Driving assists': 'مساعدات القيادة', 'Display': 'العرض', 'Audio': 'الصوت', 'Data': 'البيانات',
+  'Group B': 'المجموعة B', 'Group A': 'المجموعة A', 'Classic': 'كلاسيكي',
   'Go': 'انطلق', 'Final lap': 'اللفة الأخيرة', 'Wrong way': 'اتجاه خاطئ', 'Repaired': 'تم الإصلاح', 'Combo lost': 'ضاعت السلسلة',
   'Lights out. Clean first corner.': 'انطفأت الأضواء. خُذ المنعطف الأول بهدوء.', 'Last lap. Everything you have.': 'اللفة الأخيرة. أعطِ كل ما عندك.',
   'Tyres are nearly gone. Box at the blue pit.': 'الإطارات انتهت تقريباً. ادخل الصيانة.', 'Fuel is low. Box this lap or you will not make it.': 'الوقود قليل. ادخل الصيانة هذه اللفة.',

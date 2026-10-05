@@ -8,8 +8,7 @@ const REF_RPM = 3000;
 // real idle / mid / high-rpm or on-load / off-load recordings can be added here later without touching the mixer.
 const one = n => ({ label: n.slice(3).replace(/_/g, ' '), trim: 1, loops: [{ file: n + '_Loop.wav', rpm: REF_RPM }] });
 const four = (n, trim) => ({ label: n.slice(3).replace(/_/g, ' ') + ' (4 rpm layers)', trim, loops: [1200, 2400, 4200, 6400].map(rpm => ({ file: n + '_' + rpm + '.wav', rpm })) });
-export const ENGINE_SETS = { '01_Turbo_Inline4': one('01_Turbo_Inline4'), '02_Boxer_Flat4': one('02_Boxer_Flat4'), '03_Race_Inline6': one('03_Race_Inline6'), '04_Crossplane_V8': one('04_Crossplane_V8'),
-  '05_FlatPlane_V8': four('05_FlatPlane_V8', 1.5), '06_Race_V12': four('06_Race_V12', 1.55), '07_TwinTurbo_V6': four('07_TwinTurbo_V6', 1.45), '08_Race_V10': four('08_Race_V10', 1.5), '09_Rally_Inline5': four('09_Rally_Inline5', 1.5) };
+export const ENGINE_SETS = { '01_Turbo_Inline4': one('01_Turbo_Inline4'), '02_Boxer_Flat4': one('02_Boxer_Flat4'), '07_TwinTurbo_V6': four('07_TwinTurbo_V6', 1.45), '09_Rally_Inline5': four('09_Rally_Inline5', 1.5) };
 const TYRES = { sqLow: 'tyre_squeal_low.wav', sqMid: 'tyre_squeal_mid.wav', sqHigh: 'tyre_squeal_high.wav', whine: 'gear_whine.wav', limiter: 'rev_limiter.wav', spool: 'turbo_spool.wav', scrub: 'tyre_scrub.wav', grass: 'surface_grass.wav', gravel: 'surface_gravel.wav', kerb: 'kerb_rumble.wav' };
 const SHOTS = { pop: '06_Shift_Exhaust_SinglePop.wav', crackle: '07_Shift_Exhaust_CrackleBurst.wav', bang1: 'exhaust_bang_1.wav', bang2: 'exhaust_bang_2.wav', bang3: 'exhaust_bang_3.wav', bov1: 'turbo_blowoff_1.wav', bov2: 'turbo_blowoff_2.wav' };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;

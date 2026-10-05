@@ -319,7 +319,7 @@ function buildProc(track) {
   c.strokeStyle = '#ff0000'; c.lineWidth = hw * 2 / cell; trace();
   c.strokeStyle = '#0000ff'; c.lineWidth = (hw + 1.5) * 2 / cell; trace(curved);
   // pit lane: a second strip of tarmac on the left of the start straight, inside its own wall
-  const pb = def.pit === null ? null : def.pit || [50, 50], nb = pb ? Math.round(pb[0] / 2) : 0, na = pb ? Math.round(pb[1] / 2) : 0;
+  const pb = def.pit === null ? null : [Math.max(60, (def.pit || [])[0] || 0), Math.max(90, (def.pit || [])[1] || 0)], nb = pb ? Math.round(pb[0] / 2) : 0, na = pb ? Math.round(pb[1] / 2) : 0;
   const inPit = i => !!pb && (i >= n - nb || i <= na), pitIdx = []; for (let i = n - nb; i <= n + na; i++) pitIdx.push(i % n);
   const offLine = (k, o) => { k.beginPath(); pitIdx.forEach((i, q) => { const p = path[i], X = (p.x + p.tz * o - x0) / cell, Z = (p.z - p.tx * o - z0) / cell; q ? k.lineTo(X, Z) : k.moveTo(X, Z); }); k.stroke(); };
   let pitPx = null; const pitWall = Math.max(B + .2, hw + 8.6);
@@ -416,13 +416,14 @@ function buildProc(track) {
     const lane = new THREE.Mesh(ribbon(path, hw + 7.6, hw, .02, 1 / 12, true, mask), new THREE.MeshStandardMaterial({ color: night ? 0x34353d : 0x665c75, roughness: .9, name: 'racetrack' })); lane.receiveShadow = true; G.add(lane);
     const ln = new THREE.Mesh(ribbon(path, hw + .25, hw - .05, .05, 1, true, mask), new THREE.MeshStandardMaterial({ color: 0xf2c230, roughness: .7 })); G.add(ln);
     track.pitBoxes = []; const crew = [], crewCols = [0xe3262e, 0x19a7ce, 0xffc21a, 0x2fb457, 0xff7ab0, 0xf3f4f6].map(c => new THREE.Color(c));
-    for (let j = 0; j < 6; j++) {
+    track.pitIn = n - nb; track.pitOut = na; track.pitHw = hw;      // where the pit lane starts and ends, and the track's half width
+    for (let j = 0; j < 12; j++) {          // twelve boxes: every car on the grid has its own
       const i = ((n - Math.round(nb * .6) + j * 4) % n + n) % n, p = path[i], x = p.x + p.tz * (hw + 5), z = p.z - p.tx * (hw + 5), thb = Math.atan2(p.tx, p.tz);
       const bt = canvasTex(128, 256, (k) => { k.clearRect(0, 0, 128, 256); k.strokeStyle = '#fff'; k.lineWidth = 8; k.strokeRect(6, 6, 116, 244); k.fillStyle = 'rgba(255,255,255,.9)'; k.font = '900 70px Rubik, Arial Black, sans-serif'; k.textAlign = 'center'; k.fillText(String(j + 1), 64, 150); });
       const bm = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6.8), new THREE.MeshBasicMaterial({ map: bt, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }));
       bm.rotation.set(-Math.PI / 2, 0, Math.PI - thb); bm.position.set(x, .06, z); G.add(bm);
       track.pitBoxes.push({ x, z, th: thb, idx: i });
-      for (let q = 0; q < 3; q++) crew.push({ x: p.x + p.tz * (hw + 7.6) + p.tx * (q - 1) * 1.3, z: p.z - p.tx * (hw + 7.6) + p.tz * (q - 1) * 1.3, c: crewCols[j] });
+      for (let q = 0; q < 3; q++) crew.push({ x: p.x + p.tz * (hw + 7.6) + p.tx * (q - 1) * 1.3, z: p.z - p.tx * (hw + 7.6) + p.tz * (q - 1) * 1.3, c: crewCols[j % 6] });
     }
     const cb = new THREE.CapsuleGeometry(.3, .75, 3, 8); cb.translate(0, .68, 0); const chd = new THREE.SphereGeometry(.27, 8, 6); chd.translate(0, 1.52, 0);
     crew.forEach((q, n2) => { q.beh = 0; q.r = Math.atan2(path[0].tx, path[0].tz) - Math.PI / 2 + (n2 % 3 - 1) * .5; }); people(crew);
