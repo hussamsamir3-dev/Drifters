@@ -456,3 +456,19 @@ body.touch #pauseBtn{top:auto !important;bottom:calc(14px + env(safe-area-inset-
 #menu .start:hover{filter:brightness(1.12);transform:translateY(-3px)}
 #menu .right,#menu .carinfo{animation:mRise .8s .35s cubic-bezier(.2,.9,.3,1) both}
 @media (prefers-reduced-motion:reduce){#menu *{animation:none !important}}
+
+/* ---------- phone layout v4: lighter, smaller controls inside the safe areas, so they cover as little of the picture as possible ---------- */
+body.touch #touch{--bw:clamp(84px,11.5vw,140px);--gh:clamp(112px,31vh,184px);--bh:clamp(80px,22vh,132px);--sm:clamp(56px,8vw,80px);--gap:clamp(8px,1.1vw,14px);--pad:calc(10px + env(safe-area-inset-bottom))}
+body.touch #touch .t{background:rgba(23,24,28,.2);border:2px solid rgba(243,244,246,.4);box-shadow:none;border-radius:22px;backdrop-filter:none}
+body.touch #touch .t b{font-size:clamp(13px,1.9vw,22px);opacity:.9}
+body.touch #touch .sl,body.touch #touch .sr{height:calc(var(--bh) * 1.1);font-size:clamp(34px,5.2vw,64px);opacity:.92}
+body.touch #touch .g{background:rgba(47,180,87,.16);border-radius:22px}
+body.touch #touch .b{background:rgba(227,38,46,.15);border-radius:22px}
+body.touch #touch .h,body.touch #touch .n{border-radius:50%}
+body.touch #touch .t.on{background:rgba(255,194,26,.42)}
+body.touch #touch .t.g.on{background:rgba(47,180,87,.5)}body.touch #touch .t.b.on{background:rgba(227,38,46,.48)}
+body.touch #pauseBtn{min-width:64px;min-height:44px;font-size:15px;opacity:.85}
+/* HUD blocks stay clear of the notch / Dynamic Island on the left and the rounded corner on the right */
+body.touch #hud .hp{margin-left:max(0px,calc(env(safe-area-inset-left) - 8px))}
+body.touch #hud .ht{margin-right:max(0px,calc(env(safe-area-inset-right) - 8px))}
+body.touch #hud .hp .big b{font-size:clamp(40px,9vh,62px)}
