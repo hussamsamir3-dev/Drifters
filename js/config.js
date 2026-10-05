@@ -32,11 +32,12 @@ export const TUNE = {
   slowTurn: .22,                         // extra front bite while the car is slowing (lifting or braking): the nose tucks in
   drift: { rearCut: .18, build: 3.2, decay: 5, minSpeed: 10 },
   enginePower: 1.22,                    // all engines: more torque than the rear tyres can take in the low gears
-  shock: { minHit: 7, perMs: .08, max: 1.6 },   // a hard hit switches the driving aids off for up to this many seconds
+  shock: { minHit: 14, perMs: .03, max: .4 },   // a hard hit switches the driving aids off for up to this many seconds
   // Turn-in look: the body swings into the corner as soon as you steer, a moment before the car's path bends.
   // It is visual only, so it costs no grip. steer/yaw = how much each adds (rad per rad), max = limit (rad), rate = how fast it swings in.
   visualLead: { steer: .16, yaw: .05, max: .07, rate: 10, fullSpeed: 12 },                   // extra rotation damping at Assist Full
   wall: { bounce: .02, spin: .28, friction: .2, yawKeep: .94 },   // barrier contact: no bounce, little spin, the car settles and slides along   // barrier contact: restitution, share of impulse that may rotate the car, wall friction
+  crash: { rest: .2, restMin: 1.5, fric: .4, box: .93 },     // car-to-car contact: restitution (only above restMin m/s), friction coefficient
   yawDamp: .45, yawDampSpeed: .01,       // yaw damping (1/s), rising with speed for high-speed stability
   // Online sync. hz = state messages per second from each player. The free Supabase plan allows 100 messages/s for the
   // whole project, so 24 keeps a duel safely under it; on a paid plan 30-40 is fine. minBuffer/maxBuffer bound how far in

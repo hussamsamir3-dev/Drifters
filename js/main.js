@@ -169,7 +169,7 @@ const show = (id, on) => { $(id).hidden = !on; };
 
 // ---------------- race state ----------------
 let R = null, paused = false, camMode = 0, shake = 0, acc = 0;
-const CAMS = [{ name: 'Circuit', fixed: true, d: 43, h: 48, fov: 30 }];   // one camera: the far, fixed-heading race view
+const CAMS = [{ name: 'Circuit', fixed: true, d: 48, h: 40, fov: 38 }];   // one camera: the far, fixed-heading race view
 let hitPulse = 0, fovPunch = 0; const ambAt = { position: new THREE.Vector3() };
 const cam = { yaw: 0, pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 55 };
 const H = 1 / 120;
@@ -666,7 +666,7 @@ function raceExtras(dt) {
   if (tr.cullables.length && frameN % 3 === 0) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 8100 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
-    const u = post.u; u.tilt.value = R.attract ? .7 : CAMS[camMode].fixed ? 1 : 0; u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
+    const u = post.u; u.tilt.value = R.attract ? .7 : CAMS[camMode].fixed ? .3 : 0; u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
     if (sunDisc && sunDisc.visible) { const v = sunDisc.position.clone().project(camera); const on = v.z < 1 ? clamp(1.5 - Math.max(Math.abs(v.x), Math.abs(v.y)), 0, 1) : 0; u.sunPos.value.set(v.x * .5 + .5, v.y * .5 + .5); u.sunVis.value += (on - u.sunVis.value) * Math.min(1, dt * 4); } else u.sunVis.value = 0;
   }
 }
@@ -733,6 +733,7 @@ function updateRace(dt) {
 }
 
 function updateCamera(dt) {
+  if (camera.view && camera.view.enabled && (R.attract || !CAMS[camMode].fixed)) camera.clearViewOffset();
   const me0 = R.player, pitWant = R.pit && (R.pit.busy || (me0.inPit && Math.hypot(me0.x - R.pit.x, me0.z - R.pit.z) < 18)) ? 1 / 1.5 : 1; R.pitZ = (R.pitZ ?? 1) + (pitWant - (R.pitZ ?? 1)) * (1 - Math.exp(-dt * 2.5)); const pz = R.pitZ;      // pit stop: the camera moves in 50% closer
   const me = R.player, m = CAMS[camMode], sp = me.speed, tr = R.track, X = me.rx ?? me.x, Z = me.rz ?? me.z;
   const d = THEMES[tr.def.theme].sunDir; sun.position.set(X + d[0] * 130, me.y + d[1] * 130, Z + d[2] * 130); sun.target.position.set(X, me.y, Z);
@@ -740,10 +741,11 @@ function updateCamera(dt) {
   if (R.marker) { R.marker.position.y = me.top + 1.5 + Math.sin(R.t * 4) * .12; R.marker.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
-    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), la = clamp(sp * .6, 0, 22) * Math.min(1, (save.zoom || 1.5) / 2.25), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz;
+    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz;
     cam.look.x += (lx - cam.look.x) * k; cam.look.z += (lz - cam.look.z) * k; cam.look.y += (me.y - cam.look.y) * k;
     camera.position.set(cam.look.x - Math.sin(yaw) * m.d * z, cam.look.y + m.h * z * (1 - .45 * intro), cam.look.z - Math.cos(yaw) * m.d * z); if (hitPulse > .02) { const a = hitPulse * 1.1; camera.position.x += (Math.random() - .5) * a; camera.position.y += (Math.random() - .5) * a; camera.position.z += (Math.random() - .5) * a; }   // a short, small jolt when your car hits something
     camera.lookAt(cam.look); cam.pos.copy(camera.position); cam.yaw = yaw;
+    { const Wd = renderer.domElement.width, Hd = renderer.domElement.height, sh = (.08 + .2 * clamp(sp / 25, 0, 1)) * (1 - intro); camera.setViewOffset(Wd, Hd, 0, -Hd * sh, Wd, Hd); }      // lens shift: the car rides low on the screen and the road ahead fills the frame
     if (Math.abs(camera.fov - m.fov) > .05) { camera.fov = cam.fov = m.fov; camera.updateProjectionMatrix(); }
     shake = 0; return;
   }
@@ -985,30 +987,34 @@ function arenaEvents(dt) {
     if (f.vy <= 0) { f.done = true; for (let i = 0; i < 80; i++) { const th = Math.random() * 6.283, ph = Math.acos(2 * Math.random() - 1), sp = 6 + Math.random() * 7; A.fx.glow.emit(f.x, f.y, f.z, Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp, Math.sin(ph) * Math.sin(th) * sp, 1.6, .6, 0, f.col[0], f.col[1], f.col[2], 1, 5); } } }
   A.fw = A.fw.filter(f => !f.done);
 }
-// ---- the camera director: seven shots, cut with a quick whip, with shake, roll, lens changes and slow motion on the big moments
+// ---- the camera director: seven wide, long-lens shots. The camera always stays far from the action (at least 24 m from any car, at least 9 m up),
+// moves slowly and smoothly, never shakes, and cross-dissolves its way between shots, like a drone filming a motorsport event.
 function arenaDirector(dt, T) {
-  const A = arena, cars = A.cars, nar = innerWidth < 820, ease = x => x * x * (3 - 2 * x);
-  const D = A.dir || (A.dir = { n: -1, t0: -99, dur: 0, seq: 0, car: cars[0], from: null, blend: 1, pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 40, roll: 0 });
-  if (T - D.t0 > D.dur) { D.from = { pos: camera.position.clone(), look: D.look.clone(), fov: camera.fov, roll: D.roll }; D.blend = D.n < 0 ? 1 : 0; D.seq++; D.n = (D.n + 1) % 7; D.t0 = T; D.dur = D.n === 6 ? 5 : D.n === 3 ? 8 : 6.4; D.car = cars[[0, 0, 1, 0, 2, 0, 1][D.seq % 7] % cars.length]; }
-  const c = D.car, u = Math.min(1, (T - D.t0) / D.dur), th = c.th, sn = Math.sin(th), cs = Math.cos(th), X = c.x, Z = c.z, lx = cs, lz = -sn;      // (lx, lz) points out of the car's left side
-  let px, py, pz, tx = X, ty = .7, tz = Z, fov = 42, roll = 0, rough = .012 + Math.min(.08, Math.abs(c.beta || 0) * .14);
+  if (camera.view && camera.view.enabled) camera.clearViewOffset();
+  const A = arena, cars = A.cars, nar = innerWidth < 820, ease = x => x * x * (3 - 2 * x), lerp = (a, b, t) => a + (b - a) * t;
+  const D = A.dir || (A.dir = { n: -1, t0: -99, dur: 0, seq: 0, car: cars[0], from: null, blend: 1, look: new THREE.Vector3(), fov: 34 });
+  if (T - D.t0 > D.dur) { D.from = { pos: camera.position.clone(), look: D.look.clone(), fov: camera.fov }; D.blend = D.n < 0 ? 1 : 0; D.seq++; D.n = (D.n + 1) % 7; D.t0 = T; D.dur = [8.5, 7.5, 8.5, 9, 8.5, 7.5, 8][D.n]; D.car = cars[[0, 0, 1, 0, 2, 0, 1][D.seq % 7] % cars.length]; D.side = D.seq % 2 ? 1 : -1; D.a0 = Math.atan2(D.car.x, D.car.z); }
+  const c = D.car, u = Math.min(1, (T - D.t0) / D.dur), e = ease(u), X = c.x, Z = c.z, ang = Math.atan2(X, Z);
+  let px = 0, py = 20, pz = 50, tx = 0, ty = 0, tz = 0, fov = 34;
+  const mix = k => { tx = lerp(0, X, k); tz = lerp(0, Z, k); };         // aim: 0 = the middle of the arena, 1 = the car
   switch (D.n) {
-    case 0: { const a = D.seq * 1.7 + u * 1.7, r = 10.5 - 3 * u; px = X + Math.cos(a) * r; pz = Z + Math.sin(a) * r; py = 1.9 + 1.8 * u; fov = 44; break; }                                   // hero orbit, drifting in to the car
-    case 1: { px = X + sn * (13 - 6 * u) + lx * 1.6; pz = Z + cs * (13 - 6 * u) + lz * 1.6; py = .5 + .25 * u; ty = .55; fov = 62; roll = .05 * Math.sin(u * 6); rough *= 1.8; break; }        // low, wide, the car charging at the lens
-    case 2: { const s = D.seq % 2 ? 1 : -1; px = X + lx * 6.4 * s + sn * (-3 + 6 * u); pz = Z + lz * 6.4 * s + cs * (-3 + 6 * u); py = 1.05; tx = X + sn * 1.5; tz = Z + cs * 1.5; ty = .8; fov = 36; break; }             // side tracking shot
-    case 3: { const e = u * u * (3 - 2 * u); px = X - sn * (9 - 3 * e) + lx * 3; pz = Z - cs * (9 - 3 * e) + lz * 3; py = .9 + 31 * e * e; fov = 36 + 20 * e; break; }                                      // crane up and away, the lens widening
-    case 4: { const a = T * .45; px = Math.sin(a) * (14 - 5 * u); pz = Math.cos(a) * (14 - 5 * u); py = 46 - 14 * u; tx = 0; tz = 0; ty = 0; fov = 32; roll = Math.sin(T * .3) * .05; break; }                  // overhead spiral over the whole arena
-    case 5: { px = X - sn * 7.4; pz = Z - cs * 7.4; py = 2.9; tx = X + sn * 6; tz = Z + cs * 6; ty = .5; fov = 62 + c.speed * .5; rough *= 2.2; break; }                                                    // on its tail
-    default: { px = X + sn * (5.2 - 3 * u) + lx * 1.9; pz = Z + cs * (5.2 - 3 * u) + lz * 1.9; py = .45 + .3 * u; tx = X + sn * .6; tz = Z + cs * .6; ty = .62; fov = 50 - 8 * u; roll = -.07; }        // headlights, close, in slow motion
+    case 0: { const a = D.a0 + Math.PI * .9 + u * .55 * D.side, r = 54; px = Math.sin(a) * r; pz = Math.cos(a) * r; py = 17 + 9 * e; mix(.55); ty = .6; fov = 34; break; }                       // wide orbit around the whole scene
+    case 1: { const a = ang + .95 * D.side; px = Math.sin(a) * 52; pz = Math.cos(a) * 52; py = 11 + 3 * e; tx = X; tz = Z; ty = .7; fov = 21; break; }                                        // long-lens tracking: the camera follows the car round the rim
+    case 2: { const a = D.a0 + Math.PI * .75; px = Math.sin(a) * lerp(56, 40, e); pz = Math.cos(a) * lerp(56, 40, e); py = lerp(12, 46, e * e); mix(.35); ty = 0; fov = lerp(30, 40, e); break; }  // crane up and away
+    case 3: { const a = T * .2; px = Math.sin(a) * lerp(24, 14, e); pz = Math.cos(a) * lerp(24, 14, e); py = lerp(64, 48, e); tx = 0; ty = 0; tz = 0; fov = 36; break; }                      // overhead spiral over the whole arena
+    case 4: { px = 60 * D.side; pz = -30; py = 20; const o = cars[(cars.indexOf(c) + 1) % cars.length], k = e; tx = lerp(c.x, o.x, k); tz = lerp(c.z, o.z, k); ty = .5; fov = 26; break; }           // fixed high camera, the lens panning from one car to the next
+    case 5: { px = lerp(-70, 70, e) * D.side; pz = -48; py = lerp(16, 24, e); mix(.4); ty = 0; fov = 30; break; }                                                                           // drone fly-by past the arena
+    default: { const a = ang + Math.PI * (.55 + .3 * u) * D.side; px = Math.sin(a) * 38; pz = Math.cos(a) * 38; py = 12; tx = X; tz = Z; ty = .6; fov = lerp(26, 22, e); }                       // slow-motion hero shot, still at a distance
   }
   if (nar) fov *= 1.28;
-  const want = new THREE.Vector3(px, py, pz), look = new THREE.Vector3(tx, ty, tz);
-  if (D.blend < 1) { D.blend = Math.min(1, D.blend + dt / .75); const e = ease(D.blend); want.lerpVectors(D.from.pos, want, e); look.lerpVectors(D.from.look, look, e); fov = D.from.fov + (fov - D.from.fov) * e; roll = D.from.roll + (roll - D.from.roll) * e; }
-  D.look.copy(look); D.roll = roll; D.fov = fov;
-  camera.position.set(want.x + (Math.random() - .5) * rough, want.y + (Math.random() - .5) * rough, want.z + (Math.random() - .5) * rough); camera.lookAt(look); camera.rotateZ(roll);
+  const want = new THREE.Vector3(px, Math.max(py, 9), pz), look = new THREE.Vector3(tx, ty, tz);
+  for (const q of cars) { const ddx = want.x - q.x, ddz = want.z - q.z, dd = Math.hypot(ddx, ddz); if (dd < 24 && dd > .01) { want.x = q.x + ddx / dd * 24; want.z = q.z + ddz / dd * 24; } }      // never close to a car
+  if (D.blend < 1) { D.blend = Math.min(1, D.blend + dt / 1.5); const b = ease(D.blend); want.lerpVectors(D.from.pos, want, b); look.lerpVectors(D.from.look, look, b); fov = D.from.fov + (fov - D.from.fov) * b; }
+  D.look.copy(look); D.fov = fov;
+  camera.position.copy(want); camera.lookAt(look);
   if (Math.abs(camera.fov - fov) > .02) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  const tsT = D.n === 6 && u > .12 && u < .85 ? .42 : D.n === 1 && u > .5 ? .65 : 1; A.ts += (tsT - A.ts) * (1 - Math.exp(-dt * 5));
-  if (post) { post.u.speed.value += ((D.n === 5 || D.n === 1 ? .55 : .1) - post.u.speed.value) * Math.min(1, dt * 2); post.u.tilt.value = D.n === 4 || D.n === 3 ? .75 : .45; }
+  const tsT = D.n === 6 && u > .1 && u < .85 ? .5 : 1; A.ts += (tsT - A.ts) * (1 - Math.exp(-dt * 4));
+  if (post) { post.u.speed.value += (0 - post.u.speed.value) * Math.min(1, dt * 3); post.u.tilt.value = D.n === 3 ? .5 : .35; }
 }
 function arenaTick(dt) {
   const A = arena, tr = A.track; A.t += dt; A.ts = A.ts ?? 1; A.acc += dt * A.ts; let n = 0;      // ts: slow motion on the big moments
@@ -1303,5 +1309,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

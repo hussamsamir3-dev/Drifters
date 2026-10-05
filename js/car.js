@@ -123,7 +123,7 @@ export class Car {
     { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
     this.door = proto.userData.door ? proto.userData.door.slice() : null;
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
-    this.I = spec.mass * this.a * this.b * spec.yawK; this.h = .5;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
+    this.I = spec.mass * this.a * this.b * spec.yawK; this.Ic = spec.mass * ((this.a + this.b) * .31) ** 2; this.h = .5;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
     this.reset(0, 0, 0);
   }
@@ -278,22 +278,35 @@ export class Car {
   }
 
   // circle-vs-circle bump between two cars. `kin` = the other car is network-driven and does not react here
+  // Car-to-car contact as a rigid body collision between two oriented boxes (separating-axis test). The contact normal is the face that is struck and the
+  // contact point is the middle of the overlap, so a centred hit pushes straight and an off-centre or corner hit turns the car by exactly its lever arm.
+  // The impulse uses the true relative velocity at that point (centre velocity plus spin), the real mass and yaw inertia, a small restitution (metal
+  // crumples, it does not bounce) and Coulomb friction along the contact. Nothing artificial is added to the spin.
   bump(o, kin) {
-    let hit = 0;
-    const S = TUNE.toy.l; for (const za of [1.15 * S, -1.15 * S]) for (const zb of [1.15 * S, -1.15 * S]) {
-      const ax = this.x + Math.sin(this.th) * za, az = this.z + Math.cos(this.th) * za, bx = o.x + Math.sin(o.th) * zb, bz = o.z + Math.cos(o.th) * zb;
-      const dx = ax - bx, dz = az - bz, d = Math.hypot(dx, dz), min = 2.05 * TUNE.toy.w;
-      if (d >= min || d < 1e-4) continue;
-      const nx = dx / d, nz = dz / d, pen = min - d, ma = this.spec.mass, mb = o.spec.mass, ia = 1 / ma, ib = 1 / mb;
-      this.x += nx * pen * ib / (ia + ib) * (kin ? 0 : 1) + (kin ? nx * pen : 0); this.z += nz * pen * ib / (ia + ib) * (kin ? 0 : 1) + (kin ? nz * pen : 0);
-      if (!kin) { o.x -= nx * pen * ia / (ia + ib); o.z -= nz * pen * ia / (ia + ib); }
-      const vn = (this.vx - o.vx) * nx + (this.vz - o.vz) * nz; if (vn >= 0) continue;
-      const j = -1.08 * vn / (ia + ib);
-      this.vx += j * nx * ia; this.vz += j * nz * ia; this.r += (Math.cos(this.th) * za * nx - Math.sin(this.th) * za * nz) * j * 1.1 / this.I;
-      if (!kin) { o.vx -= j * nx * ib; o.vz -= j * nz * ib; o.r -= (Math.cos(o.th) * zb * nx - Math.sin(o.th) * zb * nz) * j * 1.1 / o.I; }
-      if (-vn > hit) { hit = -vn; this.hitX = (ax + bx) / 2; this.hitZ = (az + bz) / 2; this.hitL = this.toLocal(this.hitX, this.hitZ); this.hitN = [nx, nz]; o.hitX = this.hitX; o.hitZ = this.hitZ; o.hitL = o.toLocal(this.hitX, this.hitZ); o.hitN = [-nx, -nz]; }
+    const CR = TUNE.crash, sA = Math.sin(this.th), cA = Math.cos(this.th), sB = Math.sin(o.th), cB = Math.cos(o.th);
+    const hlA = (this.zf0 + this.zr0) / 2 * CR.box, hwA = this.hw0 * CR.box, hlB = (o.zf0 + o.zr0) / 2 * CR.box, hwB = o.hw0 * CR.box, offA = (this.zf0 - this.zr0) / 2, offB = (o.zf0 - o.zr0) / 2;
+    const ax = this.x + sA * offA, az = this.z + cA * offA, bx = o.x + sB * offB, bz = o.z + cB * offB, dx = ax - bx, dz = az - bz;
+    if (dx * dx + dz * dz > (hlA + hwA + hlB + hwB) ** 2) return 0;
+    let best = 1e9, nx = 0, nz = 0;
+    for (const [px, pz] of [[sA, cA], [cA, -sA], [sB, cB], [cB, -sB]]) {
+      const rA = hlA * Math.abs(sA * px + cA * pz) + hwA * Math.abs(cA * px - sA * pz), rB = hlB * Math.abs(sB * px + cB * pz) + hwB * Math.abs(cB * px - sB * pz), dist = dx * px + dz * pz, ov = rA + rB - Math.abs(dist);
+      if (ov <= 0) return 0; if (ov < best) { best = ov; nx = dist >= 0 ? px : -px; nz = dist >= 0 ? pz : -pz; }
     }
-    return hit;
+    const tx = -nz, tz = nx, ia = 1 / this.spec.mass, ib = kin ? 0 : 1 / o.spec.mass, Ia = 1 / this.Ic, Ib = kin ? 0 : 1 / o.Ic, sa = ia / (ia + ib), sb = ib / (ia + ib);
+    // contact point: middle of the overlap along the struck face, and midway between the two surfaces across it
+    const projR = (hl, hw, s, cc, px, pz) => hl * Math.abs(s * px + cc * pz) + hw * Math.abs(cc * px - s * pz);
+    const tA = ax * tx + az * tz, tB = bx * tx + bz * tz, rtA = projR(hlA, hwA, sA, cA, tx, tz), rtB = projR(hlB, hwB, sB, cB, tx, tz), tm = (Math.max(tA - rtA, tB - rtB) + Math.min(tA + rtA, tB + rtB)) / 2;
+    const nA = ax * nx + az * nz - projR(hlA, hwA, sA, cA, nx, nz), nB = bx * nx + bz * nz + projR(hlB, hwB, sB, cB, nx, nz), nm = (nA + nB) / 2, cx = nx * nm + tx * tm, cz = nz * nm + tz * tm;
+    this.x += nx * best * (kin ? 1 : sb); this.z += nz * best * (kin ? 1 : sb); if (!kin) { o.x -= nx * best * sa; o.z -= nz * best * sa; }
+    const rAx = cx - this.x, rAz = cz - this.z, rBx = cx - o.x, rBz = cz - o.z;
+    const vel = () => [this.vx + this.r * rAz - o.vx - o.r * rBz, this.vz - this.r * rAx - o.vz + o.r * rBx];
+    let [rvx, rvz] = vel(); const vn = rvx * nx + rvz * nz; if (vn >= 0) return 0;
+    const wA = rAz * nx - rAx * nz, wB = rBz * nx - rBx * nz, kN = ia + ib + wA * wA * Ia + wB * wB * Ib, jn = -(1 + (vn < -CR.restMin ? CR.rest : 0)) * vn / kN;
+    this.vx += jn * nx * ia; this.vz += jn * nz * ia; this.r += jn * wA * Ia; if (!kin) { o.vx -= jn * nx * ib; o.vz -= jn * nz * ib; o.r -= jn * wB * Ib; }
+    [rvx, rvz] = vel(); const vt = rvx * tx + rvz * tz, wtA = rAz * tx - rAx * tz, wtB = rBz * tx - rBx * tz, kT = ia + ib + wtA * wtA * Ia + wtB * wtB * Ib, jt = Math.max(-CR.fric * jn, Math.min(CR.fric * jn, -vt / kT));
+    this.vx += jt * tx * ia; this.vz += jt * tz * ia; this.r += jt * wtA * Ia; if (!kin) { o.vx -= jt * tx * ib; o.vz -= jt * tz * ib; o.r -= jt * wtB * Ib; }
+    this.hitX = cx; this.hitZ = cz; this.hitL = this.toLocal(cx, cz); this.hitN = [nx, nz]; o.hitX = cx; o.hitZ = cz; o.hitL = o.toLocal(cx, cz); o.hitN = [-nx, -nz];
+    return -vn;
   }
 
   // Bodywork options. Every part is positioned from the car's own geometry (rear deck height, nose height, body width),
