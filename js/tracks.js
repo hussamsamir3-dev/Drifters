@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4, GRAVEL = 5, WETP = 6, MUD = 7;      // the last three are patches on the racing surface
+export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4;
 
 export const THEMES = {
   day:    { skyTop: 0x3f86d8, skyBot: 0xcfe6f5, fog: 0xd8e4dc, fogD: 0.0012, sun: 0xffe6c0, sunI: 2.9, hemiS: 0xbfd9ff, hemiG: 0x6b7a4a, hemiI: 1.1, sunDir: [-0.6, 0.6, 0.4], ground: 0x4f8a3c, exposure: 1.0 },
@@ -314,26 +314,8 @@ function buildProc(track) {
   const px = c.getImageData(0, 0, w, h).data, surf = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) { const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; surf[i] = g < 128 ? WALL : r > 128 ? ROAD : pitPx && pitPx[i * 4] > 128 ? PIT : b > 128 ? KERB : GRASS; }
   track.grid = { w, h, x0, z0, cell, surf, hgt: null };
-  // -- surface patches on the racing surface: loose gravel, standing water and mud. They change grip, drag, dust, the car's dirt and the sound, are painted on the
-  // road, and are written into the same grid the physics reads. Placement is deterministic per track and keeps clear of the start, the grid and the pit lane.
-  track.patches = []; track.pmu = new Float32Array(n).fill(1); track.audioZones = [];
+  track.audioZones = [];
   {
-    const kinds = def.id === 'marina' ? ['wet', 'wet', 'wet'] : th.night ? ['wet', 'wet', 'gravel'] : def.theme === 'coast' ? ['mud', 'wet', 'gravel', 'wet'] : ['gravel', 'wet', 'gravel', 'mud'];
-    let sd = 7; for (const ch of def.id) sd = (sd * 31 + ch.charCodeAt(0)) >>> 0; const rnd = () => (sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296;
-    const lo = 80, hi = n - 110, span = (hi - lo) / kinds.length;
-    kinds.forEach((kind, k) => { const len = Math.round((kind === 'wet' ? 16 : 20) + rnd() * 12), i0 = Math.round(lo + k * span + rnd() * Math.max(1, span - len - 6)), i1 = i0 + len; track.patches.push({ i0, i1, kind }); });
-    const CODE = { gravel: GRAVEL, wet: WETP, mud: MUD }, MU = { gravel: .78, wet: .78, mud: .64 };
-    for (const pt of track.patches) for (let i = pt.i0; i <= pt.i1; i++) { const q = path[i % n], q1 = path[(i + 1) % n]; track.pmu[i % n] = MU[pt.kind];
-      for (let sS = 0; sS < 1; sS += .2) { const bx = q.x + (q1.x - q.x) * sS, bz = q.z + (q1.z - q.z) * sS;       // fill the whole strip, not just lines across it
-        for (let o = -hw; o <= hw; o += cell * .45) { const px = bx + q.tz * o, pz = bz - q.tx * o, gx = Math.floor((px - x0) / cell), gz = Math.floor((pz - z0) / cell); if (gx >= 0 && gz >= 0 && gx < w && gz < h) { const kk = gz * w + gx; if (surf[kk] === ROAD) surf[kk] = CODE[pt.kind]; } } } }
-    for (const kind of ['gravel', 'wet', 'mud']) {
-      const mask = new Array(n).fill(false); let any = false; for (const pt of track.patches) if (pt.kind === kind) for (let i = pt.i0; i <= pt.i1 + 1; i++) { mask[i % n] = true; any = true; } if (!any) continue;
-      const tex = kind === 'wet' ? canvasTex(128, 128, (k, W, H) => { k.fillStyle = '#10131a'; k.fillRect(0, 0, W, H); noise(k, W, H, '#1b2230', .5, 500); k.strokeStyle = 'rgba(160,190,230,.18)'; k.lineWidth = 2; for (let r = 0; r < 9; r++) { k.beginPath(); k.ellipse(Math.random() * W, Math.random() * H, 8 + Math.random() * 22, 3 + Math.random() * 7, 0, 0, 6.3); k.stroke(); } }, 1, 1)
-        : canvasTex(128, 128, (k, W, H) => { k.fillStyle = kind === 'gravel' ? '#b39a6c' : '#4b3321'; k.fillRect(0, 0, W, H); noise(k, W, H, kind === 'gravel' ? '#8a7048' : '#33220f', .6, 1200); noise(k, W, H, kind === 'gravel' ? '#dccb9c' : '#6b4a2c', .35, 700); }, 1, 1);
-      tex.repeat.set(2, 1);
-      const mat = new THREE.MeshStandardMaterial(kind === 'wet' ? { map: tex, roughness: .06, metalness: .55, transparent: true, opacity: .8, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 } : { map: tex, roughness: .97, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-      const m = new THREE.Mesh(ribbon(path, hw, -hw, .038, 1 / 5, true, mask), mat); m.receiveShadow = true; m.renderOrder = 2; G.add(m);
-    }
     // -- places where the crowd is: the start straight stands and the outside of the tightest corners. Near them the sound gets the big, bright reverb of a grandstand.
     const zone = (i, side, r, wv, kind) => { const q = path[((i % n) + n) % n]; track.audioZones.push({ x: q.x + q.tz * side, z: q.z - q.tx * side, r, w: wv, kind }); };
     zone(0, hw + 14, 70, .45, 'stand'); zone(n - 40, hw + 14, 50, .35, 'stand');

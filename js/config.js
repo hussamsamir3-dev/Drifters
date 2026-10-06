@@ -19,7 +19,6 @@ export const TUNE = {
   // Stability assist. `counter` adds automatic counter-steer in a slide, `power` eases the throttle as the slide angle grows.
   assist: { off: 0, low: .4, medium: .7, full: 1 },
   surface: { kerbGrip: .95, grassDrag: .15, roadDrag: .03, airDrag: .25 },
-  surf: { gravel: .74, wetPatch: .82, mud: .58, drag: .035 },      // grip on the racing-surface patches (before the car's own off-road ability), and extra rolling drag per wheel share
   tyreT: { start: 62, ambient: 25, ambientWet: 15, ambientNight: 14 },   // tyre temperature model: blankets on the grid, then heat from slip and load, cooling with air
   fuel: { tankKg: 45, fullThrottleSeconds: 330, idle: .06 },   // a full tank lasts ~5.5 minutes flat out
   pit: { limit: 16.7, tyres: 2.6, fuelFull: 4.0, repairFull: 6.0 },   // limit in m/s (60 km/h); service times in seconds

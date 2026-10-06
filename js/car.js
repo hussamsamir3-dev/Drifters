@@ -1,7 +1,7 @@
 // Cars: models, tyre-model physics, wheel animation, effects, AI driver, network ghost.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { GRASS, KERB, ROAD, WALL, PIT, GRAVEL, WETP, MUD } from './tracks.js';
+import { GRASS, KERB, ROAD, WALL, PIT } from './tracks.js';
 import { getAsset } from './assets.js';
 
 // top = top speed (m/s), acc = launch acceleration (m/s²), grip = tyre μ, rear = rear-axle grip bias
@@ -162,14 +162,13 @@ export class Car {
     const rainLoss = this.wetTyres ? .07 * wet + .07 * (1 - wet) : .27 * wet;      // wets: a little slower in the dry, far better in the rain
     this.oil = Math.max(0, this.oil - dt);
     // what is under each wheel
-    let muF = 0, muR = 0, gr = 0, pitN = 0, lz = 0, lg = 0, lm = 0, lw = 0;
+    let muF = 0, muR = 0, gr = 0, pitN = 0;
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[WK[i]], sf = track.surf(this.x + sn * w.z + cs * w.x, this.z + cs * w.z - sn * w.x);
-      this.wsurf[i] = sf; if (sf === PIT) pitN++; const SU = TUNE.surf; let mu = sf === ROAD || sf === PIT ? 1 - rainLoss : sf === KERB ? .95 - rainLoss * 1.2 : sf === GRAVEL ? clamp(SU.gravel + (s.off - .75) * .5, .5, .92) * (1 - .08 * wet) : sf === WETP ? (1 - rainLoss) * SU.wetPatch * (this.wetTyres ? 1.05 : .88) : sf === MUD ? clamp(SU.mud + (s.off - .75) * .4, .38, .8) : s.off * (1 - .15 * wet);
-      if (sf === GRAVEL || sf === MUD || sf === GRASS) mu *= TN.loose; if (sf === GRASS || sf === WALL) gr += .25; if (sf === GRAVEL) { lz += .25; lg += .25; } else if (sf === MUD) { lz += .5; lm += .25; } else if (sf === WETP) { lz += .08; lw += .25; }
+      this.wsurf[i] = sf; if (sf === PIT) pitN++; let mu = sf === ROAD || sf === PIT ? 1 - rainLoss : sf === KERB ? .95 - rainLoss * 1.2 : s.off * (1 - .15 * wet); if (sf === GRASS) mu *= TN.loose; if (sf === GRASS || sf === WALL) gr += .25;
       const wm = mu * (1 - PT.wheelGrip * P.wheels[i]); if (i < 2) muF += wm / 2; else muR += wm / 2;   // a bent or flat wheel grips less
     }
-    this.muF = muF; this.muR = muR; this.grass = gr; this.lz = lz; this.lg = lg; this.lm = lm; this.lw = lw; this.inPit = pitN >= 2 || this.pitZone;
+    this.grass = gr; this.inPit = pitN >= 2 || this.pitZone;
 
     // steering: lock shrinks with speed; a little automatic counter-steer keeps slides catchable
     const beta = speed > 4 && vf > 0 ? Math.atan2(vl, vf) : 0;
@@ -227,7 +226,7 @@ export class Car {
     if (burn) { this.wspin = Math.max(this.wspin, 1.2); FyR *= .3; }
     this.aF = aF; this.useF = Math.hypot(FxF, FyF) / (capF || 1); this.useR = Math.hypot(FxR, FyR) / (capR || 1);
     const cd = Math.cos(this.steer), sd = Math.sin(this.steer);
-    const ax = (FxR + FxF * cd - FyF * sd - .6 * s.cda * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.006 + wdrag + gr * TUNE.surface.grassDrag + lz * TUNE.surf.drag) * vf - m * .12 * Math.sign(vf) * Math.min(1, Math.abs(vf)) - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
+    const ax = (FxR + FxF * cd - FyF * sd - .6 * s.cda * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.006 + wdrag + gr * TUNE.surface.grassDrag) * vf - m * .12 * Math.sign(vf) * Math.min(1, Math.abs(vf)) - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
     const ay = (FyF * cd + FxF * sd + FyR) / m;
     this.vx += (ax * sn + ay * cs) * dt; this.vz += (ax * cs - ay * sn) * dt;
     if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt) * (1 - this.di); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
@@ -254,8 +253,7 @@ export class Car {
     if (this.rpmR >= red && this.cutT <= 0) this.cutT = .08; this.limiter = this.cutT > 0;
     this.rpm = clamp((this.rpmR - idle) / (red - idle), 0, 1.02); this.load = live ? thr * (this.shiftT > 0 ? .2 : 1) : inp.throttle * .45;
     this.dirt = clamp(this.dirt + dt * (gr * Math.min(1, speed / 15) * .07 - wet * .03), 0, 1);
-    this.mud = clamp(this.mud + dt * (lm * Math.min(1, speed / 12) * .22 + gr * Math.min(1, speed / 15) * .012 + lg * .004 - wet * .04 - lw * Math.min(1, speed / 10) * .09), 0, 1);      // mud builds on mud, washes off in rain and puddles
-    this.dirt = clamp(this.dirt + dt * (lg * Math.min(1, speed / 14) * .05 + lm * .03), 0, 1);
+    this.mud = clamp(this.mud + dt * (gr * Math.min(1, speed / 15) * .03 - wet * .04), 0, 1);      // mud builds up in the runoff and washes off in rain
     { const use = clamp(((this.useF + this.useR) / 2 - .25) / .75, 0, 1), amb = track.def && track.def.theme === 'night' ? TUNE.tyreT.ambientNight : (track.wet || 0) > .4 ? TUNE.tyreT.ambientWet : TUNE.tyreT.ambient;
       const heat = 3.4 * use ** 1.3 * (.4 + speed / 45) + (speed > 2 ? .2 : 0) + this.wspin * 2.2 + (this.locked ? 3 : 0), cool = (this.tT - amb) * (.022 + speed * .0007) * (1 + (track.wet || 0) * 1.2); this.tT = clamp(this.tT + (heat - cool) * dt, amb, 135); }      // tyre temperature: heat from slip and load, cooling with air and rain
     this.lockF = this.braking && brk > .9 && speed > 17 && gr < .5;
@@ -551,11 +549,11 @@ export class Car {
         if (Math.random() < .6) fx.glow.emit(this.x - this.vx * .08, gy + .04, this.z - this.vz * .08, 0, 0, 0, 1.4 + Math.random(), .1, 0, 1, .42, .1, .8, 0); } }
     if (sp > 8 && this.dmg.front + this.dmg.rear > 1.15 && n > 0) { const gy = track.height(this.x, this.z) + .1; for (let k = 0; k < n; k++) if (Math.random() < .5) fx.glow.emit(this.x - Math.sin(this.th) * 1.5, gy, this.z - Math.cos(this.th) * 1.5, -this.vx * .2 + (Math.random() - .5) * 3, .8 + Math.random() * 1.6, -this.vz * .2 + (Math.random() - .5) * 3, .22 + Math.random() * .2, .09, 0, 1, .66, .22, 1, 14); }      // a wrecked car grinding its floor on the road
     if (sp > 3) for (let i = 0; i < 4; i++) {     // dirt from any wheel that is off the tarmac
-      const sf = this.wsurf[i]; if (sf !== GRASS && sf !== GRAVEL && sf !== MUD && sf !== WETP) continue; const col = sf === GRAVEL ? [.66, .56, .4] : sf === MUD ? [.22, .14, .08] : sf === WETP ? [.8, .86, .93] : dust;
-      const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x, y = track.height(wx, wz), q = clamp(sp / 25, .2, 1) * (sf === MUD ? 1.5 : sf === WETP ? .85 : 1);
+      if (this.wsurf[i] !== GRASS) continue;
+      const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x, y = track.height(wx, wz), q = clamp(sp / 25, .2, 1);
       for (let k = 0; k < n; k++) if (Math.random() < q * .7) {
-        fx.smoke.emit(wx, y + .1, wz, this.vx * .3 + (Math.random() - .5) * 2, 1 + Math.random() * 2, this.vz * .3 + (Math.random() - .5) * 2, .7 + Math.random() * .6, .7, 3.5, col[0], col[1], col[2], sf === WETP ? .28 : .42);
-        if (Math.random() < .5) fx.smoke.emit(wx, y + .1, wz, -this.vx * .1 + (Math.random() - .5) * 4, 2 + Math.random() * 3, -this.vz * .1 + (Math.random() - .5) * 4, .5, .16, 0, col[0] * .6, col[1] * .6, col[2] * .6, 1, 12);   // clods
+        fx.smoke.emit(wx, y + .1, wz, this.vx * .3 + (Math.random() - .5) * 2, 1 + Math.random() * 2, this.vz * .3 + (Math.random() - .5) * 2, .7 + Math.random() * .6, .7, 3.5, dust[0], dust[1], dust[2], .42);
+        if (Math.random() < .5) fx.smoke.emit(wx, y + .1, wz, -this.vx * .1 + (Math.random() - .5) * 4, 2 + Math.random() * 3, -this.vz * .1 + (Math.random() - .5) * 4, .5, .16, 0, dust[0] * .6, dust[1] * .6, dust[2] * .6, 1, 12);   // clods
       }
     }
     if (this.lockF) for (let i = 0; i < 2; i++) {                          // hard braking: the fronts chirp and smoke a little
@@ -690,7 +688,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   // fastest speed that still lets us slow down for every corner in sight
   let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 7.5 * ai.skill;
   for (let i = 0; i < 70; i++) {
-    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * (track.pmu ? track.pmu[(car.idx + i) % n] : 1) * car.tmpK / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
+    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16);
