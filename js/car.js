@@ -1,7 +1,7 @@
 // Cars: models, tyre-model physics, wheel animation, effects, AI driver, network ghost.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { GRASS, KERB, ROAD, WALL, PIT } from './tracks.js';
+import { GRASS, KERB, ROAD, WALL, PIT, GRAVEL, WETP, MUD } from './tracks.js';
 import { getAsset } from './assets.js';
 
 // top = top speed (m/s), acc = launch acceleration (m/s²), grip = tyre μ, rear = rear-axle grip bias
@@ -11,8 +11,11 @@ export { CARS };
 export const RIMS = [0, 0xf3f4f6, 0x111214, 0xb87333, 0xf2c200, 0xe3262e, 0x19a7ce], TINTS = [0, 0x030304, 0x0b2f52, 0x5a4410, 0x4a0d14], GLOWS = [0, 0x19a7ce, 0xff2bd0, 0x7dff9b, 0xffc21a, 0xe3262e, 0xffffff];
 // garage set-up -> the multipliers the physics uses
 export function tuneOf(spec, t) {
-  t = Object.assign({ gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' }, t || {}); const S = TUNE.setup, c = S.compound[t.tyre] || S.compound.medium;
-  return { acc: 1 + S.gearAcc * t.gear, top: (1 - S.gearTop * t.gear) * (1 - S.aeroTop * t.aero), aero: Math.max(.1, 1 + S.aeroDown * t.aero), bias: .7 + S.biasStep * t.brake, rollF: spec.rollF + S.rollStep * t.susp, grip: c[0], wear: c[1] };
+  t = Object.assign({ gear: 0, aero: 0, brake: 0, susp: 0, split: 0, diff: 0, tyre: 'medium' }, t || {}); const S = TUNE.setup, c = S.compound[t.tyre] || S.compound.medium;
+  // torque split (AWD only): the front share of drive torque. Differential: how hard the two wheels of an axle are tied together. A tighter diff puts more power down out of a corner
+  // but pushes the nose wide; an open diff turns in freely but the inside wheel spins and traction is lost.
+  const sBase = spec.splitF ?? clamp(.3 + (spec.fw - .4) * .5, .3, .42), dBase = spec.klass === 'Group B' ? .55 : spec.klass === 'Group A' ? .5 : .22;
+  return { acc: 1 + S.gearAcc * t.gear, top: (1 - S.gearTop * t.gear) * (1 - S.aeroTop * t.aero), aero: Math.max(.1, 1 + S.aeroDown * t.aero), bias: .7 + S.biasStep * t.brake, rollF: spec.rollF + S.rollStep * t.susp, grip: c[0], wear: c[1], tOpt: c[2], tSpan: c[3], loose: c[4], split: clamp(sBase + .06 * t.split, .18, .6), diff: clamp(dBase + .2 * t.diff, 0, 1), comp: t.tyre };
 }
 export const PAINTS = [0x0f5c4a, 0x8a1c2b, 0x2b2f8a, 0xff9d2e, 0xd81e2c, 0xff6a13, 0xf2c200, 0x2fb457, 0x19a7ce, 0x1f6feb, 0x7b3fe4, 0xff4fa3, 0xf2f2f2, 0x1c1f26];
 
@@ -44,11 +47,23 @@ function tyreTextMat() {      // printed sidewall lettering, drawn once on a rin
 // (everything within a colour distance of the livery's base colour), so sponsors, stripes and numbers stay as drawn.
 function texMaterial(src, info, paintHex, recolor) {
   const m = src.clone(); m.vertexColors = true; m.roughness = .46; m.metalness = .08; m.envMapIntensity = .55; m.side = THREE.DoubleSide; m.name = 'tex';
-  const b = info.base || [.9, .9, .9], U = m.userData.rc = { uBase: { value: new THREE.Color().setRGB(b[0], b[1], b[2], THREE.SRGBColorSpace) }, uPaint: { value: new THREE.Color(paintHex) }, uOn: { value: recolor ? 1 : 0 } };
-  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U); sh.fragmentShader = 'uniform vec3 uBase, uPaint; uniform float uOn;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+  const b = info.base || [.9, .9, .9], U = m.userData.rc = { uBase: { value: new THREE.Color().setRGB(b[0], b[1], b[2], THREE.SRGBColorSpace) }, uPaint: { value: new THREE.Color(paintHex) }, uOn: { value: recolor ? 1 : 0 },
+    uDirt: { value: 0 }, uMud: { value: 0 }, uScr: { value: Array.from({ length: 6 }, () => new THREE.Vector4()) } };
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U);
+    sh.vertexShader = 'varying vec3 vLoc;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vLoc = position;');
+    sh.fragmentShader = 'uniform vec3 uBase, uPaint; uniform float uOn, uDirt, uMud; uniform vec4 uScr[6]; varying vec3 vLoc;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
     if (uOn > .5) { vec3 cs = pow(max(diffuseColor.rgb, vec3(0.)), vec3(.4545)), bs = pow(max(uBase, vec3(0.)), vec3(.4545)); float mm = 1. - smoothstep(.11, .22, distance(cs, bs));
-      float lr = dot(diffuseColor.rgb, vec3(.2126, .7152, .0722)) / max(dot(uBase, vec3(.2126, .7152, .0722)), .04); diffuseColor.rgb = mix(diffuseColor.rgb, uPaint * clamp(lr, .12, 1.5), mm); }`); };
-  m.customProgramCacheKey = () => 'texrc'; return m;
+      float lr = dot(diffuseColor.rgb, vec3(.2126, .7152, .0722)) / max(dot(uBase, vec3(.2126, .7152, .0722)), .04); diffuseColor.rgb = mix(diffuseColor.rgb, uPaint * clamp(lr, .12, 1.5), mm); }
+    // dirt and mud: heavier low on the body and around the wheel arches, broken up with cell noise
+    { float h = clamp(vLoc.y / 1.15, 0., 1.), low = 1. - smoothstep(.16, .78, h);
+      float n1 = fract(sin(dot(floor(vLoc.xz * 7. + vLoc.y * 3.), vec2(12.9898, 78.233))) * 43758.5453), n2 = fract(sin(dot(floor(vLoc.xz * 17. + vLoc.y * 8.), vec2(39.3468, 11.135))) * 24634.6345);
+      float dm = clamp(uDirt * (.3 + low * 1.1) * (.5 + n1 * .8), 0., .85), mmk = clamp(uMud * (.25 + low * 1.5) * (.3 + n2 * .95) - h * .3, 0., .96);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.30, .22, .13), dm * .8); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.13, .085, .045), mmk); }
+    // scratches: crossed fine lines of bare metal around each recorded impact point
+    for (int i = 0; i < 6; i++) { vec4 s = uScr[i]; if (s.w > 0.) { float dd = length(vec2((vLoc.z - s.z) * .6, (vLoc.y - s.y) * 1.5)) + length(vec2((vLoc.x - s.x) * .5, 0.)) * .5, mk = smoothstep(s.w, 0., dd);
+      float ln = max(smoothstep(.93, 1., abs(sin(vLoc.y * 41. + vLoc.z * 2.3 + vLoc.x * 1.7))), smoothstep(.95, 1., abs(sin(vLoc.y * 29. + vLoc.x * 3.1 - vLoc.z * 1.2))));
+      diffuseColor.rgb = mix(diffuseColor.rgb * (1. - mk * .18), vec3(.34, .35, .39), ln * mk); } }`); };
+  m.customProgramCacheKey = () => 'texrc2'; return m;
 }
 export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
 function livery(m) {
@@ -94,7 +109,7 @@ export class Car {
     this.wantLight = wantLight;
     this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
     this.fuel = 1; this.fuelK = 1; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; this.partK = 1; this.pace = 1; this.bopP = 1; this.bopG = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
-    this.dirt = 0; this.dirtShown = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
+    this.dirt = 0; this.dirtShown = 0; this.mud = 0; this.mudShown = 0; this.scr = []; this.scrN = 0; this.tT = TUNE.tyreT.start; this.tmpK = 1; this.lz = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
     const proto = protos[spec.model || spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
     this.m = mats(color); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
@@ -118,7 +133,7 @@ export class Car {
     const box = new THREE.Box3().setFromObject(chassis);
     { if (!LAMP.aoTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const k = c.getContext('2d'), g = k.createRadialGradient(32, 32, 6, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,.85)'); g.addColorStop(.6, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); k.fillStyle = g; k.fillRect(0, 0, 64, 64); LAMP.aoTex = new THREE.CanvasTexture(c); LAMP.aoM = new THREE.MeshBasicMaterial({ map: LAMP.aoTex, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); }
       const ao = new THREE.Mesh(new THREE.PlaneGeometry((box.max.x - box.min.x) * 1.45, (box.max.z - box.min.z) * 1.25), LAMP.aoM); ao.rotation.x = -Math.PI / 2; ao.position.set(0, .03, (box.max.z + box.min.z) / 2); ao.renderOrder = 1; root.add(ao); }   // soft contact shadow: the car sits on the road instead of floating
-    this.tn = tuneOf(spec, tune); this.wear = this.tn.wear; this.dress(look);
+    this.tuneBase = tune || {}; this.tn = tuneOf(spec, tune); this.wear = this.tn.wear; if (tune && tune.tyre === 'rain') this.wetTyres = true; this.dress(look);
     this.hw0 = (box.max.x - box.min.x) / 2; this.zf0 = box.max.z; this.zr0 = -box.min.z; this.pd = proto.userData; this.makeLamps();
     { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
     this.door = proto.userData.door ? proto.userData.door.slice() : null;
@@ -143,17 +158,18 @@ export class Car {
     const sn = Math.sin(this.th), cs = Math.cos(this.th);
     const vf = this.vx * sn + this.vz * cs, vl = this.vx * cs - this.vz * sn, speed = Math.hypot(vf, vl), sg = vf >= 0 ? 1 : -1;
 
-    const wet = track.wet || 0, D = this.dmg, P = this.parts, PT = TUNE.parts, wdrag = Math.min(.3, P.wheels.reduce((a, w) => a + (w > PT.flatAt ? PT.flatDrag : 0), 0)), gripK = this.bopG * s.grip * TN.grip * (1 + .035 * U.tyre) * (.72 + .28 * this.tyre) * (this.oil > 0 ? .42 : 1) * TUNE.gripScale;
+    const Tm = this.tT, tLo = TN.tOpt - TN.tSpan, tHi = TN.tOpt + TN.tSpan, tmpK = this.tmpK = Tm < tLo ? 1 - clamp((tLo - Tm) / 60, 0, 1) * .28 : Tm > tHi ? 1 - clamp((Tm - tHi) / 50, 0, 1) * .3 : 1, wet = track.wet || 0, D = this.dmg, P = this.parts, PT = TUNE.parts, wdrag = Math.min(.3, P.wheels.reduce((a, w) => a + (w > PT.flatAt ? PT.flatDrag : 0), 0)), gripK = this.bopG * s.grip * TN.grip * (1 + .035 * U.tyre) * (.72 + .28 * this.tyre) * tmpK * (this.oil > 0 ? .42 : 1) * TUNE.gripScale;
     const rainLoss = this.wetTyres ? .07 * wet + .07 * (1 - wet) : .27 * wet;      // wets: a little slower in the dry, far better in the rain
     this.oil = Math.max(0, this.oil - dt);
     // what is under each wheel
-    let muF = 0, muR = 0, gr = 0, pitN = 0;
+    let muF = 0, muR = 0, gr = 0, pitN = 0, lz = 0, lg = 0, lm = 0, lw = 0;
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[WK[i]], sf = track.surf(this.x + sn * w.z + cs * w.x, this.z + cs * w.z - sn * w.x);
-      this.wsurf[i] = sf; if (sf === PIT) pitN++; const mu = sf === ROAD || sf === PIT ? 1 - rainLoss : sf === KERB ? .95 - rainLoss * 1.2 : s.off * (1 - .15 * wet); if (sf === GRASS || sf === WALL) gr += .25;
+      this.wsurf[i] = sf; if (sf === PIT) pitN++; const SU = TUNE.surf; let mu = sf === ROAD || sf === PIT ? 1 - rainLoss : sf === KERB ? .95 - rainLoss * 1.2 : sf === GRAVEL ? clamp(SU.gravel + (s.off - .75) * .5, .5, .92) * (1 - .08 * wet) : sf === WETP ? (1 - rainLoss) * SU.wetPatch * (this.wetTyres ? 1.05 : .88) : sf === MUD ? clamp(SU.mud + (s.off - .75) * .4, .38, .8) : s.off * (1 - .15 * wet);
+      if (sf === GRAVEL || sf === MUD || sf === GRASS) mu *= TN.loose; if (sf === GRASS || sf === WALL) gr += .25; if (sf === GRAVEL) { lz += .25; lg += .25; } else if (sf === MUD) { lz += .5; lm += .25; } else if (sf === WETP) { lz += .08; lw += .25; }
       const wm = mu * (1 - PT.wheelGrip * P.wheels[i]); if (i < 2) muF += wm / 2; else muR += wm / 2;   // a bent or flat wheel grips less
     }
-    this.grass = gr; this.inPit = pitN >= 2 || this.pitZone;
+    this.muF = muF; this.muR = muR; this.grass = gr; this.lz = lz; this.lg = lg; this.lm = lm; this.lw = lw; this.inPit = pitN >= 2 || this.pitZone;
 
     // steering: lock shrinks with speed; a little automatic counter-steer keeps slides catchable
     const beta = speed > 4 && vf > 0 ? Math.atan2(vl, vf) : 0;
@@ -187,10 +203,10 @@ export class Car {
     let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, s.pw / (s.acc * m) / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 8, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
     Fdrive *= TUNE.enginePower * this.bopP * PC.pow * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
     if (this._thr > .7 && thr < .1 && this.rpm > .5) { this.backfire = .24; this.popEvt = 1; } if (this.shiftEvt > 0 && this.rpm > .6 && thr > .6) this.backfire = Math.max(this.backfire || 0, .12); this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
-    const bf = rev ? 0 : Math.min(brk * s.brake * m * g, m * Math.abs(vf) / dt);
+    const bf = rev ? 0 : Math.min(brk * s.brake * m * g * clamp((muF + muR) * .5 * tmpK * 1.12, .3, 1), m * Math.abs(vf) / dt);      // the surface and the tyre temperature limit how hard you can brake
     this.braking = brk > .1 && !rev;
-    const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? .38 : 0;
-    const capF = muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.08 : 1) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
+    const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? TN.split : 0, crn = clamp(Math.abs(this.ayS) / (g * .8), 0, 1) * clamp(thr, 0, 1), trac = 1 - (1 - TN.diff) * .2 * crn, und = 1 - TN.diff * .1 * crn;      // diff: open loses traction out of corners, locked pushes the nose wide
+    const capF = muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.08 : 1) * und * (dF > .5 ? trac : 1 - (1 - trac) * dF) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (1 - trac) * (1 - dF)) * (1 + TN.diff * .03 * crn) * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
@@ -211,7 +227,7 @@ export class Car {
     if (burn) { this.wspin = Math.max(this.wspin, 1.2); FyR *= .3; }
     this.aF = aF; this.useF = Math.hypot(FxF, FyF) / (capF || 1); this.useR = Math.hypot(FxR, FyR) / (capR || 1);
     const cd = Math.cos(this.steer), sd = Math.sin(this.steer);
-    const ax = (FxR + FxF * cd - FyF * sd - .6 * s.cda * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.006 + wdrag + gr * TUNE.surface.grassDrag) * vf - m * .12 * Math.sign(vf) * Math.min(1, Math.abs(vf)) - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
+    const ax = (FxR + FxF * cd - FyF * sd - .6 * s.cda * (1 - .45 * this.draft) * vf * Math.abs(vf) - m * (.006 + wdrag + gr * TUNE.surface.grassDrag + lz * TUNE.surf.drag) * vf - m * .12 * Math.sign(vf) * Math.min(1, Math.abs(vf)) - (thr === 0 && !rev ? m * .45 * Math.sign(vf) * Math.min(1, Math.abs(vf)) : 0)) / m;   // last term: engine braking when off the throttle
     const ay = (FyF * cd + FxF * sd + FyR) / m;
     this.vx += (ax * sn + ay * cs) * dt; this.vz += (ax * cs - ay * sn) * dt;
     if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt) * (1 - this.di); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
@@ -221,7 +237,7 @@ export class Car {
     this.th += this.r * dt; this.x += this.vx * dt; this.z += this.vz * dt;
     this.axS += (ax - this.axS) * Math.min(1, dt * 8); this.ayS += (ay - this.ayS) * Math.min(1, dt * 8);
     if (live) this.fuel = Math.max(0, this.fuel - dt * this.fuelK * PC.fuel * (TUNE.fuel.idle + thr * (.35 + .65 * this.rpm)) / TUNE.fuel.fullThrottleSeconds);
-    if (live) this.tyre = Math.max(0, this.tyre - dt * this.wear * PC.wear * (TY.wear.base * Math.min(1, speed / 25) + Math.min(this.slipR, .8) * .011 + this.wspin * .008 + (this.locked ? .03 : 0) + gr * .002));
+    if (live) this.tyre = Math.max(0, this.tyre - dt * this.wear * (1 + Math.max(0, this.tT - tHi) * .035) * PC.wear * (TY.wear.base * Math.min(1, speed / 25) + Math.min(this.slipR, .8) * .011 + this.wspin * .008 + (this.locked ? .03 : 0) + gr * .002));
     if (!nit && live) this.nitro = Math.min(1, this.nitro + dt * (.018 + (this.drifting ? .09 : 0)));
     this.drifting = Math.abs(this.beta) > .22 && speed > 9 && vf > 0 && gr < .6;
 
@@ -238,9 +254,13 @@ export class Car {
     if (this.rpmR >= red && this.cutT <= 0) this.cutT = .08; this.limiter = this.cutT > 0;
     this.rpm = clamp((this.rpmR - idle) / (red - idle), 0, 1.02); this.load = live ? thr * (this.shiftT > 0 ? .2 : 1) : inp.throttle * .45;
     this.dirt = clamp(this.dirt + dt * (gr * Math.min(1, speed / 15) * .07 - wet * .03), 0, 1);
+    this.mud = clamp(this.mud + dt * (lm * Math.min(1, speed / 12) * .22 + gr * Math.min(1, speed / 15) * .012 + lg * .004 - wet * .04 - lw * Math.min(1, speed / 10) * .09), 0, 1);      // mud builds on mud, washes off in rain and puddles
+    this.dirt = clamp(this.dirt + dt * (lg * Math.min(1, speed / 14) * .05 + lm * .03), 0, 1);
+    { const use = clamp(((this.useF + this.useR) / 2 - .25) / .75, 0, 1), amb = track.def && track.def.theme === 'night' ? TUNE.tyreT.ambientNight : (track.wet || 0) > .4 ? TUNE.tyreT.ambientWet : TUNE.tyreT.ambient;
+      const heat = 3.4 * use ** 1.3 * (.4 + speed / 45) + (speed > 2 ? .2 : 0) + this.wspin * 2.2 + (this.locked ? 3 : 0), cool = (this.tT - amb) * (.022 + speed * .0007) * (1 + (track.wet || 0) * 1.2); this.tT = clamp(this.tT + (heat - cool) * dt, amb, 135); }      // tyre temperature: heat from slip and load, cooling with air and rain
     this.lockF = this.braking && brk > .9 && speed > 17 && gr < .5;
     let hit = this.collideWalls(track);
-    if (track.surf(this.x, this.z) === WALL) { this.x = x0; this.z = z0; this.vx *= .15; this.vz *= .15; this.r *= .3; hit = Math.max(hit, speed * .5); this.hitX = x0; this.hitZ = z0; this.hitL = [0, this.zf]; this.hitN = [-sn, -cs]; }   // never end a step inside a barrier
+    if (track.surf(this.x, this.z) === WALL) { this.x = x0; this.z = z0; this.vx *= .15; this.vz *= .15; this.r *= .3; hit = Math.max(hit, speed * .5); this.scrapeT = .3; this.hitX = x0; this.hitZ = z0; this.hitL = [0, this.zf]; this.hitN = [-sn, -cs]; }   // never end a step inside a barrier
     return hit;
   }
 
@@ -439,7 +459,11 @@ export class Car {
   toLocal(wx, wz) { const dx = wx - this.x, dz = wz - this.z, sn = Math.sin(this.th), cs = Math.cos(this.th); return [dx * cs - dz * sn, dx * sn + dz * cs]; }
 
   // ---- damage: zone health + real dents in the bodywork around the point of impact
+  addScratch(power) {      // a fresh scratch where the impact was (model units, so it matches the texture-space shader)
+    if (power < 2.5 || !this.hitL) return; const T = this.T, x = this.hitL[0] / T.w, z = this.hitL[1] / T.l; this.scr.push({ x, y: .45 + Math.random() * .3, z, r: Math.min(.95, .22 + power * .028) }); if (this.scr.length > 6) this.scr.shift();
+  }
   damage(power, shock = true) {
+    this.addScratch(power);
     const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale; if (amt <= 0 || !this.hitL) return 0;
     if (shock && power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
@@ -470,12 +494,13 @@ export class Car {
   get health() { const D = this.dmg, P = this.parts; return Math.max(.05, 1 - (D.front + D.rear + D.left + D.right) / 4 * .55 - P.engine * .2 - P.gearbox * .1 - (P.wheels[0] + P.wheels[1] + P.wheels[2] + P.wheels[3]) / 4 * .25); }
   get stranded() { return this.fuelK > 0 && this.fuel <= 0 && this.speed < 1; }   // only an empty tank strands a car now
   repair() {
-    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { o.visible = true; }); this.dress(this.look); for (const l of this.lamps) l.ok = true; this.setLights(this.lightsOn);
+    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.mud = 0; this.scr = []; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { o.visible = true; }); this.dress(this.look); for (const l of this.lamps) l.ok = true; this.setLights(this.lightsOn);
     for (const mesh of this.bodyMeshes) { mesh.geometry.attributes.position.array.set(mesh.userData.orig); mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.computeVertexNormals(); }
   }
 
   // ---- visuals: ride height from the track, body roll, wheel spin + steer
   render(dt, track, al = 1) {
+    if (this.tex) for (const k in this.tex) { const U = this.tex[k].userData.rc; U.uDirt.value = this.dirt; U.uMud.value = this.mud; for (let q = 0; q < 6; q++) { const s = this.scr[q]; U.uScr.value[q].set(s ? s.x : 0, s ? s.y : 0, s ? s.z : 0, s ? s.r : 0); } }
     const X = this.rx = this.px + (this.x - this.px) * al, Z = this.rz = this.pz + (this.z - this.pz) * al, TH = this.pth + wrap(this.th - this.pth) * al;
     { const VL = TUNE.visualLead, sp = Math.hypot(this.vx, this.vz), want = clamp(this.steer * VL.steer + this.r * VL.yaw, -VL.max, VL.max) * Math.min(1, sp / VL.fullSpeed) * (this.vf > 1 && !(this.touchT > 0) ? 1 : 0); this.touchT = Math.max(0, (this.touchT || 0) - dt); this.lead += (want - this.lead) * Math.min(1, dt * VL.rate); }
     const sn = Math.sin(TH), cs = Math.cos(TH), h = [];
@@ -521,12 +546,16 @@ export class Car {
         this.lastSk[i - 2] = [l, r];
       } else this.lastSk[i - 2] = null;
     }
+    if (this.scrapeT > 0) { this.scrapeT -= dt; if (sp > 3 && n > 0) { const nn = this.hitN || [0, 0], tx = -nn[1], tz = nn[0], along = Math.sign(this.vx * tx + this.vz * tz) || 1, gy = track.height(this.x, this.z);
+        for (let k = 0; k < n * 2; k++) { const s = (3 + Math.random() * 8) * along; fx.glow.emit(this.x + (Math.random() - .5), gy + .35 + Math.random() * .3, this.z + (Math.random() - .5), tx * s + this.vx * .35, .4 + Math.random() * 3.5, tz * s + this.vz * .35, .25 + Math.random() * .35, .12, 0, 1, .7, .26, 1, 15); }
+        if (Math.random() < .6) fx.glow.emit(this.x - this.vx * .08, gy + .04, this.z - this.vz * .08, 0, 0, 0, 1.4 + Math.random(), .1, 0, 1, .42, .1, .8, 0); } }
+    if (sp > 8 && this.dmg.front + this.dmg.rear > 1.15 && n > 0) { const gy = track.height(this.x, this.z) + .1; for (let k = 0; k < n; k++) if (Math.random() < .5) fx.glow.emit(this.x - Math.sin(this.th) * 1.5, gy, this.z - Math.cos(this.th) * 1.5, -this.vx * .2 + (Math.random() - .5) * 3, .8 + Math.random() * 1.6, -this.vz * .2 + (Math.random() - .5) * 3, .22 + Math.random() * .2, .09, 0, 1, .66, .22, 1, 14); }      // a wrecked car grinding its floor on the road
     if (sp > 3) for (let i = 0; i < 4; i++) {     // dirt from any wheel that is off the tarmac
-      if (this.wsurf[i] !== GRASS) continue;
-      const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x, y = track.height(wx, wz), q = clamp(sp / 25, .2, 1);
+      const sf = this.wsurf[i]; if (sf !== GRASS && sf !== GRAVEL && sf !== MUD && sf !== WETP) continue; const col = sf === GRAVEL ? [.66, .56, .4] : sf === MUD ? [.22, .14, .08] : sf === WETP ? [.8, .86, .93] : dust;
+      const w = this.wheels[WK[i]], wx = this.x + sn * w.z + cs * w.x, wz = this.z + cs * w.z - sn * w.x, y = track.height(wx, wz), q = clamp(sp / 25, .2, 1) * (sf === MUD ? 1.5 : sf === WETP ? .85 : 1);
       for (let k = 0; k < n; k++) if (Math.random() < q * .7) {
-        fx.smoke.emit(wx, y + .1, wz, this.vx * .3 + (Math.random() - .5) * 2, 1 + Math.random() * 2, this.vz * .3 + (Math.random() - .5) * 2, .7 + Math.random() * .6, .7, 3.5, dust[0], dust[1], dust[2], .42);
-        if (Math.random() < .5) fx.smoke.emit(wx, y + .1, wz, -this.vx * .1 + (Math.random() - .5) * 4, 2 + Math.random() * 3, -this.vz * .1 + (Math.random() - .5) * 4, .5, .16, 0, dust[0] * .6, dust[1] * .6, dust[2] * .6, 1, 12);   // clods
+        fx.smoke.emit(wx, y + .1, wz, this.vx * .3 + (Math.random() - .5) * 2, 1 + Math.random() * 2, this.vz * .3 + (Math.random() - .5) * 2, .7 + Math.random() * .6, .7, 3.5, col[0], col[1], col[2], sf === WETP ? .28 : .42);
+        if (Math.random() < .5) fx.smoke.emit(wx, y + .1, wz, -this.vx * .1 + (Math.random() - .5) * 4, 2 + Math.random() * 3, -this.vz * .1 + (Math.random() - .5) * 4, .5, .16, 0, col[0] * .6, col[1] * .6, col[2] * .6, 1, 12);   // clods
       }
     }
     if (this.lockF) for (let i = 0; i < 2; i++) {                          // hard braking: the fronts chirp and smoke a little
@@ -559,6 +588,8 @@ export class Car {
   }
   // sparks fly along the surface we scraped, panel fragments tumble away, dust lifts from the contact point
   impactFX(fx, track, power) {
+    { const n0 = this.hitN || [0, 0], tx0 = -n0[1], tz0 = n0[0], al0 = Math.sign(this.vx * tx0 + this.vz * tz0) || 1, v0 = Math.min(1, power / 20), gy = track.height(this.hitX, this.hitZ) + .05;
+      for (let i = 0; i < 3 + v0 * 12; i++) { const d = (.5 + Math.random() * (3 + v0 * 9)) * al0; fx.glow.emit(this.hitX + tx0 * d, gy, this.hitZ + tz0 * d, 0, 0, 0, 1.3 + Math.random() * 1.6, .11, 0, 1, .45, .12, .85, 0); } }      // embers: glowing specks that lie on the road and cool slowly
     const y = track.height(this.hitX, this.hitZ) + .45, n = this.hitN || [0, 0], tx = -n[1], tz = n[0], along = Math.sign(this.vx * tx + this.vz * tz) || 1, v = Math.min(1, power / 20);
     for (let i = 0; i < 5 + v * 26; i++) { const s = (4 + Math.random() * 10) * along * (.4 + v); fx.glow.emit(this.hitX, y + Math.random() * .3, this.hitZ, tx * s + n[0] * (1 + Math.random() * 4) + this.vx * .3, .5 + Math.random() * 4.5, tz * s + n[1] * (1 + Math.random() * 4) + this.vz * .3, .2 + Math.random() * .4, .13, 0, 1, .72, .28, 1, 15); }
     if (power > 6) {
@@ -659,7 +690,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   // fastest speed that still lets us slow down for every corner in sight
   let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 7.5 * ai.skill;
   for (let i = 0; i < 70; i++) {
-    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
+    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * (track.pmu ? track.pmu[(car.idx + i) % n] : 1) * car.tmpK / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16);

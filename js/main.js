@@ -35,7 +35,7 @@ if (!save.v9) { save.zoom = 1.5; save.v9 = 1; }
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
 const tx = s => save.lang === 'ar' && AR[s] != null ? AR[s] : s;
 const lookOf = id => save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 });
-const tuneSet = id => save.tune[id] || (save.tune[id] = { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' });
+const tuneSet = id => save.tune[id] || (save.tune[id] = { gear: 0, aero: 0, brake: 0, susp: 0, split: 0, diff: 0, tyre: 'medium' });
 const racing = () => !!R && !R.attract;
 const paintOf = id => save.paint[id] ?? CARS.find(c => c.id === id).color;
 
@@ -97,15 +97,25 @@ function showGarageCar() {
 let garageSpin = .6, tuneFocus = '';
 // What a set-up does, in numbers. Each figure is worked out from the car's real data (power, mass, drag, tyre grip, downforce)
 // for the stock set-up and for the current one, so every click shows what it buys and what it costs.
+const COMP_LETTER = { soft: 'S', medium: 'M', hard: 'H', rain: 'W', gravel: 'G' }, COMP_ORDER = ['auto', 'soft', 'medium', 'hard', 'rain', 'gravel'];
+// Fit a compound: new tyres come off the blankets already warm. 'rain' makes the car a wet-tyre car.
+function fitTyres(car, comp) { car.tn = tuneOf(car.spec, Object.assign({}, car.tuneBase, { tyre: comp })); car.wear = car.tn.wear; car.wetTyres = comp === 'rain'; car.tT = 58; }
+function nextCompFor(car) { const w = R.wet > .4 || R.rainAt - R.t < 20; if (R.nextComp && R.nextComp !== 'auto') return R.nextComp; return w ? 'rain' : car.tn.comp === 'rain' ? 'medium' : car.tn.comp; }
+function cycleComp() { if (!R || !R.player || R.attract) return; R.nextComp = COMP_ORDER[(COMP_ORDER.indexOf(R.nextComp || 'auto') + 1) % COMP_ORDER.length]; radio(R.nextComp === 'auto' ? 'Tyres for the next stop: the crew will choose for the weather.' : 'Next stop: ' + R.nextComp + ' tyres.'); }
+let _dbk = null; function debrisKit() { return _dbk || (_dbk = [
+  { g: new THREE.BoxGeometry(.16, .02, .12), m: new THREE.MeshStandardMaterial({ color: 0xa6d6ff, roughness: .1, metalness: .3, transparent: true, opacity: .8 }) },        // glass
+  { g: new THREE.BoxGeometry(.26, .09, .18), m: new THREE.MeshStandardMaterial({ color: 0x141416, roughness: .9 }) },                                                         // rubber
+  { g: new THREE.BoxGeometry(.4, .05, .07), m: new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: .5, metalness: .5 }) },                                           // trim
+  { g: new THREE.BoxGeometry(.22, .14, .07), m: new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: .3, metalness: .8 }) } ]); }                                    // a mirror
 function tuneFigures(spec, tn, up) {
   const t = tuneOf(spec, tn), m = spec.mass, g = 9.81, P = spec.pw * (1 + .06 * (up.eng || 0)), mu = spec.grip * t.grip * (1 + .04 * (up.tyre || 0)), df = spec.aero * t.aero, drag = .6 * spec.cda * (1 + .09 * (tn.aero || 0));
   let v = 60; for (let i = 0; i < 40; i++) v = Math.cbrt(Math.max(1, P - m * (.12 + .006 * v) * v) / drag); const top = Math.min(v, spec.top * t.top * 1.02);
   const share = spec.drive === 'awd' ? 1 : spec.drive === 'rwd' ? 1 - spec.fw + .12 : spec.fw - .08, a0 = Math.min(spec.acc * t.acc, mu * g * share), v1 = P / (m * a0), sprint = v1 < 27.8 ? v1 / a0 + m * (27.8 ** 2 - v1 ** 2) / (2 * P) : 27.8 / a0;
   const cg = mu * (1 + df * 41.7 ** 2 / (m * g)), dec = Math.min(spec.brake * g, mu * g * (1 + df * 27.8 ** 2 * .5 / (m * g)));
-  return [['Top speed', top * 3.6, 'km/h', 1, 0], ['0–100 km/h', sprint, 's', -1, 2], ['Cornering at 150 km/h', cg, 'g', 1, 2], ['Braking 100–0', 27.8 ** 2 / (2 * dec), 'm', -1, 1], ['Downforce at 200 km/h', df * 55.6 ** 2 / g, 'kg', 1, 0], ['Tyre life', 100 / t.wear, '%', 1, 0], ['Brake balance, front', t.bias * 100, '%', 0, 0], ['Roll stiffness, front', t.rollF * 100, '%', 0, 0]];
+  return [['Top speed', top * 3.6, 'km/h', 1, 0], ['0–100 km/h', sprint, 's', -1, 2], ['Cornering at 150 km/h', cg, 'g', 1, 2], ['Braking 100–0', 27.8 ** 2 / (2 * dec), 'm', -1, 1], ['Downforce at 200 km/h', df * 55.6 ** 2 / g, 'kg', 1, 0], ['Tyre life', 100 / t.wear, '%', 1, 0], ['Brake balance, front', t.bias * 100, '%', 0, 0], ['Roll stiffness, front', t.rollF * 100, '%', 0, 0], ['Exit traction', (1 - (1 - t.diff) * .2) * 100, '%', 1, 0], ['Nose push on power', t.diff * 10, '%', -1, 1], ['Front torque share', (spec.drive === 'awd' ? t.split : spec.drive === 'fwd' ? 1 : 0) * 100, '%', 0, 0]];
 }
 function tuneTable(spec, tn, up) {
-  const now = tuneFigures(spec, tn, up), base = tuneFigures(spec, { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' }, up), hot = { gear: [0, 1], aero: [0, 2, 4], brake: [3, 6], susp: [7], tyre: [2, 3, 5] }[tuneFocus] || [];
+  const now = tuneFigures(spec, tn, up), base = tuneFigures(spec, { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' }, up), hot = { gear: [0, 1], aero: [0, 2, 4], brake: [3, 6], susp: [7], tyre: [2, 3, 5], diff: [8, 9, 2], split: [10, 9, 2] }[tuneFocus] || [];
   return '<h3>' + tx('Effect of this set-up') + '</h3><table class="figs"><tr><th></th><th>' + tx('Stock') + '</th><th>' + tx('Now') + '</th><th></th></tr>' + now.map(([n, v, u, dir, dp], i) => { const d = v - base[i][1], show = Math.abs(d) > (dp ? .005 : .5), good = dir === 0 ? '' : d * dir > 0 ? 'up' : 'down';
     return '<tr class="' + (hot.includes(i) ? 'hot' : '') + '"><td>' + tx(n) + '</td><td>' + base[i][1].toFixed(dp) + '</td><td><b>' + v.toFixed(dp) + '</b> ' + u + '</td><td class="' + (show ? good : '') + '">' + (show ? (d > 0 ? '+' : '−') + Math.abs(d).toFixed(dp) : '·') + '</td></tr>'; }).join('') + '</table>';
 }
@@ -131,6 +141,7 @@ addEventListener('keydown', e => {
     if (e.code === 'F7') { me.prog += R.track.n - 30; toast('DEV: skipped to the end of the lap'); }
     if (e.code.startsWith('F')) e.preventDefault(); }
   if (e.code === 'KeyT') $('tele').hidden = !$('tele').hidden;
+  if (e.code === 'KeyC') cycleComp();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -208,7 +219,7 @@ async function startRace(o) {
     const base = [.80, .89, .97][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
-      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], undefined, { wing: s.wing ? 0 : Math.random() * 4 | 0, split: Math.random() * 2 | 0, rim: 0 }); livUsed.add(s.id);
+      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], undefined, { wing: s.wing ? 0 : Math.random() * 4 | 0, split: Math.random() * 2 | 0, rim: 0 }, { tyre: o.weather === 'rain' ? 'rain' : ['soft', 'medium', 'medium', 'medium', 'hard', 'gravel'][Math.random() * 6 | 0] }); livUsed.add(s.id);
       R.ais.set(car, mkAI(riv ? riv[i].skill : base + (4 - i) * .012 + Math.random() * .015)); car.assistK = .7; R.cars.push(car); placeOnGrid(car, i);
     }
     R.cars.push(me); placeOnGrid(me, count);
@@ -348,7 +359,8 @@ function impact(car, power, wall) {
     const P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), n = car.hitN || [0, 0];
     for (const c of car.lost) { c.updateWorldMatrix(true, false); c.matrixWorld.decompose(P, Q, S); R.debris.spawn(c.geometry, c.material, P.clone(), Q.clone(), S.clone(), new THREE.Vector3(car.vx * .7 + n[0] * 3, 3 + Math.random() * 3, car.vz * .7 + n[1] * 3)); c.visible = false; }
     car.lost.length = 0;
-    if (near && amt > .06) for (let i = 0; i < Math.min(3, 1 + amt * 8 | 0); i++) R.debris.spawn(new THREE.BoxGeometry(.5 + Math.random() * .7, .04, .25 + Math.random() * .3), car.m.paint, new THREE.Vector3(car.hitX, car.y + .5, car.hitZ), null, null, new THREE.Vector3(car.vx * .6 + n[0] * (2 + Math.random() * 4) + (Math.random() - .5) * 4, 3 + Math.random() * 4, car.vz * .6 + n[1] * (2 + Math.random() * 4) + (Math.random() - .5) * 4));   // torn body panels in the car's own colour
+    if (near && amt > .1) { const DB = debrisKit(), n2 = Math.min(5, 1 + amt * 10 | 0); for (let i = 0; i < n2; i++) { const k = DB[(Math.random() * DB.length) | 0]; R.debris.spawn(k.g, k.m, new THREE.Vector3(car.hitX + (Math.random() - .5), car.y + .4, car.hitZ + (Math.random() - .5)), null, null, new THREE.Vector3(car.vx * .5 + (n[0] || 0) * (2 + Math.random() * 5) + (Math.random() - .5) * 5, 2 + Math.random() * 5, car.vz * .5 + (n[1] || 0) * (2 + Math.random() * 5) + (Math.random() - .5) * 5)); } }      // glass, rubber, trim and a mirror: they stay on the road
+    if (near && amt > .06) for (let i = 0; i < Math.min(3, 1 + amt * 8 | 0); i++) R.debris.spawn(new THREE.BoxGeometry(.5 + Math.random() * .7, .04, .25 + Math.random() * .3), car.texCar ? Object.values(car.tex)[0] : car.m.paint, new THREE.Vector3(car.hitX, car.y + .5, car.hitZ), null, null, new THREE.Vector3(car.vx * .6 + n[0] * (2 + Math.random() * 4) + (Math.random() - .5) * 4, 3 + Math.random() * 4, car.vz * .6 + n[1] * (2 + Math.random() * 4) + (Math.random() - .5) * 4));   // torn body panels in the car's own colour
   }
   if (car !== me) { if (near) audio.crash(power * .35); return; }
   if (isTouch && navigator.vibrate) navigator.vibrate(Math.min(90, power * 5));
@@ -465,7 +477,7 @@ function aiPit(car, ai, dt) {
   }
   if (ai.pitState === 'service') { b.svc = { t: ai.svcT, jobs: ai.pitJobsL || (ai.pitJobsL = pitJobs(car)), car };                                             // wheels off, engine seen to, tyres and fuel: the same jobs and times as the player's stop
     car.vx *= .7; car.vz *= .7; inp.throttle = 0; inp.brake = 1; inp.steer = 0; ai.svcT += dt;
-    if (ai.svcT >= ai.pitNeed) { car.repair(); car.fuel = 1; car.wetTyres = R.wet > .4; R.aiPits = (R.aiPits || 0) + 1; ai.pitState = 'out'; ai.pitOff = null; b.svc = null; ai.pitJobsL = null; car.lift = 0; }
+    if (ai.svcT >= ai.pitNeed) { car.repair(); car.fuel = 1; fitTyres(car, R.wet > .4 ? 'rain' : R.laps - Math.max(0, car.lap) > 4 ? 'hard' : (car.tn.comp === 'rain' ? 'medium' : 'soft')); R.aiPits = (R.aiPits || 0) + 1; ai.pitState = 'out'; ai.pitOff = null; b.svc = null; ai.pitJobsL = null; car.lift = 0; }
     return;
   }
   if (ai.pitState === 'out') {                                                 // back along the lane at the limiter, then merge onto the track
@@ -622,7 +634,7 @@ function raceExtras(dt) {
       pit.t += dt; pit.tick -= dt; if (pit.tick <= 0) { pit.tick = .55; audio.wrench(); }
       let acc2 = 0, cur = pit.jobs[0][0]; for (const j of pit.jobs) { if (pit.t >= acc2) cur = j[0]; acc2 += j[1]; }
       flash(cur + '  ' + Math.max(0, pit.total - pit.t).toFixed(1) + 's', false, 250);
-      if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; me.wetTyres = R.wet > .4 || R.rainAt - R.t < 20; pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); radio((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
+      if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); radio((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
     }
   }
   if (R.sc) safetyTick(dt);
@@ -683,7 +695,10 @@ function updateRace(dt) {
   if (live && R.state !== 'over') R.t += dt;
 
   // AI decisions once per frame (also the player's autopilot after the flag)
-  setTxt('hTyreLbl', tx(me.wetTyres ? 'Wets' : 'Tyres'));
+  { const tn2 = me.tn, nx = R.nextComp && R.nextComp !== 'auto' ? ' › ' + COMP_LETTER[R.nextComp] : '', lo = tn2.tOpt - tn2.tSpan, hi = tn2.tOpt + tn2.tSpan;
+    setTxt('hTyreLbl', (COMP_LETTER[tn2.comp] || '?') + ' ' + Math.round(me.tT) + '°' + nx);
+    const col = me.tT < lo - 12 ? '#38bdf8' : me.tT < lo ? '#7dd3fc' : me.tT <= hi ? '' : me.tT < hi + 14 ? '#f59e0b' : '#ef4444';      // blue: cold, normal colour: in the window, orange/red: overheating
+    if (hudCache.tyreCol !== col) { hudCache.tyreCol = col; if (col) $('gTyre').style.setProperty('--c', col); else $('gTyre').style.removeProperty('--c'); } }
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
     if (car !== me && live) { const left = R.laps - Math.max(0, car.lap), short = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * Math.min(left, 3) * 1.05 && left > 1, ahead = R.cars.some(o => o !== car && !o.out && o.prog > car.prog && (o.prog - car.prog) * tr.spacing < Math.max(18, car.speed * 1.2)); car.pace = short || car.tyre < .35 ? 0 : ahead && car.tyre > .5 ? 2 : 1; }   // AI manages its pace like a driver: saves when fuel or tyres are short, pushes when a car is within reach
@@ -719,16 +734,19 @@ function updateRace(dt) {
   const detail = pixelRatio < 1.2 ? .6 : 1;
   if (tr2Tick(tr), !$('tele').hidden) telemetry(me, dt);
   for (const c of R.cars) { c.render(dt, tr, c.isRemote ? 1 : clamp(acc / H, 0, 1)); c.effects(dt, R.fx, tr, c === me ? detail : detail * .6); }
-  R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
+  R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr, R.cars); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
   updateCamera(dt);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360)); R.fx.smoke.mat.uniforms.uScale.value = R.fx.glow.mat.uniforms.uScale.value = sc;
   updateHUD(dt);
   const skid = (me.slipR > .16 && me.speed > 6) || me.wspin > .12 || (me.locked && me.speed > 3);
   if (me.shiftEvt) { audio.shift(me.shiftEvt, Math.min(1, me.load * (me.shiftT > 0 ? 5 : 1)), me.rpm, me.spec.pops); me.shiftEvt = 0; }                      // one event per completed gear change
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
-    audio.rivals(near.map(({ c, d }) => ({ snd: c.spec.snd, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
+    { const rt = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); near.forEach(o => { const dx = o.c.x - me.x, dz = o.c.z - me.z, dd = Math.hypot(dx, dz) || 1; o.pan = clamp((dx * rt.x + dz * rt.z) / 26, -1, 1); o.dop = clamp(-(((o.c.vx - me.vx) * dx + (o.c.vz - me.vz) * dz) / dd) / 343 * 1.5, -.05, .05); }); }
+    audio.rivals(near.map(({ c, d, pan, dop }) => ({ pan, dop, snd: c.spec.snd, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
   audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 });
-  audio.drive({ rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, sand: tr.def.theme === 'desert', kerb: me.speed > 2 && me.wsurf.includes(1) ? 1 : 0, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
+  { const cnt = k => me.wsurf.filter(v => v === k).length, tr0 = R.track; const surfK = cnt(7) >= 2 ? 'mud' : cnt(5) >= 2 ? 'gravel' : cnt(6) >= 2 ? 'wet' : me.grass > .5 ? 'grass' : 'road'; R.audioSurf = surfK;
+    let zw = 0, zk = 'stand'; for (const z of tr0.audioZones || []) { const d = Math.hypot(me.x - z.x, me.z - z.z), q = clamp(1 - d / z.r, 0, 1) * z.w; if (q > zw) { zw = q; zk = z.kind; } } audio.zone(zw, zk); }
+  audio.drive({ surf: R.audioSurf, tmpK: me.tmpK, soft: me.tn.comp === 'soft' ? 1.15 : me.tn.comp === 'hard' ? .85 : 1, rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, sand: tr.def.theme === 'desert', kerb: me.speed > 2 && me.wsurf.includes(1) ? 1 : 0, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
   adaptQuality(dt);
 }
 
@@ -745,7 +763,7 @@ function updateCamera(dt) {
   if (R.marker) { R.marker.position.y = me.top + 1.5 + Math.sin(R.t * 4) * .12; R.marker.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
-    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz * zsm(dt, sp);      // pulls back a little with speed to show more road
+    const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz * zsm(dt, sp) / 1.3;      // pulls back a little with speed to show more road; the whole follow camera is 30% closer than before
     { cam.vx = cam.vx || { v: 0 }; cam.vz = cam.vz || { v: 0 }; const far = Math.hypot(lx - cam.look.x, lz - cam.look.z) > 45, st = far ? .15 : .5; cam.look.x = smoothDamp(cam.look.x, lx, cam.vx, st, dt); cam.look.z = smoothDamp(cam.look.z, lz, cam.vz, st, dt); cam.look.y += (me.y - cam.look.y) * k; }
     camera.position.set(cam.look.x - Math.sin(yaw) * m.d * z, cam.look.y + m.h * z * (1 - .45 * intro), cam.look.z - Math.cos(yaw) * m.d * z); if (hitPulse > .02) { const a = isTouch ? 0 : hitPulse * .3; camera.position.x += (Math.random() - .5) * a; camera.position.y += (Math.random() - .5) * a; camera.position.z += (Math.random() - .5) * a; }   // a short, small jolt when your car hits something
     camera.lookAt(cam.look); cam.pos.copy(camera.position); cam.yaw = yaw;
@@ -1082,8 +1100,8 @@ async function refreshMenu() {
   if (gpMode) { const g = save.gp && !save.gp.done ? save.gp : null; $('gpBox').innerHTML = '<h2>' + tx('Grand Prix') + '</h2><p>' + tx('Four rounds, eight drivers, points for every finish. The third round is wet.') + '</p><ol>' + GP_TRACKS.map((id, i) => { const t = TRACKS.find(x => x.id === id); return '<li class="' + (g && i < g.round ? 'done' : g && i === g.round ? 'on' : '') + '">' + (save.lang === 'ar' ? t.ar : t.name) + '</li>'; }).join('') + '</ol>' + (g ? '<p class="meta">' + Object.entries(g.pts).sort((a, b) => b[1] - a[1]).slice(0, 4).map((e, i) => (i + 1) + '. ' + e[0] + ' ' + e[1]).join(' · ') + '</p>' : ''); }
   { const sp2 = CARS[sel.car], L = lookOf(sp2.id), sw = (k, arr) => arr.map((c, i) => '<button data-k="' + k + '" data-v="' + i + '" class="' + (L[k] === i ? 'on' : '') + '" style="background:' + (c ? hex(c) : 'transparent') + '">' + (c ? '' : '×') + '</button>').join(''), sg = (k, labels) => labels.map((l, i) => '<button data-k="' + k + '" data-v="' + i + '" class="' + (L[k] === i ? 'on' : '') + '">' + tx(l) + '</button>').join('');
     $('lookRows').innerHTML = '<h3>' + tx('Rear wing') + '</h3>' + (garageCar && garageCar.hasWing ? '<p class="note">' + tx('This car has its own wing.') + '</p>' : '<div class="seg wide four">' + sg('wing', ['None', 'Lip', 'GT wing', 'Race wing']) + '</div>') + '<h3>' + tx('Front splitter') + '</h3><div class="seg wide two">' + sg('split', ['Off', 'On']) + '</div><h3>' + tx('Extras') + '</h3><div class="seg wide">' + ['skirt', 'scoop', 'pipe'].map((k, i) => '<button data-k="' + k + '" data-v="' + (L[k] ? 0 : 1) + '" class="' + (L[k] ? 'on' : '') + '">' + tx(['Side skirts', 'Roof scoop', 'Exhaust tips'][i]) + '</button>').join('') + '</div><h3>' + tx('Wheels') + '</h3><div class="paints">' + sw('rim', RIMS) + '</div><h3>' + tx('Glass') + '</h3><div class="paints">' + sw('tint', TINTS) + '</div><h3>' + tx('Underglow') + '</h3><div class="paints">' + sw('glow', GLOWS) + '</div>';
-    const tn = tuneSet(sp2.id), TR = [['gear', 'Gearing', 'Top speed', 'Acceleration'], ['aero', 'Downforce', 'Less drag', 'More grip'], ['brake', 'Brake bias', 'Rearward', 'Forward'], ['susp', 'Balance', 'Agile', 'Stable']];
-    $('tuneRows').innerHTML = TR.map(([k, n1, lo, hi]) => '<div class="trow2"><b>' + tx(n1) + '</b><span>' + tx(lo) + '</span><button data-k="' + k + '" data-d="-1">−</button><i>' + [-2, -1, 0, 1, 2].map(v => '<u class="' + (v === tn[k] ? 'on' : '') + '"></u>').join('') + '</i><button data-k="' + k + '" data-d="1">+</button><span>' + tx(hi) + '</span></div>').join('') + '<h3>' + tx('Tyre compound') + '</h3><div class="seg wide">' + ['soft', 'medium', 'hard'].map(c => '<button data-c="' + c + '" class="' + (tn.tyre === c ? 'on' : '') + '">' + tx(c[0].toUpperCase() + c.slice(1)) + '</button>').join('') + '</div><p class="note">' + tx('Soft tyres grip more and wear faster. Hard tyres last longer. Settings apply to this car only.') + '</p>' + tuneTable(sp2, tn, upOf(sp2.id)); }
+    const tn = tuneSet(sp2.id), TR = [['gear', 'Gearing', 'Top speed', 'Acceleration'], ['aero', 'Downforce', 'Less drag', 'More grip'], ['brake', 'Brake bias', 'Rearward', 'Forward'], ['susp', 'Balance', 'Agile', 'Stable'], ...(sp2.drive === 'awd' ? [['split', 'Torque split', 'Rear-biased', 'Front-biased']] : []), ['diff', 'Differential', 'Open', 'Locked']];
+    $('tuneRows').innerHTML = TR.map(([k, n1, lo, hi]) => '<div class="trow2"><b>' + tx(n1) + '</b><span>' + tx(lo) + '</span><button data-k="' + k + '" data-d="-1">−</button><i>' + [-2, -1, 0, 1, 2].map(v => '<u class="' + (v === tn[k] ? 'on' : '') + '"></u>').join('') + '</i><button data-k="' + k + '" data-d="1">+</button><span>' + tx(hi) + '</span></div>').join('') + '<h3>' + tx('Tyre compound') + '</h3><div class="seg wide">' + ['soft', 'medium', 'hard', 'rain', 'gravel'].map(c => '<button data-c="' + c + '" class="' + (tn.tyre === c ? 'on' : '') + '">' + tx(c[0].toUpperCase() + c.slice(1)) + '</button>').join('') + '</div><p class="note">' + tx('Soft tyres grip more and wear faster; hard tyres last longer and need more heat. Rain tyres for wet roads, gravel tyres for loose ground. Watch the tyre temperature: too cold or too hot and the grip falls away. Settings apply to this car only.') + '</p>' + tuneTable(sp2, tn, upOf(sp2.id)); }
 
 
   const lv = levelOf(save.xp); $('lvl').textContent = lv; $('xpBar').style.width = clamp((save.xp - xpFor(lv)) / (xpFor(lv + 1) - xpFor(lv)), 0, 1) * 100 + '%';
@@ -1146,7 +1164,8 @@ const ASSIST_HELP = { medium: 'Assist medium: the car helps catch slides, but it
 function applyLang() { document.documentElement.lang = save.lang; for (const id of ['menu', 'results', 'pause']) $(id).dir = save.lang === 'ar' ? 'rtl' : 'ltr'; for (const el of document.querySelectorAll('[data-t]')) { if (!el.dataset.t) el.dataset.t = el.textContent.trim(); el.textContent = tx(el.dataset.t); } }
 const carLook = () => { persist(); tellPeer(); showGarageCar(); refreshMenu(); };
 $('lookRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; lookOf(CARS[sel.car].id)[b.dataset.k] = +b.dataset.v; carLook(); };
-$('tuneRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; tuneFocus = b.dataset.c ? 'tyre' : b.dataset.k; const tn = tuneSet(CARS[sel.car].id); if (b.dataset.c) tn.tyre = b.dataset.c; else tn[b.dataset.k] = clamp(tn[b.dataset.k] + +b.dataset.d, -2, 2); persist(); refreshMenu(); };
+$('gTyre').onclick = cycleComp;
+$('tuneRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; tuneFocus = b.dataset.c ? 'tyre' : b.dataset.k; const tn = tuneSet(CARS[sel.car].id); if (b.dataset.c) tn.tyre = b.dataset.c; else tn[b.dataset.k] = clamp((tn[b.dataset.k] || 0) + +b.dataset.d, -2, 2); persist(); refreshMenu(); };
 $('langSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.lang = b.dataset.l; persist(); refreshMenu(); } };
 $('zoomSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.zoom = +b.dataset.z; persist(); fitShadow(); refreshMenu(); } };
 const zoomBy = d => { save.zoom = clamp(Math.round((save.zoom + d) * 100) / 100, .7, 3.4); persist(); fitShadow(); $('zoomVal').textContent = Math.round(save.zoom / 1.5 * 100) + '%'; if (R) { updateCamera(0); draw(0); } };
@@ -1216,6 +1235,31 @@ $('boxTake').onclick = () => { show('boxWin', false); box.on = false; box.g.visi
 $('assistBtn').onclick = () => { const o = ['full', 'medium', 'low', 'off']; save.assist = o[(o.indexOf(save.assist) + 1) % 4]; persist(); toast(ASSIST_HELP[save.assist]); refreshMenu(); };
 $('rulesSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.rules = b.dataset.r; persist(); toast(save.rules === 'circuit' ? 'Professional: one class, balanced cars. Track limits, contact and safety-car rules with time penalties. Fuel, tyres, damage, pit stops.' : 'Arcade: no fuel, light damage, nitro, repair kits, coins, slipstream, random events, pushier AI.'); refreshMenu(); } };
 $('copyLink').onclick = () => { const url = location.origin + location.pathname + '?room=' + room.code; (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('Invite link copied'), () => prompt('Copy this invite link', url)); };
+// ---------------- touch layout editor: every button can be dragged anywhere; size, opacity and a left-handed mirror are saved ----------------
+const TKEYS = ['left', 'right', 'gas', 'brake', 'hand', 'nitro'], tUI = () => save.touchUI || (save.touchUI = { scale: 1, op: .2, lefty: false, pos: null });
+const tEl = k => k === 'pause' ? $('pauseBtn') : $('touch').querySelector('[data-k=' + k + ']'), tKey = el => el.id === 'pauseBtn' ? 'pause' : el.dataset.k;
+function applyTouchUI() {
+  const U = tUI(), root = $('touch'); root.style.setProperty('--ui', U.scale); root.style.setProperty('--ta', U.op);
+  for (const k of [...TKEYS, 'pause']) { const el = tEl(k), p = U.pos && U.pos[k]; if (!el) continue; if (p) { el.style.left = p[0] * 100 + '%'; el.style.top = p[1] * 100 + '%'; el.style.right = 'auto'; el.style.bottom = 'auto'; el.style.translate = '-50% -50%'; } else for (const s of ['left', 'top', 'right', 'bottom', 'translate']) el.style[s] = ''; }
+}
+function captureTouchDefaults() { const U = tUI(); if (U.pos) return; U.pos = {}; for (const k of [...TKEYS, 'pause']) { const el = tEl(k); if (!el) continue; const r = el.getBoundingClientRect(); U.pos[k] = [(r.left + r.width / 2) / innerWidth, (r.top + r.height / 2) / innerHeight]; } }
+let tDrag = null, tWasHud = false, tWasTouch = false;
+function enterTouchEdit() {
+  document.body.classList.add('touch', 'editTouch'); const hud = $('hud'); tWasHud = hud.hidden; tWasTouch = $('touch').hidden; hud.hidden = false; $('touch').hidden = false; $('touchEdit').hidden = false;
+  const U = tUI(); $('teSize').value = Math.round(U.scale * 100); $('teOp').value = Math.round(U.op * 100); $('teLefty').classList.toggle('on', !!U.lefty); applyTouchUI(); requestAnimationFrame(() => { captureTouchDefaults(); applyTouchUI(); persist(); });
+}
+function exitTouchEdit() { document.body.classList.remove('editTouch'); if (!isTouch) document.body.classList.remove('touch'); $('touchEdit').hidden = true; $('hud').hidden = tWasHud; $('touch').hidden = tWasTouch; tDrag = null; persist(); }
+$('touch').addEventListener('pointerdown', e => { if (!document.body.classList.contains('editTouch')) return; e.stopPropagation(); e.preventDefault(); const el = e.target.closest('.t'); if (!el) return; tDrag = el; try { el.setPointerCapture(e.pointerId); } catch (_) {} }, true);
+$('pauseBtn').addEventListener('pointerdown', e => { if (!document.body.classList.contains('editTouch')) return; e.stopPropagation(); e.preventDefault(); tDrag = $('pauseBtn'); try { $('pauseBtn').setPointerCapture(e.pointerId); } catch (_) {} }, true);
+$('pauseBtn').addEventListener('click', e => { if (document.body.classList.contains('editTouch')) { e.stopPropagation(); e.preventDefault(); } }, true);
+addEventListener('pointermove', e => { if (!tDrag) return; captureTouchDefaults(); tUI().pos[tKey(tDrag)] = [clamp(e.clientX / innerWidth, .05, .95), clamp(e.clientY / innerHeight, .08, .94)]; applyTouchUI(); });
+addEventListener('pointerup', () => { if (tDrag) { tDrag = null; persist(); } });
+$('touchEditBtn').onclick = enterTouchEdit; $('teDone').onclick = exitTouchEdit;
+$('teSize').oninput = e => { tUI().scale = +e.target.value / 100; applyTouchUI(); persist(); };
+$('teOp').oninput = e => { tUI().op = +e.target.value / 100; applyTouchUI(); persist(); };
+$('teLefty').onclick = () => { const U = tUI(); captureTouchDefaults(); U.lefty = !U.lefty; for (const k in U.pos) U.pos[k] = [1 - U.pos[k][0], U.pos[k][1]]; $('teLefty').classList.toggle('on', U.lefty); applyTouchUI(); persist(); };
+$('teReset').onclick = () => { save.touchUI = { scale: 1, op: .2, lefty: false, pos: null }; $('teSize').value = 100; $('teOp').value = 20; $('teLefty').classList.remove('on'); applyTouchUI(); requestAnimationFrame(() => { captureTouchDefaults(); applyTouchUI(); }); persist(); };
+applyTouchUI();
 $('gasBtn').onclick = () => { save.autoGas = !save.autoGas; persist(); refreshMenu(); };
 $('daily').onclick = () => { const d = dailyFor(TRACKS); audio.init(); lastOpts = { mode: d.mode, track: d.track, laps: 3, diff: 1, weather: d.weather, daily: d }; startRace(lastOpts); };
 // story briefing: characters talk, then the event starts
@@ -1326,5 +1370,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

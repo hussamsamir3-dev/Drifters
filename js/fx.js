@@ -101,13 +101,14 @@ export class Ambient {
 
 // Parts knocked off a car: they tumble, bounce, come to rest on the track and stay there for a while.
 export class Debris {
-  constructor(scene, max = 40) { this.scene = scene; this.items = []; this.max = max; }
+  constructor(scene, max = 140) { this.scene = scene; this.items = []; this.max = max; }      // pieces stay where they land for the rest of the race; the oldest go when there are too many
   spawn(geo, mat, pos, quat, scale, vel) {
     if (this.items.length >= this.max) this.scene.remove(this.items.shift().m);
     const m = new THREE.Mesh(geo, mat); m.position.copy(pos); if (quat) m.quaternion.copy(quat); if (scale) m.scale.copy(scale); m.castShadow = true; this.scene.add(m);
-    this.items.push({ m, v: vel, w: new THREE.Vector3((Math.random() - .5) * 12, (Math.random() - .5) * 12, (Math.random() - .5) * 12), life: 35, rest: false });
+    this.items.push({ m, v: vel, w: new THREE.Vector3((Math.random() - .5) * 12, (Math.random() - .5) * 12, (Math.random() - .5) * 12), life: 9999, rest: false });
   }
-  update(dt, track) {
+  update(dt, track, cars) {
+    if (cars) for (const it of this.items) { if (!it.rest) continue; for (const c of cars) { const sp = Math.hypot(c.vx, c.vz); if (sp < 3) continue; const dx = it.m.position.x - c.x, dz = it.m.position.z - c.z; if (dx * dx + dz * dz < 2.6) { it.rest = false; it.v.set(c.vx * .75 + (Math.random() - .5) * 3, 2 + Math.random() * 2.5, c.vz * .75 + (Math.random() - .5) * 3); break; } } }      // a car driving over a piece flicks it away
     for (let i = this.items.length - 1; i >= 0; i--) { const it = this.items[i], m = it.m;
       if (!it.rest) { it.v.y -= 22 * dt; m.position.addScaledVector(it.v, dt); m.rotation.x += it.w.x * dt; m.rotation.y += it.w.y * dt; m.rotation.z += it.w.z * dt;
         const g = track.height(m.position.x, m.position.z) + .07;

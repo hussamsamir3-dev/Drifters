@@ -472,3 +472,22 @@ body.touch #pauseBtn{min-width:64px;min-height:44px;font-size:15px;opacity:.85}
 body.touch #hud .hp{margin-left:max(0px,calc(env(safe-area-inset-left) - 8px))}
 body.touch #hud .ht{margin-right:max(0px,calc(env(safe-area-inset-right) - 8px))}
 body.touch #hud .hp .big b{font-size:clamp(40px,9vh,62px)}
+
+#hud #gTyre{pointer-events:auto;cursor:pointer}
+#hud #gTyre small{font-size:8px;letter-spacing:0;white-space:nowrap}
+
+/* ---------- touch layout v5: size and opacity are user settings, buttons can be placed anywhere ---------- */
+body.touch #touch{--bw:calc(clamp(84px,11.5vw,140px) * var(--ui,1));--gh:calc(clamp(112px,31vh,184px) * var(--ui,1));--bh:calc(clamp(80px,22vh,132px) * var(--ui,1));--sm:calc(clamp(56px,8vw,80px) * var(--ui,1))}
+body.touch #touch .t{background:rgba(23,24,28,var(--ta,.2))}
+body.touch #touch .g{background:rgba(47,180,87,calc(var(--ta,.2) * .8))}
+body.touch #touch .b{background:rgba(227,38,46,calc(var(--ta,.2) * .75))}
+#touchEdit{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);z-index:90;width:min(540px,92vw);display:grid;gap:8px;padding:12px 16px;border-radius:18px;background:rgba(14,15,18,.94);border:1px solid rgba(255,255,255,.18);color:#f3f4f6;font-style:normal;font-weight:600;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+#touchEdit b{font-size:17px}#touchEdit small{opacity:.7;font-weight:400}
+#touchEdit label{display:grid;grid-template-columns:90px 1fr;align-items:center;gap:10px;font-size:14px}#touchEdit label input{width:100%}
+#touchEdit .row{display:flex;gap:8px}#touchEdit .row .tile{flex:1;min-height:42px}
+body.editTouch{overflow:hidden}
+body.editTouch #menu{visibility:hidden}
+body.editTouch #hud{display:block !important;pointer-events:none;background:linear-gradient(180deg,#1b2a1d,#25331f 55%,#1d1f26)}
+body.editTouch #hud>*:not(#touch):not(#pauseBtn){display:none !important}
+body.editTouch #touch{display:block !important;pointer-events:auto}
+body.editTouch #touch .t,body.editTouch #pauseBtn{outline:2px dashed rgba(255,194,26,.9);outline-offset:3px;cursor:grab;pointer-events:auto;opacity:1 !important}
