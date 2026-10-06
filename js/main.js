@@ -4,6 +4,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS } from './tracks.js';
 import { CLASSES, balance, TUNE } from './config.js';
 import { buildCrew } from './pit.js';
+import { Marshals } from './people.js';
 import { CARS, PAINTS, RIMS, TINTS, LIVC, Car, loadCars, aiDrive, tuneOf, RIM_STYLES, TYRE_STYLES, CAL_COLS } from './car.js';
 import { AR } from './lang.js';
 import { MenuBg } from './menubg.js';
@@ -143,6 +144,18 @@ let _dbk = null; function debrisKit() { return _dbk || (_dbk = [
   { g: new THREE.BoxGeometry(.26, .09, .18), m: new THREE.MeshStandardMaterial({ color: 0x141416, roughness: .9 }) },                                                         // rubber
   { g: new THREE.BoxGeometry(.4, .05, .07), m: new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: .5, metalness: .5 }) },                                           // trim
   { g: new THREE.BoxGeometry(.22, .14, .07), m: new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: .3, metalness: .8 }) } ]); }                                    // a mirror
+// ---------------- AI cars: modifications by difficulty ----------------
+// One number for how fast a car is round a lap: top speed, cornering, launch and braking, from the same figures the Tuning screen shows.
+function perfScore(spec, up, tn) { const f = tuneFigures(spec, tn, up); return .3 * f[0][1] / 220 + .38 * f[2][1] / 1.6 + .2 * 4.5 / Math.max(2, f[1][1]) + .12 * 32 / Math.max(15, f[3][1]); }
+// Easy: random modifications. Normal: the build whose performance matches the player's car. Hard: the best build, up to a little above the player's performance (fully modified when the player is).
+function aiLoadout(spec, diff, fixed) {
+  const comps = ['soft', 'medium', 'hard'], rnd = a => a[Math.random() * a.length | 0], noUp = { eng: 0, tyre: 0, nitro: 0, armor: 0 };
+  if (fixed) return { up: undefined, tune: {}, wing: 0, split: 0, score: 0 };
+  if (diff === 0) { const up = { eng: Math.random() * 3 | 0, tyre: Math.random() * 3 | 0, nitro: 0, armor: 0 }, tune = { gear: rnd([-1, 0, 1]), aero: rnd([-1, 0, 1]), brake: 0, susp: 0, split: 0, diff: 0, tyre: rnd(comps) }; return { up, tune, wing: Math.random() * 4 | 0, split: Math.random() * 2 | 0, score: perfScore(spec, up, tune) }; }
+  const pl = CARS.find(c => c.id === save.car), pscore = perfScore(pl, upOf(pl.id), tuneSet(pl.id)), target = diff === 1 ? pscore * (.97 + Math.random() * .06) : pscore * 1.1;
+  let best = null; for (let e = 0; e <= 3; e++) for (let t = 0; t <= 3; t++) for (let a = -2; a <= 2; a++) for (let g = -2; g <= 2; g++) for (const c of comps) { const up = { eng: e, tyre: t, nitro: 0, armor: 0 }, tune = { gear: g, aero: a, brake: 0, susp: 0, split: 0, diff: 0, tyre: c }, s = perfScore(spec, up, tune), err = Math.abs(s - target) + (diff === 2 ? -.004 * (e + t) : .0015 * (e + t)); if (!best || err < best.err) best = { err, up, tune, score: s }; }
+  return { up: best.up, tune: best.tune, wing: best.up.eng >= 2 || best.tune.aero >= 1 ? 2 + (Math.random() * 2 | 0) : 0, split: best.up.tyre >= 2 ? 1 : 0, score: best.score, target };
+}
 function tuneFigures(spec, tn, up) {
   const t = tuneOf(spec, tn), m = spec.mass, g = 9.81, P = spec.pw * (1 + .06 * (up.eng || 0)), mu = spec.grip * t.grip * (1 + .04 * (up.tyre || 0)), df = spec.aero * t.aero, drag = .6 * spec.cda * (1 + .09 * (tn.aero || 0));
   let v = 60; for (let i = 0; i < 40; i++) v = Math.cbrt(Math.max(1, P - m * (.12 + .006 * v) * v) / drag); const top = Math.min(v, spec.top * t.top * 1.02);
@@ -246,17 +259,17 @@ async function startRace(o) {
   scene.add(track.group); applyTheme(track.theme);
   R = { ...o, track, cars: [], ais: new Map(), t: 0, state: 'wait', countT: 3.6, drift: 0, D: { combo: 0, time: 0, mult: 1, grace: 0 }, fx: null, sendT: 0, waitT: 0, bestThisRace: null };
   R.rules = o.rules || 'circuit'; R.arc = R.rules === 'arcade' || o.mode === 'drift';
-  R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene) }; R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
+  R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene) }; R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = new Marshals(scene, track, { fx: R.fx, blood: () => save.blood !== false, onHit: (p) => { audio.crash(Math.min(30, p * .8)); } }); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
-  const mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lane, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
+  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - 2.9), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
   R.ais.set(me, mkAI(.95));     // used when the player's car goes on autopilot after the flag
   if (o.mode === 'race') {
     const base = [.80, .89, .97][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
-      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], undefined, { wing: s.wing ? 0 : Math.random() * 4 | 0, split: Math.random() * 2 | 0, rim: 0, ai: 1 }, { tyre: o.weather === 'rain' ? 'rain' : ['soft', 'medium', 'medium', 'medium', 'hard', 'gravel'][Math.random() * 6 | 0] }); livUsed.add(s.id);
-      R.ais.set(car, mkAI(riv ? riv[i].skill : base + (4 - i) * .012 + Math.random() * .015)); car.assistK = .7; R.cars.push(car); placeOnGrid(car, i);
+      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), LO = aiLoadout(s, o.diff, !!riv), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], LO.up, { wing: s.wing ? 0 : LO.wing, split: LO.split, rim: 0, ai: 1 }, Object.assign(LO.tune.tyre ? LO.tune : { tyre: ['soft', 'medium', 'medium', 'medium', 'hard'][Math.random() * 5 | 0] }, o.weather === 'rain' ? { tyre: 'rain' } : {})); livUsed.add(s.id);
+      car.loadout = LO; R.ais.set(car, mkAI(riv ? riv[i].skill : base + (4 - i) * .012 + Math.random() * .015)); car.assistK = .7; R.cars.push(car); placeOnGrid(car, i);
     }
     R.cars.push(me); placeOnGrid(me, count);
   } else if (o.mode === 'online') {
@@ -280,6 +293,7 @@ function beginCountdown() { if (!R || R.state !== 'wait') return; R.state = 'cou
 function checkGo() { if (R && R.mode === 'online' && isHost && R.state === 'wait' && peerLoaded) { room.send({ k: 'go' }); beginCountdown(); } }
 
 function endRace() {
+  if (R && R.people) { R.people.dispose(); R.people = null; }
   if (R && R.flood) { for (const L of R.flood.lights) { scene.remove(L, L.target); L.dispose && L.dispose(); } R.flood = null; }
   if (!R) return;
   for (const c of R.cars) { scene.remove(c.root); c.dispose(); }
@@ -785,7 +799,7 @@ function updateRace(dt) {
   const detail = pixelRatio < 1.2 ? .6 : 1;
   if (tr2Tick(tr), !$('tele').hidden) telemetry(me, dt);
   for (const c of R.cars) { c.render(dt, tr, c.isRemote ? 1 : clamp(acc / H, 0, 1)); c.effects(dt, R.fx, tr, c === me ? detail : detail * .6); }
-  R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr, R.cars); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
+  R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr, R.cars); if (R.people) R.people.update(dt, R.cars, tr); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
   updateCamera(dt);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360)); R.fx.smoke.mat.uniforms.uScale.value = R.fx.glow.mat.uniforms.uScale.value = sc;
   updateHUD(dt);
@@ -1307,6 +1321,7 @@ $('pauseBtn').addEventListener('click', e => { if (document.body.classList.conta
 addEventListener('pointermove', e => { if (!tDrag) return; captureTouchDefaults(); tUI().pos[tKey(tDrag)] = [clamp(e.clientX / innerWidth, .05, .95), clamp(e.clientY / innerHeight, .08, .94)]; applyTouchUI(); });
 addEventListener('pointerup', () => { if (tDrag) { tDrag = null; persist(); } });
 $('touchEditBtn').onclick = enterTouchEdit; $('todSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; save.tod = b.dataset.d; persist(); for (const x of $('todSeg').children) x.classList.toggle('on', x.dataset.d === (save.tod || 'default')); }; for (const x of $('todSeg').children) x.classList.toggle('on', x.dataset.d === (save.tod || 'default'));
+$('bloodBtn').onclick = () => { save.blood = save.blood === false; persist(); $('bloodBtn').textContent = tx('Blood') + ': ' + tx(save.blood === false ? 'Off' : 'On'); }; $('bloodBtn').textContent = tx('Blood') + ': ' + tx(save.blood === false ? 'Off' : 'On');
 $('hapBtn').onclick = () => { save.haptics = save.haptics === false; persist(); $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); if (save.haptics !== false) rumble(40, .5, .5); }; $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); $('teDone').onclick = exitTouchEdit;
 $('teSize').oninput = e => { tUI().scale = +e.target.value / 100; applyTouchUI(); persist(); };
 $('teOp').oninput = e => { tUI().op = +e.target.value / 100; applyTouchUI(); persist(); };
@@ -1423,5 +1438,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

@@ -68,7 +68,7 @@ function texMaterial(src, info, paintHex, recolor) {
   m.customProgramCacheKey = () => 'texrc2'; return m;
 }
 export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
-const ROOFP = {};      // centre-line roof heights per car model, measured once with rays
+const ROOFP = {}, FITS = {};      // centre-line roof heights per car model, measured once with rays
 function livery(m) {
   const U = m.userData.liv = { uH: { value: 1 }, uL: { value: new THREE.Color(0xf2f2ee) }, uRoof: { value: 0 }, uStripe: { value: 0 }, uDoor: { value: 0 }, uFlash: { value: 0 }, uNose: { value: 0 }, uL2: { value: new THREE.Color(0x1c57c8) }, uZ: { value: 2 }, uDy: { value: .8 }, uDz: { value: -.1 }, uAsp: { value: 1 } };
   m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U);
@@ -398,15 +398,32 @@ export class Car {
         for (const sx of [-1, 1]) { put(across([[-.1, 0], [.06, 0], [.085, hi - .01], [.02, hi - .01]], .016), dark, sx * w2 * .29, deck - .01, z + .02);       // swept uprights, standing on the roof or the lid
           put(across([[-ch * .62, -.085], [ch * .7, -.085], [ch * .7, race ? .15 : .07], [-ch * .25, race ? .15 : .07], [-ch * .62, -.01]], .012), dark, sx * w2 / 2, deck + hi, z); } }   // end plates
     }
+    // ---- nose splitter and side skirts: fitted from rays cast at the real body surface (cached per model), not from a search for vertices
+    let FIT = null; if (L.split || L.skirt) {
+      const key = this.spec.model || this.spec.id; FIT = FITS[key];
+      if (!FIT) { const o = new THREE.Vector3(), d = new THREE.Vector3(), ray = new THREE.Ray(o, d), pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3(), hit = new THREE.Vector3();
+        const cast = (ox, oy, oz, dx, dy, dz) => { o.set(ox, oy, oz); d.set(dx, dy, dz); let best = -1;
+          for (const m of this.bodyMeshes) { const idx = m.geometry.index, P = m.userData.orig, n = idx ? idx.count : P.length / 3;
+            for (let t = 0; t < n; t += 3) { const i0 = idx ? idx.getX(t) : t, i1 = idx ? idx.getX(t + 1) : t + 1, i2 = idx ? idx.getX(t + 2) : t + 2; pa.set(P[i0 * 3], P[i0 * 3 + 1], P[i0 * 3 + 2]); pb.set(P[i1 * 3], P[i1 * 3 + 1], P[i1 * 3 + 2]); pc.set(P[i2 * 3], P[i2 * 3 + 1], P[i2 * 3 + 2]);
+              if (ray.intersectTriangle(pa, pb, pc, false, hit)) { const t2 = hit.distanceTo(o); if (best < 0 || t2 < best) best = t2; } } } return best; };
+        const under = (x, z) => { const t = cast(x, -.6, z, 0, 1, 0); return t < 0 ? null : -.6 + t; }, outer = (y, z) => { const t = cast(5, y, z, -1, 0, 0); return t < 0 ? null : 5 - t; };
+        FIT = FITS[key] = { sp: null, sk: null };
+        { const zs = [], xs = []; let y0 = 9; for (const x of [0, .3, .6]) { const u = under(x, maxZ - .25); if (u != null && u < y0) y0 = u; } if (y0 > 5) y0 = .2; let last = null;
+          for (let z = maxZ - .5; z < maxZ - .01; z += .05) { const x = outer(y0 + .15, z); if (x != null && x > .05) last = last == null ? x : Math.min(x, last + .02); else if (last != null) last *= .8; zs.push(z); xs.push(last ?? .6); } FIT.sp = { y0, zs, xs }; }
+        { const T = this.T, zr = this.wheels.RL.z / T.l + this.R / T.wheel + .07, zf = this.wheels.FL.z / T.l - this.R / T.wheel - .07, zs = [], xs = [], ys = []; let lx = null;
+          for (let z = zr; z <= zf + 1e-6; z += .1) { const x0 = outer(.36, z); if (x0 == null) continue; const u = under(x0 - .08, z), yU = u == null ? .2 : u, x = outer(yU + .13, z) ?? x0; lx = lx == null ? x : lx + (x - lx) * .6; zs.push(z); xs.push(lx); ys.push(Math.max(.07, yU)); } FIT.sk = { zs, xs, ys }; } } }
     part = 'split';
-    if (L.split) { const y0 = low(maxZ - .45, maxZ), pts = [], zs = []; for (let z = maxZ - .5; z < maxZ - .01; z += .05) zs.push(z); let lastX = side(maxZ - .6, maxZ - .45, y0, y0 + .3) || maxX;
-      const xs = zs.map(z => { const x = side(z - .05, z + .05, y0, y0 + .3); if (x > .05) lastX = Math.min(x, lastX + .02); else lastX *= .8; return lastX; });
+    if (L.split && FIT.sp) { const { y0, zs, xs } = FIT.sp, pts = [];
       zs.forEach((z, q) => pts.push([xs[q] + .045, -(z + .03)])); pts.push([xs[xs.length - 1] * .7, -(maxZ + .075)], [-xs[xs.length - 1] * .7, -(maxZ + .075)]); for (let q = zs.length - 1; q >= 0; q--) pts.push([-xs[q] - .045, -(zs[q] + .03)]);
-      put(ext(pts, .02).rotateX(-Math.PI / 2), dark, 0, y0 - .012, 0);                                                                                         // a blade cut to the plan shape of this bumper
+      put(ext(pts, .02).rotateX(-Math.PI / 2), dark, 0, y0 - .012, 0);                                                                                         // a blade cut to the true plan shape of this bumper, at its true underside
       for (const sx of [-1, 1]) put(across([[-.1, 0], [.1, 0], [.1, .05], [-.04, .075]], .012), dark, sx * (xs[2] + .03), y0 + .005, zs[2] + .1); }           // dive planes
     part = 'skirt';
-    if (L.skirt) { const zr = this.wheels.RL.z / this.T.l + this.R / this.T.wheel + .07, zf = this.wheels.FL.z / this.T.l - this.R / this.T.wheel - .07, y0 = low(zr, zf), xs = side(zr, zf, y0, y0 + .22);
-      for (const sx of [-1, 1]) { const me = put(ext([[-.04, 0], [.05, 0], [.058, .016], [.0, .075], [-.04, .075]], zf - zr), dark, sx * (xs - .012), y0 - .012, zr); me.scale.x = sx; } }   // a wedge under the sill, arch to arch
+    if (L.skirt && FIT.sk && FIT.sk.zs.length > 2) { const { zs, xs, ys } = FIT.sk;
+      for (const sx of [-1, 1]) { const pos = [], ind = [], ring = (x, y) => [[x - .05, y + .14], [x + .012, y + .14], [x + .055, y + .045], [x + .055, y - .015], [x - .05, y - .015]];
+        zs.forEach((z, q) => { for (const [dx, dy] of ring(xs[q], ys[q])) pos.push(sx * dx, dy, z); });
+        for (let q = 0; q < zs.length - 1; q++) for (let r = 0; r < 5; r++) { const a = q * 5 + r, b = q * 5 + (r + 1) % 5, a2 = a + 5, b2 = b + 5; ind.push(a, b, a2, b, b2, a2); }
+        for (const q of [0, zs.length - 1]) for (let r = 1; r < 4; r++) ind.push(q * 5, q * 5 + r, q * 5 + r + 1);
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(ind); g.computeVertexNormals(); put(g, dark, 0, 0, 0); } }      // swept along the real sill line, arch to arch
     part = 'scoop';
     if (L.scoop) { const roofLen = zr1 - zr0, hl = clamp(roofLen * .16, .13, .24), sz = clamp(zr1 - roofLen * .4, zr0 + hl + .12, Math.max(zr0 + hl + .12, zr1 - hl - .1)), sy = roofAt(sz) - .012, k = hl / .24;      // on the roof, behind the windscreen header, flush with the roof line
       put(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(.17 * k, .075 * k, hl), this.m.paint, 0, sy, sz);
@@ -664,6 +681,35 @@ export class Car {
 }
 
 // ---- AI driver: pure-pursuit steering + brake-point speed planning along the centre line
+// The racing line: found once per track by minimising the curvature of the whole lap inside the road limits (the fourth-order smoothing of the path, with the offsets clamped to the
+// road). That gives what professionals drive: a wide approach, a late turn-in, the apex clipped, and the exit run out to the edge, with the largest possible corner radius, so the
+// corner speed limit is higher than the centre-line's. Returns the lateral offset of the line at every node and its signed curvature.
+function buildRaceLine(track, maxOff) {
+  const p = track.path, n = p.length, st = 3, m = Math.floor(n / st), mx = Math.max(1, maxOff);
+  const cx = new Float64Array(m), cz = new Float64Array(m), nx = new Float64Array(m), nz = new Float64Array(m);
+  for (let i = 0; i < m; i++) { const q = p[i * st]; cx[i] = q.x; cz[i] = q.z; nx[i] = q.tz; nz[i] = -q.tx; }
+  // The energy is the sum over the lap of |second difference of (centre line + offset * normal)|^2: a quadratic in the offsets, M o = -b, where M is banded.
+  const M = new Float64Array(m * m), b = new Float64Array(m), co = [1, -2, 1];
+  for (let i = 0; i < m; i++) { const J = [(i + m - 1) % m, i, (i + 1) % m], dx = cx[J[0]] - 2 * cx[i] + cx[J[2]], dz = cz[J[0]] - 2 * cz[i] + cz[J[2]];
+    for (let a = 0; a < 3; a++) { const ja = J[a]; b[ja] += co[a] * (nx[ja] * dx + nz[ja] * dz); for (let c2 = 0; c2 < 3; c2++) { const jc = J[c2]; M[ja * m + jc] += co[a] * co[c2] * (nx[ja] * nx[jc] + nz[ja] * nz[jc]); } } }
+  for (let i = 0; i < m; i++) M[i * m + i] += 1e-6;
+  const o = new Float64Array(m), fixed = new Uint8Array(m);
+  for (let round = 0; round < 14; round++) {      // active set: solve for the free offsets, pin whichever hit the road edge, repeat
+    const fr = []; for (let i = 0; i < m; i++) if (!fixed[i]) fr.push(i); const f = fr.length; if (!f) break;
+    const A = new Float64Array(f * (f + 1)); for (let r = 0; r < f; r++) { let rhs = -b[fr[r]]; for (let q = 0; q < m; q++) if (fixed[q]) rhs -= M[fr[r] * m + q] * o[q]; for (let q = 0; q < f; q++) A[r * (f + 1) + q] = M[fr[r] * m + fr[q]]; A[r * (f + 1) + f] = rhs; }
+    for (let col = 0; col < f; col++) { let pv = col, best = Math.abs(A[col * (f + 1) + col]); for (let r = col + 1; r < f; r++) { const v = Math.abs(A[r * (f + 1) + col]); if (v > best) { best = v; pv = r; } }
+      if (pv !== col) for (let q = col; q <= f; q++) { const t = A[col * (f + 1) + q]; A[col * (f + 1) + q] = A[pv * (f + 1) + q]; A[pv * (f + 1) + q] = t; }
+      const d = A[col * (f + 1) + col] || 1e-12; for (let r = col + 1; r < f; r++) { const k2 = A[r * (f + 1) + col] / d; if (k2) for (let q = col; q <= f; q++) A[r * (f + 1) + q] -= k2 * A[col * (f + 1) + q]; } }
+    for (let r = f - 1; r >= 0; r--) { let s = A[r * (f + 1) + f]; for (let q = r + 1; q < f; q++) s -= A[r * (f + 1) + q] * o[fr[q]]; o[fr[r]] = s / (A[r * (f + 1) + r] || 1e-12); }
+    let hit = false; for (const i of fr) if (Math.abs(o[i]) > mx) { o[i] = Math.sign(o[i]) * mx; fixed[i] = 1; hit = true; } if (!hit) break; }
+  const off = new Float32Array(n), X = new Float64Array(n), Z = new Float64Array(n);
+  for (let t = 0; t < n; t++) { const u = t / st, i0 = Math.min(m - 1, Math.floor(u)), i1 = (i0 + 1) % m, f = Math.min(1, u - i0), s = f * f * (3 - 2 * f); off[t] = o[i0] + (o[i1] - o[i0]) * s; }
+  for (let t = 0; t < n; t++) { const q = p[t]; X[t] = q.x + q.tz * off[t]; Z[t] = q.z - q.tx * off[t]; }
+  const k = new Float32Array(n); let agree = 0;
+  for (let i = 0; i < n; i++) { const i0 = (i + n - 1) % n, i1 = (i + 1) % n, ax = X[i] - X[i0], az = Z[i] - Z[i0], bx = X[i1] - X[i], bz = Z[i1] - Z[i], la = Math.hypot(ax, az) || 1, lb = Math.hypot(bx, bz) || 1, ch = Math.hypot(X[i1] - X[i0], Z[i1] - Z[i0]) || 1; k[i] = 2 * (ax * bz - az * bx) / (la * lb * ch); agree += k[i] * p[i].k; }
+  const sg = agree < 0 ? -1 : 1; for (let pass = 0; pass < 3; pass++) { const t = Float32Array.from(k); for (let i = 0; i < n; i++) k[i] = sg * (t[(i + n - 2) % n] + 2 * t[(i + n - 1) % n] + 3 * t[i] + 2 * t[(i + 1) % n] + t[(i + 2) % n]) / 9; }
+  return { o: off, k };
+}
 export function aiDrive(car, track, ai, cars, dt) {
   const n = track.n, sp = car.speed, p = track.path;
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
@@ -680,21 +726,9 @@ export function aiDrive(car, track, ai, cars, dt) {
     const dir = Math.sign(kk(s)); let e = s; q = 0; while (q++ < 70 && Math.abs(kk(e + 1)) > T0 * .7 && Math.sign(kk(e + 1)) === dir) e++;
     return { s, e, dir, len: e - s + 1, inside: from >= s && from <= e };
   };
-  let lineOff = 0, wsum = 0, cd = 0;
-  {
-    const c1 = corner(ix), ua = .6 + (ai.apexU ?? (ai.apexU = (Math.random() - .5) * .12));          // where in the corner this driver clips the apex (about 60%: a late apex)
-    if (c1) {
-      const d = c1.inside ? 0 : (c1.s - ix) * track.spacing; let o1, w1;
-      if (c1.inside) { const u = (ix - c1.s) / Math.max(1, c1.len); o1 = u < ua ? -c1.dir * W * (.9 - 1.75 * sm(u / ua)) : c1.dir * W * (.85 - .7 * sm((u - ua) / (1 - ua))); w1 = 1; }      // wide -> apex -> unwinding out
-      else { o1 = -c1.dir * W * .9 * clamp((75 - d) / 45, 0, 1); w1 = clamp((75 - d) / 30, 0, 1); }                                                                                           // swing out on the approach
-      lineOff += o1 * w1; wsum += w1; if (d < 70 || c1.inside) cd = c1.dir;
-    }
-    if (!(c1 && c1.inside)) {                                                                    // the corner just behind: track out to the edge
-      let b = ix, qd = 0; while (qd < 40 && Math.abs(kk(b)) <= T0) { b--; qd++; }
-      if (qd > 0 && qd < 40) { const dirb = Math.sign(kk(b)), dm = qd * track.spacing, w0 = clamp(1 - dm / 70, 0, 1); lineOff += -dirb * W * .9 * sm(dm / 14) * w0; wsum += w0; }
-    }
-  }
-  let want = lineOff / Math.max(1, wsum) + ai.lane * (1 - clamp(wsum, 0, 1)) + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
+  const RL = track.rl || (track.rl = buildRaceLine(track, ai.max)), rix = (car.idx + look + 7) % n; let cd = 0;      // cd: which way the corner ahead turns (the inside car owns the apex)
+  { const k1 = RL.k[(car.idx + look + 3) % n], k2 = RL.k[(car.idx + look + 12) % n], kc = Math.abs(k1) > Math.abs(k2) ? k1 : k2; if (Math.abs(kc) > .004) cd = Math.sign(kc); }
+  let want = RL.o[rix] + ai.lane * clamp(1 - (ai.rt ?? 99) / 12, 0, 1) * .8 + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
   const rs = clamp(1 - (ai.rt ?? 99) / 15, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
   let v0cap = 1e9, brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
@@ -728,7 +762,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   // fastest speed that still lets us slow down for every corner in sight
   let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 9.6 * ai.skill;
   for (let i = 0; i < 70; i++) {
-    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
+    const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16); v *= 1 - .07 * rs;
