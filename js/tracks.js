@@ -3,6 +3,7 @@
 // and a grid that tells the physics what is under each wheel (road / kerb / grass / wall).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildCity } from './city.js';
 
 export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4;
 
@@ -384,10 +385,7 @@ function buildProc(track) {
     if (isFree(x, z, 5)) spots.push({ x, z, r: rnd() * 6.28, s: .8 + rnd() * .7, i });
   }
   if (night) {
-    const btex = canvasTex(64, 128, (k) => { k.fillStyle = '#0d0e14'; k.fillRect(0, 0, 64, 128); for (let y = 4; y < 124; y += 10) for (let x = 4; x < 60; x += 9) if (Math.random() > .45) { k.fillStyle = ['#ffd27a', '#8fd8ff', '#ff9ad5'][Math.random() * 3 | 0]; k.fillRect(x, y, 5, 6); } });
-    const bm = new THREE.MeshStandardMaterial({ map: btex, emissive: 0xffffff, emissiveMap: btex, emissiveIntensity: 1.1, roughness: .8 });
-    const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, .5, 0);
-    G.add(instanced(g, bm, spots.filter((_, i) => i % 3 === 0).map(s => ({ x: s.x, z: s.z, r: 0, sx: 14 + rnd() * 12, sy: 5 + rnd() * 9, sz: 14 + rnd() * 12 })), false));
+    buildCity(path, n, B, isFree, rnd, G);      // the night city: real buildings with real window grids (see city.js)
     const lamp = new THREE.CylinderGeometry(.12, .16, 7, 6); lamp.translate(0, 3.5, 0);
     const bulb = new THREE.SphereGeometry(.45, 8, 6); bulb.translate(0, 7.1, 0);
     const lp = []; for (let i = 0; i < n; i += 14) { const p = path[i], off = (i % 28 ? 1 : -1) * (B + 1.2); lp.push({ x: p.x + p.tz * off, z: p.z - p.tx * off }); }

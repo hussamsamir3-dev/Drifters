@@ -94,7 +94,7 @@ function buildFloodlights(tr, G) {
   for (let i = 25; i < n - 25; i += step) { const q = tr.path[i], side = towers.length % 2 ? 1 : -1, off = B + 3.6, x = q.x + q.tz * side * off, z = q.z - q.tx * side * off, y0 = tr.height(x, z), g = new THREE.Group();
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(.16, .26, 15, 8), poleM); pole.position.y = 7.5; const bar = new THREE.Mesh(new THREE.BoxGeometry(3, .35, .5), poleM); bar.position.y = 15.1;
     g.add(pole, bar); for (let k = -1; k <= 1; k += 1) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(.8, .3, .6), headM); lamp.position.set(k * 1.0, 14.85, 0); g.add(lamp); }
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(7.5, 17, 20, 1, true), coneM); cone.position.y = 7; g.add(cone); g.position.set(x, y0, z); g.lookAt(q.x, y0, q.z); g.rotation.x = 0; g.userData.cone = cone; G.add(g);
+    g.position.set(x, y0, z); g.lookAt(q.x, y0, q.z); g.rotation.x = 0; G.add(g);      // (no visible light cone: its base showed as a ring on the ground)
     towers.push({ x, y: y0 + 15, z, tx: q.x - side * q.tz * 2, tz: q.z + side * q.tx * 2 }); }
   const lights = [0, 1, 2, 3].map(() => { const L = new THREE.SpotLight(0xfff0d8, 0, 80, .9, .65, 1.25); scene.add(L, L.target); L.userData.tw = -1; return L; });
   R.flood = { towers, lights, k: tr.theme.night ? 1 : 0, t: 0 };
@@ -638,12 +638,8 @@ function setupExtras() {
     R.pit.pad = R.crews[R.myBox].pad; R.pit.th = tr.pitBoxes[R.myBox].th; if (R.remote) { const b2 = tr.pitBoxes[R.rivBox]; R.pit2 = { x: b2.x, z: b2.z, th: b2.th }; } }
   const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 4, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x19a7ce).multiplyScalar(2.2) })); beacon.position.set(R.pit.x, tr.height(R.pit.x, R.pit.z) + 5, R.pit.z); G.add(beacon);
   // marker above the player's car
-  const mk = new THREE.Group(); { const g = new THREE.Mesh(new THREE.ConeGeometry(.55, .95, 4), new THREE.MeshBasicMaterial({ color: 0x2dff72, fog: false })); g.rotation.x = Math.PI; g.userData.arrow = 1;
-    const ed = new THREE.LineSegments(new THREE.EdgesGeometry(g.geometry), new THREE.LineBasicMaterial({ color: 0xffffff, fog: false })); ed.rotation.x = Math.PI;
-    const gc = document.createElement('canvas'); gc.width = gc.height = 64; const gk = gc.getContext('2d'), gr = gk.createRadialGradient(32, 32, 2, 32, 32, 32); gr.addColorStop(0, 'rgba(60,255,120,.95)'); gr.addColorStop(.35, 'rgba(40,255,110,.35)'); gr.addColorStop(1, 'rgba(40,255,110,0)'); gk.fillStyle = gr; gk.fillRect(0, 0, 64, 64);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); glow.scale.setScalar(2.2); glow.userData.glow = 1; glow.material.opacity = .7;
-    const rg = new THREE.Mesh(new THREE.TorusGeometry(.8, .035, 6, 40).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2dff72, fog: false })); rg.position.y = -.75; rg.userData.ring = 1;
-    mk.add(g, ed, glow, rg); mk.scale.setScalar(1.55); mk.traverse(o => { o.renderOrder = 8; }); mk.position.y = me.top + 2.1; me.root.add(mk); R.marker = mk; }
+  const mk = new THREE.Group(); { const col = 0x2dff72, mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: .55, roughness: .35, metalness: .1 }), head = new THREE.Mesh(new THREE.SphereGeometry(.42, 24, 16), mat), tip = new THREE.Mesh(new THREE.ConeGeometry(.42, .95, 24).rotateX(Math.PI), mat);
+    head.position.y = .55; tip.position.y = -.0; mk.add(head, tip); mk.scale.setScalar(1.25); mk.position.y = me.top + .75; me.root.add(mk); R.marker = mk; }      // a plain 3D map pin: a ball on a point, standing on the roof
   R.pro = R.rules !== 'arcade';
   if (R.pro && (R.mode === 'race' || R.mode === 'online')) { const field = R.cars.map(c => c.spec); for (const c of R.cars) { const b = balance(c.spec, field); c.bopP = b.p; c.bopG = b.g; } }   // balance of performance
   { const lapT = tr.len / 36, lapsPerTank = Math.max(2.6, R.laps * .62), proBurn = R.mode === 'race' && R.laps >= 3 ? clamp(TUNE.fuel.fullThrottleSeconds * .8 / (lapsPerTank * lapT), 1, 6) : 1;
@@ -815,7 +811,7 @@ function updateCamera(dt) {
   const me = R.player, m = CAMS[camMode], sp = me.speed, tr = R.track, X = me.rx ?? me.x, Z = me.rz ?? me.z;
   const d = R.sunDir || tr.theme.sunDir; sun.position.set(X + d[0] * 130, me.y + d[1] * 130, Z + d[2] * 130); sun.target.position.set(X, me.y, Z);
   if (sky) sky.position.set(X, 0, Z);
-  if (R.marker) { const mk = R.marker; mk.position.y = me.top + 1.9 + Math.sin(R.t * 3.6) * .16; mk.rotation.y = R.t * 2.2; const pu = 1 + .12 * Math.sin(R.t * 5); mk.children[2].scale.setScalar(2.2 * pu); mk.children[3].scale.setScalar(1 + .18 * Math.sin(R.t * 3.6 + 1)); mk.visible = !!m.fixed || !!m.follow; }
+  if (R.marker) { R.marker.position.y = me.top + .75 + Math.sin(R.t * 3) * .06; R.marker.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
     const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz * zsm(dt, sp) / 1.3;      // pulls back a little with speed to show more road; the whole follow camera is 30% closer than before
