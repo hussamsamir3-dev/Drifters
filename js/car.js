@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GRASS, KERB, ROAD, WALL, PIT } from './tracks.js';
+import { buildWheel, sidewallDecals, treadTexture, RIM_STYLES, TYRE_STYLES, CAL_COLS } from './wheels.js';
+export { RIM_STYLES, TYRE_STYLES, CAL_COLS };
 import { getAsset } from './assets.js';
 
 // top = top speed (m/s), acc = launch acceleration (m/s²), grip = tyre μ, rear = rear-axle grip bias
@@ -81,12 +83,13 @@ function livery(m) {
 }
 function mats(color) {
   if (!shared.tire) {
-    shared.tire = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: .92 });
+    shared.tire = new THREE.MeshStandardMaterial({ color: 0x0d0d0e, roughness: .86, bumpMap: treadTexture(), bumpScale: 2.2 });      // rubber with a tread bump map
+    shared.steelm = new THREE.MeshStandardMaterial({ color: 0xd9dde4, metalness: 1, roughness: .15 }); shared.cap = new THREE.MeshStandardMaterial({ color: 0x17181c, metalness: .65, roughness: .28 }); shared.disc = new THREE.MeshStandardMaterial({ color: 0x80848c, metalness: .92, roughness: .4 });
     shared.rim = new THREE.MeshStandardMaterial({ color: 0xc9ccd2, metalness: .95, roughness: .28 });
     shared.rimDark = new THREE.MeshStandardMaterial({ color: 0x2a2c30, metalness: .8, roughness: .4 });
     shared.body = new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: .6, metalness: .2 });
     shared.trim = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: .45, metalness: .5 });
-    shared.window = new THREE.MeshStandardMaterial({ color: 0x14212e, emissive: 0x08121c, roughness: .42, metalness: 0, envMapIntensity: .3 });      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
+    shared.window = new THREE.MeshStandardMaterial({ color: 0x080b0f, roughness: .1, metalness: .55, envMapIntensity: .42 });      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
     shared.front = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3d0, emissiveIntensity: 1.1 });
     shared.tyretext = tyreTextMat();
     shared.vcol = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .5, metalness: .05 });      // parts that keep the colours the model was drawn with
@@ -107,12 +110,12 @@ function mats(color) {
 export class Car {
   constructor(spec, color = spec.color, name = 'Driver', up, look, tune, wantLight = false) {
     this.wantLight = wantLight;
-    this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
+    this.isAI = !!(look && look.ai); this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
     this.fuel = 1; this.fuelK = 1; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; this.partK = 1; this.pace = 1; this.bopP = 1; this.bopG = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
     this.dirt = 0; this.dirtShown = 0; this.mud = 0; this.mudShown = 0; this.scr = []; this.scrN = 0; this.tT = TUNE.tyreT.start; this.tmpK = 1; this.lz = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
     const proto = protos[spec.model || spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
-    this.m = mats(color); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
+    this.m = mats(color); this.m.caliper = new THREE.MeshStandardMaterial({ color: CAL_COLS[0], roughness: .32, metalness: .35, side: THREE.DoubleSide }); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
     if (proto.userData.rim != null) { const rm = this.m.rim.clone(); rm.color.setHex(proto.userData.rim); this.m.rim = rm; }      // each car's own wheel colour
     this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dmgScale = 1; this.wear = 1;
     for (const child of proto.children) {
@@ -329,14 +332,24 @@ export class Car {
 
   // Bodywork options. Every part is positioned from the car's own geometry (rear deck height, nose height, body width),
   // so a wing sits on the boot lid and a splitter sits under the bumper whatever the model.
-  addTyreText() {      // a ring of lettering on both sidewalls, sized from each wheel's own geometry
+  buildWheels(style) {      // every wheel is rebuilt from the car's own measured tyre size, so it always fits its arch
+    const seg = this.isAI ? Math.min(40, window.__wheelSeg || 40) : window.__wheelSeg || 64, T = this.T;      // rival cars get lighter wheels: twelve cars would otherwise carry a lot of triangles
+    for (const k in this.wheels) { const q = this.wheels[k];
+      if (!q.dims) { const bT = new THREE.Box3(), bR = new THREE.Box3(); q.mesh.traverse(o => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); (o.userData.kind === 'rim7' || o.userData.kind === 'rim6' ? bR : bT).union(o.geometry.boundingBox); } });
+        const R = (bT.max.y - bT.min.y) / 2, W = bT.max.x - bT.min.x; q.dims = { R, W, rr: bR.isEmpty() ? R * .66 : clamp((bR.max.y - bR.min.y) / 2, R * .6, R * .74) }; }
+      const { R, W, rr } = q.dims; for (const ch of [...q.mesh.children]) q.mesh.remove(ch); if (q.still) q.pivot.remove(q.still);
+      const w = buildWheel(R, W, rr, style, seg, this.m, q.pivot.position.x >= 0); q.mesh.add(w.spin); q.still = w.still; w.still.scale.setScalar(T.wheel); q.pivot.add(w.still); q.spin = w.spin; }
+  }
+  addTyreText() {      // (the old flat lettering ring: now part of buildWheels / sidewallDecals)
     for (const k in this.wheels) { const q = this.wheels[k], bb = new THREE.Box3(); q.mesh.traverse(o => { if (o.isMesh && o.geometry && !o.userData.decal) { o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox); } });
       const hwid = (bb.max.x - bb.min.x) / 2, rad = (bb.max.y - bb.min.y) / 2; if (!(hwid > .02 && rad > .1)) continue;
       for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.RingGeometry(rad * .74, rad * .94, 40, 1).rotateY(s * Math.PI / 2), this.m.tyretext); m.position.x = s * (hwid + .003); m.userData.decal = 1; q.mesh.add(m); } }
   }
   dress(look) {
-    if (!this._tt) { this._tt = 1; this.addTyreText(); }
     const L = this.look = Object.assign({ wing: 0, split: 0, rim: 0, tint: 0, glow: 0, skirt: 0, scoop: 0, pipe: 0, liv: 3, livc: 0, num: 0 }, look || {}), ch = this.chassis; let part = 'wing';
+    { const rs = L.rimS ?? this.spec.rimS ?? 1, ts = L.tyreS || 0; if (this._rs !== rs) { this._rs = rs; this.buildWheels(rs); this._ts = -1; }
+      if (this._ts !== ts) { this._ts = ts; for (const k in this.wheels) { const q = this.wheels[k]; sidewallDecals(q.spin, q.dims.R, q.dims.W, q.dims.rr, ts, this.m.tyretext); } }
+      this.m.caliper.color.setHex(CAL_COLS[L.cal || 0] ?? CAL_COLS[0]); }
     { const U = this.m.paint.userData.liv; U.uRoof.value = L.liv & 2 ? 1 : 0; U.uStripe.value = L.liv & 1 ? 1 : 0; U.uDoor.value = L.num ? 1 : 0; U.uL.value.setHex(LIVC[L.livc] ?? LIVC[0]); U.uFlash.value = L.liv & 4 ? 1 : 0; U.uNose.value = L.liv & 8 ? 1 : 0; U.uL2.value.setHex(LIVC[L.livc2 ?? 3] ?? LIVC[3]); }
     if (this.addons) ch.remove(this.addons); const A = this.addons = new THREE.Group(); ch.add(A);
     let minZ = 1e9, maxZ = -1e9, maxX = 0; const V = [];
@@ -356,14 +369,20 @@ export class Car {
     if (this.hasWing == null) {       // does this body already carry a wing? Look for a slab at the tail with clear air under it.
       const ys = []; for (let i = 0; i < V.length; i += 3) if (V[i + 2] < minZ + .55 && Math.abs(V[i]) < maxX * .5) ys.push(V[i + 1]); ys.sort((a, b) => a - b); let gap = 0, at = 0; const hTop = ys[ys.length - 1];
       for (let i = 1; i < ys.length; i++) if (ys[i - 1] > hTop * .45 && ys[i] - ys[i - 1] > gap) { gap = ys[i] - ys[i - 1]; at = ys[i]; } this.hasWing = !!this.spec.wing; }
+    // the roof's extent along the centre line: where it ends at the back (zr0) and at the front (zr1)
+    const roofMax = top(minZ + .9, maxZ - .9, maxX * .3); let zr0 = 1e9, zr1 = -1e9; for (let i = 0; i < V.length; i += 3) if (V[i + 2] > minZ + .3 && V[i + 2] < maxZ - .3 && Math.abs(V[i]) < maxX * .3 && V[i + 1] >= roofMax - .09) { if (V[i + 2] < zr0) zr0 = V[i + 2]; if (V[i + 2] > zr1) zr1 = V[i + 2]; }
+    if (zr1 < zr0) { zr0 = minZ + 1; zr1 = maxZ - 1; }
+    this.roofInfo = { rearGap: +(zr0 - minZ).toFixed(2), roofLen: +(zr1 - zr0).toFixed(2), roofMax: +roofMax.toFixed(2), len: +(maxZ - minZ).toFixed(2) };
+    const roofWing = zr0 - minZ < 1.15;      // hatchbacks, estates and rally cars: the roof runs almost to the tail, so the wing sits on the END OF THE ROOF; saloons and coupes carry it on the boot lid
     if (L.wing && !this.hasWing) {
-      const tailW = side(minZ, minZ + .55, 0, 9) * 2, deck = top(minZ + .04, minZ + .42, tailW * .36);
-      if (L.wing === 1) put(across([[-.26, 0], [-.06, .03], [.02, .085], [.035, .078], [.02, 0]], tailW * .86), this.m.paint, 0, deck - .004, minZ + .05);      // ducktail: rises smoothly from the boot lid to a crisp edge
-      else { const race = L.wing === 3, ch = race ? .36 : .27, hi = race ? .36 : .24, wd = tailW * (race ? 1.0 : .88), z = minZ + (race ? .1 : .18);
-        put(across(foil(ch, .13), wd), race ? dark : this.m.paint, 0, deck + hi, z).rotation.x = race ? .2 : .12;
-        if (race) put(across(foil(.13, .12), wd), dark, 0, deck + hi + .075, z - .17).rotation.x = .5;                                                          // second element (flap)
-        for (const sx of [-1, 1]) { put(across([[-.1, 0], [.06, 0], [.085, hi - .01], [.02, hi - .01]], .016), dark, sx * wd * .29, deck - .01, z + .02);       // swept uprights
-          put(across([[-ch * .62, -.085], [ch * .7, -.085], [ch * .7, race ? .15 : .07], [-ch * .25, race ? .15 : .07], [-ch * .62, -.01]], .012), dark, sx * wd / 2, deck + hi, z); } }   // end plates
+      const tailW = side(minZ, minZ + .55, 0, 9) * 2; let deck, wd, z0;
+      if (roofWing) { const rw = Math.max(side(zr0 - .06, zr0 + .25, roofMax - .3, roofMax + .1) * 2, .8); deck = top(zr0 - .05, zr0 + .1, rw * .3); wd = Math.min(rw * 1.04 + .08, tailW * .96); z0 = zr0 - .03; } else { deck = top(minZ + .04, minZ + .42, tailW * .36); wd = tailW; z0 = minZ + .05; }
+      if (L.wing === 1) put(across([[-.26, 0], [-.06, .03], [.02, .085], [.035, .078], [.02, 0]], wd * .86), this.m.paint, 0, deck - .004, roofWing ? z0 : minZ + .05);      // ducktail: rises smoothly from the roof edge or boot lid to a crisp edge
+      else { const race = L.wing === 3, ch = race ? .36 : .27, hi = roofWing ? (race ? .2 : .13) : (race ? .36 : .24), w2 = wd * (race ? 1.0 : .88), z = roofWing ? z0 : minZ + (race ? .1 : .18);
+        put(across(foil(ch, .13), w2), race ? dark : this.m.paint, 0, deck + hi, z).rotation.x = race ? .2 : .12;
+        if (race) put(across(foil(.13, .12), w2), dark, 0, deck + hi + .075, z - .17).rotation.x = .5;                                                          // second element (flap)
+        for (const sx of [-1, 1]) { put(across([[-.1, 0], [.06, 0], [.085, hi - .01], [.02, hi - .01]], .016), dark, sx * w2 * .29, deck - .01, z + .02);       // swept uprights, standing on the roof or the lid
+          put(across([[-ch * .62, -.085], [ch * .7, -.085], [ch * .7, race ? .15 : .07], [-ch * .25, race ? .15 : .07], [-ch * .62, -.01]], .012), dark, sx * w2 / 2, deck + hi, z); } }   // end plates
     }
     part = 'split';
     if (L.split) { const y0 = low(maxZ - .45, maxZ), pts = [], zs = []; for (let z = maxZ - .5; z < maxZ - .01; z += .05) zs.push(z); let lastX = side(maxZ - .6, maxZ - .45, y0, y0 + .3) || maxX;
@@ -375,9 +394,9 @@ export class Car {
     if (L.skirt) { const zr = this.wheels.RL.z / this.T.l + this.R / this.T.wheel + .07, zf = this.wheels.FL.z / this.T.l - this.R / this.T.wheel - .07, y0 = low(zr, zf), xs = side(zr, zf, y0, y0 + .22);
       for (const sx of [-1, 1]) { const me = put(ext([[-.04, 0], [.05, 0], [.058, .016], [.0, .075], [-.04, .075]], zf - zr), dark, sx * (xs - .012), y0 - .012, zr); me.scale.x = sx; } }   // a wedge under the sill, arch to arch
     part = 'scoop';
-    if (L.scoop) { let ry = 0, rz = 0; for (let i = 0; i < V.length; i += 3) if (Math.abs(V[i]) < maxX * .3 && V[i + 2] > minZ + .9 && V[i + 2] < maxZ - 1.1 && V[i + 1] > ry) { ry = V[i + 1]; rz = V[i + 2]; }
-      put(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(.17, .075, .34), this.m.paint, 0, ry - .012, rz - .1);
-      put(new THREE.CircleGeometry(1, 16, 0, Math.PI).scale(.14, .055, 1), new THREE.MeshBasicMaterial({ color: 0x050506 }), 0, ry - .008, rz + .2).rotation.x = -.35; }   // the intake mouth
+    if (L.scoop) { const roofLen = zr1 - zr0, hl = clamp(roofLen * .16, .13, .24), sz = clamp(zr1 - roofLen * .4, zr0 + hl + .12, Math.max(zr0 + hl + .12, zr1 - hl - .1)), sy = top(sz - .08, sz + .08, .25) - .012, k = hl / .24;      // on the roof, behind the windscreen header, flush with the roof line
+      put(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(.17 * k, .075 * k, hl), this.m.paint, 0, sy, sz);
+      put(new THREE.CircleGeometry(1, 16, 0, Math.PI).scale(.14 * k, .055 * k, 1), new THREE.MeshBasicMaterial({ color: 0x050506 }), 0, sy + .004, sz + hl * .96).rotation.x = -.3; }   // the intake mouth
     part = 'pipe';
     if (L.pipe) { const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe2e6, metalness: 1, roughness: .16, side: THREE.DoubleSide }), inner = new THREE.MeshBasicMaterial({ color: 0x060606 });
       let spots = this.exhL; if (!spots) { const yl = low(minZ, minZ + .35) + .12, tw = side(minZ, minZ + .3, 0, 9); spots = []; for (const sx of [-1, 1]) { const x0 = sx * tw * .5; let zr = 9; for (let i = 0; i < V.length; i += 3) if (Math.abs(V[i] - x0) < .16 && V[i + 1] < yl + .2 && V[i + 2] < zr) zr = V[i + 2]; spots.push([x0, yl, zr]); } }   // no pipes on the model: sit them in the rear valance, flush with the bodywork there
@@ -412,7 +431,7 @@ export class Car {
       for (const z of [minZ + .32, maxZ - .32]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, W * .7, 8).rotateZ(Math.PI / 2), led); m.position.set(0, y0, z); m.userData.part = 'glow'; A.add(m); }
       if (this.wantLight) { const pl = new THREE.PointLight(col, 4.5, 6, 1.4); pl.position.set(0, .22 - this.rideY / this.T.h, (minZ + maxZ) / 2); pl.userData.part = 'glow'; A.add(pl); }
     } else this.glowPool = null;
-    const rimM = L.rim ? new THREE.MeshStandardMaterial({ color: RIMS[L.rim], metalness: .9, roughness: .26 }) : null;
+    const rimM = L.rim ? new THREE.MeshPhysicalMaterial({ color: RIMS[L.rim], metalness: .85, roughness: .22, clearcoat: .7, clearcoatRoughness: .08 }) : null;
     const shaded = m => { const q = m.clone(); q.vertexColors = true; return q; }, rimS = rimM ? shaded(rimM) : null, rim0 = shaded(this.m.rim);
     for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = o.geometry.attributes.color ? (rimS || rim0) : rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
     const winM = L.tint ? new THREE.MeshStandardMaterial({ color: new THREE.Color(TINTS[L.tint]).multiplyScalar(.45), roughness: .2, metalness: 0, envMapIntensity: .14, side: THREE.DoubleSide }) : this.m.window;
