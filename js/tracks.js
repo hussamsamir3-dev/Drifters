@@ -96,7 +96,7 @@ let seed = 1; const rnd = () => { seed = (seed * 16807) % 2147483647; return see
 
 // ---------- Track ----------
 export class Track {
-  constructor(def) { this.def = def; this.theme = THEMES[def.theme]; this.group = new THREE.Group(); this.grid = null; this.path = []; this.lights = []; }
+  constructor(def) { this.def = def; this.theme = window.__todTheme ? window.__todTheme(def.theme) : THEMES[def.theme]; this.group = new THREE.Group(); this.grid = null; this.path = []; this.lights = []; }
 
   finishPath(pts) {
     const n = pts.length; this.path = pts; this.n = n;
@@ -343,14 +343,24 @@ function buildProc(track) {
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.02, cz); ground.receiveShadow = true; G.add(ground);
 
   // -- road, lines, kerbs
-  const atex = canvasTex(512, 512, (k, W, H) => { noise(k, W, H, night ? '#26272c' : '#51475f', .1, 9000); { const g = k.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(255,255,255,.07)'); g.addColorStop(.3, 'rgba(0,0,0,.1)'); g.addColorStop(.5, 'rgba(0,0,0,.16)'); g.addColorStop(.7, 'rgba(0,0,0,.1)'); g.addColorStop(1, 'rgba(255,255,255,.07)'); k.fillStyle = g; k.fillRect(0, 0, W, H); }   // a darker rubbered-in groove down the middle
-    if (night) { k.fillStyle = 'rgba(255,255,255,.75)'; k.fillRect(W / 2 - 2, 0, 4, H * .45); }
-    // real tarmac: stone chips of different shades set in dark binder, darker patched strips, and hairline cracks
-    const im = k.getImageData(0, 0, W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const r = Math.random(), s = r < .08 ? 26 + Math.random() * 26 : r < .2 ? -22 - Math.random() * 16 : (Math.random() - .5) * 16; d[i] = Math.max(0, Math.min(255, d[i] + s)); d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + s * .97)); d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + s * .94)); } k.putImageData(im, 0, 0);
-    k.fillStyle = 'rgba(20,18,24,.13)'; for (let i = 0; i < 3; i++) k.fillRect(Math.random() * W * .8, Math.random() * H, 30 + Math.random() * 90, 60 + Math.random() * 160);
-    k.strokeStyle = 'rgba(12,10,14,.5)'; k.lineWidth = 1; for (let i = 0; i < 7; i++) { let x = Math.random() * W, y = Math.random() * H; k.beginPath(); k.moveTo(x, y); for (let q = 0; q < 9; q++) { x += (Math.random() - .5) * 26; y += 8 + Math.random() * 22; k.lineTo(x, y); } k.stroke(); } }, 1, 1);
-  const abump = canvasTex(256, 256, (k, W, H) => { const im = k.createImageData(W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const v = 110 + (Math.random() < .12 ? 90 : 0) + Math.random() * 55; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } k.putImageData(im, 0, 0); }, 1, 1); abump.colorSpace = THREE.NoColorSpace;
-  const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 9), new THREE.MeshStandardMaterial({ map: atex, bumpMap: abump, bumpScale: .5, roughness: .86 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
+  // Realistic tarmac, drawn once: neutral dark grey with big tonal patches, a rubbered-in racing line with loose grit off it, stone chips in a dark binder, repair patches
+  // with sealed seams, branching tar cracks and oil drips. The bump map carries the stones so they catch the light at a low angle.
+  const atex = canvasTex(1024, 1024, (k, W, H) => {
+    const rnd = (a, b) => a + Math.random() * (b - a); k.fillStyle = night ? '#232428' : '#4b4b4e'; k.fillRect(0, 0, W, H);
+    for (let i = 0; i < 60; i++) { const x = rnd(0, W), y = rnd(0, H), r = rnd(60, 220), g = k.createRadialGradient(x, y, 0, x, y, r), dark = Math.random() < .55; g.addColorStop(0, dark ? 'rgba(0,0,0,.09)' : 'rgba(255,255,255,.05)'); g.addColorStop(1, 'rgba(0,0,0,0)'); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); }
+    for (const cx of [.3, .7]) { const g = k.createLinearGradient(W * (cx - .11), 0, W * (cx + .11), 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.5, 'rgba(0,0,0,.2)'); g.addColorStop(1, 'rgba(0,0,0,0)'); k.fillStyle = g; k.fillRect(W * (cx - .11), 0, W * .22, H); }      // the two rubbered-in grooves
+    { const g = k.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(255,255,255,.07)'); g.addColorStop(.12, 'rgba(255,255,255,0)'); g.addColorStop(.88, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.07)'); k.fillStyle = g; k.fillRect(0, 0, W, H); }      // sun-bleached, gritty edges
+    for (let i = 0; i < 9000; i++) { const x = Math.random() < .5 ? rnd(0, W * .13) : rnd(W * .87, W), y = rnd(0, H), s = rnd(.6, 1.8); k.fillStyle = 'rgba(' + (150 + rnd(0, 60) | 0) + ',' + (150 + rnd(0, 55) | 0) + ',' + (150 + rnd(0, 50) | 0) + ',' + rnd(.2, .55) + ')'; k.fillRect(x, y, s, s); }      // loose grit off the line
+    if (night) { k.fillStyle = 'rgba(255,255,255,.75)'; k.fillRect(W / 2 - 3, 0, 6, H * .45); }
+    const im = k.getImageData(0, 0, W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const r = Math.random(), s = r < .07 ? 22 + Math.random() * 38 : r < .2 ? -18 - Math.random() * 22 : (Math.random() - .5) * 15; d[i] = Math.max(0, Math.min(255, d[i] + s)); d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + s)); d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + s * 1.02)); } k.putImageData(im, 0, 0);
+    for (let i = 0; i < 4; i++) { const x = rnd(W * .05, W * .7), y = rnd(0, H), w = rnd(90, 320), h = rnd(120, 420); k.fillStyle = Math.random() < .6 ? 'rgba(10,10,12,.14)' : 'rgba(255,255,255,.04)'; k.fillRect(x, y, w, h); k.strokeStyle = 'rgba(8,8,10,.5)'; k.lineWidth = 2; k.strokeRect(x, y, w, h); }      // repair patches with sealed seams
+    k.lineCap = 'round'; for (let i = 0; i < 14; i++) { let x = rnd(0, W), y = rnd(0, H); const wid = rnd(1, 2.4), br = [[x, y]]; k.strokeStyle = 'rgba(9,9,11,.62)'; k.lineWidth = wid; k.beginPath(); k.moveTo(x, y);
+      for (let q = 0; q < 14; q++) { x += rnd(-30, 30); y += rnd(10, 42); k.lineTo(x, y); if (Math.random() < .25) br.push([x, y]); } k.stroke(); for (const [bx, by] of br.slice(1)) { let x2 = bx, y2 = by; k.lineWidth = wid * .6; k.beginPath(); k.moveTo(x2, y2); for (let q = 0; q < 6; q++) { x2 += rnd(10, 40) * (Math.random() < .5 ? -1 : 1); y2 += rnd(-10, 26); k.lineTo(x2, y2); } k.stroke(); } }      // tar cracks, with branches
+    for (let i = 0; i < 14; i++) { const x = rnd(W * .2, W * .8), y = rnd(0, H), r = rnd(5, 16), g = k.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(6,6,8,.4)'); g.addColorStop(1, 'rgba(6,6,8,0)'); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); }      // oil drips
+  }, 1, 1); atex.anisotropy = 8;
+  const abump = canvasTex(512, 512, (k, W, H) => { k.fillStyle = '#6a6a6a'; k.fillRect(0, 0, W, H); const im = k.getImageData(0, 0, W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const v = 96 + Math.random() * 46; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } k.putImageData(im, 0, 0);
+    for (let i = 0; i < 14000; i++) { const x = Math.random() * W, y = Math.random() * H, r = .8 + Math.random() * 2.6, v = 150 + Math.random() * 100 | 0; const g = k.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(' + v + ',' + v + ',' + v + ',.9)'); g.addColorStop(1, 'rgba(' + v + ',' + v + ',' + v + ',0)'); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); } }, 1, 1); abump.colorSpace = THREE.NoColorSpace; abump.anisotropy = 8;
+  const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 9), new THREE.MeshStandardMaterial({ map: atex, bumpMap: abump, bumpScale: .9, roughness: .84 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
   const white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .7 });
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
   const ktex = canvasTex(64, 64, (k) => { k.fillStyle = day ? '#e8475a' : '#e3262e'; k.fillRect(0, 0, 64, 32); k.fillStyle = day ? '#f2c230' : '#f4f4f4'; k.fillRect(0, 32, 64, 32); });
@@ -416,7 +426,7 @@ function buildProc(track) {
   // -- pit lane surface, boxes, crew and garage
   if (pb) {
     const mask = path.map((_, i) => inPit(i));
-    const lane = new THREE.Mesh(ribbon(path, hw + 7.6, hw, .02, 1 / 12, true, mask), new THREE.MeshStandardMaterial({ color: night ? 0x34353d : 0x665c75, roughness: .9, name: 'racetrack' })); lane.receiveShadow = true; G.add(lane);
+    const lane = new THREE.Mesh(ribbon(path, hw + 7.6, hw, .02, 1 / 12, true, mask), new THREE.MeshStandardMaterial({ color: night ? 0x34353d : 0x5c5c60, roughness: .9, name: 'racetrack' })); lane.receiveShadow = true; G.add(lane);
     const ln = new THREE.Mesh(ribbon(path, hw + .25, hw - .05, .05, 1, true, mask), new THREE.MeshStandardMaterial({ color: 0xf2c230, roughness: .7 })); G.add(ln);
     track.pitBoxes = []; const crew = [], crewCols = [0xe3262e, 0x19a7ce, 0xffc21a, 0x2fb457, 0xff7ab0, 0xf3f4f6].map(c => new THREE.Color(c));
     track.pitIn = n - nb; track.pitOut = na; track.pitHw = hw;      // where the pit lane starts and ends, and the track's half width

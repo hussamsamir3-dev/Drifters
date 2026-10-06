@@ -68,6 +68,7 @@ function texMaterial(src, info, paintHex, recolor) {
   m.customProgramCacheKey = () => 'texrc2'; return m;
 }
 export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
+const ROOFP = {};      // centre-line roof heights per car model, measured once with rays
 function livery(m) {
   const U = m.userData.liv = { uH: { value: 1 }, uL: { value: new THREE.Color(0xf2f2ee) }, uRoof: { value: 0 }, uStripe: { value: 0 }, uDoor: { value: 0 }, uFlash: { value: 0 }, uNose: { value: 0 }, uL2: { value: new THREE.Color(0x1c57c8) }, uZ: { value: 2 }, uDy: { value: .8 }, uDz: { value: -.1 }, uAsp: { value: 1 } };
   m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U);
@@ -89,7 +90,7 @@ function mats(color) {
     shared.rimDark = new THREE.MeshStandardMaterial({ color: 0x2a2c30, metalness: .8, roughness: .4 });
     shared.body = new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: .6, metalness: .2 });
     shared.trim = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: .45, metalness: .5 });
-    shared.window = new THREE.MeshStandardMaterial({ color: 0x080b0f, roughness: .1, metalness: .55, envMapIntensity: .42 });      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
+    shared.window = new THREE.MeshBasicMaterial({ color: 0x07080a });      // exactly the surface of the black window texture beside it, so a pane never shades in halves      // blue-grey glass that stands out from the body   // dark tinted glass: reads as a window, not as chrome
     shared.front = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3d0, emissiveIntensity: 1.1 });
     shared.tyretext = tyreTextMat();
     shared.vcol = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .5, metalness: .05 });      // parts that keep the colours the model was drawn with
@@ -204,11 +205,15 @@ export class Car {
     if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));     // drift-angle hold: ease the power before a slide becomes a spin
     let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, s.pw / (s.acc * m) / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 8, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
     Fdrive *= TUNE.enginePower * this.bopP * PC.pow * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
-    if (this._thr > .7 && thr < .1 && this.rpm > .5) { this.backfire = .24; this.popEvt = 1; } if (this.shiftEvt > 0 && this.rpm > .6 && thr > .6) this.backfire = Math.max(this.backfire || 0, .12); this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
-    const bf = rev ? 0 : Math.min(brk * s.brake * m * g * clamp((muF + muR) * .5 * tmpK * 1.12, .3, 1), m * Math.abs(vf) / dt);      // the surface and the tyre temperature limit how hard you can brake
+    // exhaust pops: rare, short, and only on cars that have them (turbo or tuned). A cooldown stops bursts chaining into a flame that never goes out.
+    this.bfCool = Math.max(0, (this.bfCool || 0) - dt); const popper = s.pops || s.turbo;
+    if (popper && this.bfCool <= 0 && this._thr > .75 && thr < .1 && this.rpm > .66 && speed > 14 && Math.random() < .5) { this.backfire = .07 + Math.random() * .05; this.popEvt = 1; this.bfCool = 1.6 + Math.random() * 2.4; }
+    else if (popper && this.bfCool <= 0 && this.shiftEvt > 0 && this.rpm > .72 && thr > .75 && Math.random() < .4) { this.backfire = .06 + Math.random() * .04; this.bfCool = 1.4 + Math.random() * 2; }
+    this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
+    const bf = rev ? 0 : Math.min(brk * s.brake * TUNE.brakeScale * m * g * clamp((muF + muR) * .5 * tmpK * 1.12, .3, 1), m * Math.abs(vf) / dt);      // the surface and the tyre temperature limit how hard you can brake
     this.braking = brk > .1 && !rev;
     const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? TN.split : 0, crn = clamp(Math.abs(this.ayS) / (g * .8), 0, 1) * clamp(thr, 0, 1), trac = 1 - (1 - TN.diff) * .2 * crn, und = 1 - TN.diff * .1 * crn;      // diff: open loses traction out of corners, locked pushes the nose wide
-    const capF = muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.08 : 1) * und * (dF > .5 ? trac : 1 - (1 - trac) * dF) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (1 - trac) * (1 - dF)) * (1 + TN.diff * .03 * crn) * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
+    const capF = muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.2 : 1) * und * (dF > .5 ? trac : 1 - (1 - trac) * dF) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (1 - trac) * (1 - dF)) * (1 + TN.diff * .03 * crn) * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
@@ -369,14 +374,23 @@ export class Car {
     if (this.hasWing == null) {       // does this body already carry a wing? Look for a slab at the tail with clear air under it.
       const ys = []; for (let i = 0; i < V.length; i += 3) if (V[i + 2] < minZ + .55 && Math.abs(V[i]) < maxX * .5) ys.push(V[i + 1]); ys.sort((a, b) => a - b); let gap = 0, at = 0; const hTop = ys[ys.length - 1];
       for (let i = 1; i < ys.length; i++) if (ys[i - 1] > hTop * .45 && ys[i] - ys[i - 1] > gap) { gap = ys[i] - ys[i - 1]; at = ys[i]; } this.hasWing = !!this.spec.wing; }
-    // the roof's extent along the centre line: where it ends at the back (zr0) and at the front (zr1)
-    const roofMax = top(minZ + .9, maxZ - .9, maxX * .3); let zr0 = 1e9, zr1 = -1e9; for (let i = 0; i < V.length; i += 3) if (V[i + 2] > minZ + .3 && V[i + 2] < maxZ - .3 && Math.abs(V[i]) < maxX * .3 && V[i + 1] >= roofMax - .09) { if (V[i + 2] < zr0) zr0 = V[i + 2]; if (V[i + 2] > zr1) zr1 = V[i + 2]; }
-    if (zr1 < zr0) { zr0 = minZ + 1; zr1 = maxZ - 1; }
-    this.roofInfo = { rearGap: +(zr0 - minZ).toFixed(2), roofLen: +(zr1 - zr0).toFixed(2), roofMax: +roofMax.toFixed(2), len: +(maxZ - minZ).toFixed(2) };
+    // the roof's centre-line profile, read by casting rays down onto the real body surface (low-poly roofs have no vertices along the centre line, so a vertex search finds nothing there)
+    let roofMax = 0, zr0 = 0, zr1 = 0, roofAt = () => 0;
+    if ((L.wing && !this.hasWing) || L.scoop) {
+      const key = this.spec.model || this.spec.id; let prof = ROOFP[key];
+      if (!prof) { prof = ROOFP[key] = []; const o = new THREE.Vector3(), ray = new THREE.Ray(o, new THREE.Vector3(0, -1, 0)), pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3(), hit = new THREE.Vector3();
+        for (let z = minZ + .15; z <= maxZ - .15; z += .05) { o.set(0, 4, z); let y = -1;
+          for (const m of this.bodyMeshes) { const idx = m.geometry.index, P = m.userData.orig, n = idx ? idx.count : P.length / 3;
+            for (let t = 0; t < n; t += 3) { const i0 = idx ? idx.getX(t) : t, i1 = idx ? idx.getX(t + 1) : t + 1, i2 = idx ? idx.getX(t + 2) : t + 2; pa.set(P[i0 * 3], P[i0 * 3 + 1], P[i0 * 3 + 2]); pb.set(P[i1 * 3], P[i1 * 3 + 1], P[i1 * 3 + 2]); pc.set(P[i2 * 3], P[i2 * 3 + 1], P[i2 * 3 + 2]); if (ray.intersectTriangle(pa, pb, pc, false, hit) && hit.y > y) y = hit.y; } }
+          prof.push([z, y]); } }
+      roofAt = z => { let best = prof[0], bd = 1e9; for (const p of prof) { const dd = Math.abs(p[0] - z); if (dd < bd) { bd = dd; best = p; } } return Math.max(0, best[1]); };
+      roofMax = Math.max(...prof.map(p => p[1])); zr0 = 1e9; zr1 = -1e9; for (const [z, y] of prof) if (y >= roofMax - .09) { if (z < zr0) zr0 = z; if (z > zr1) zr1 = z; }
+      if (zr1 < zr0) { zr0 = minZ + 1; zr1 = maxZ - 1; }
+    }
     const roofWing = zr0 - minZ < 1.15;      // hatchbacks, estates and rally cars: the roof runs almost to the tail, so the wing sits on the END OF THE ROOF; saloons and coupes carry it on the boot lid
     if (L.wing && !this.hasWing) {
       const tailW = side(minZ, minZ + .55, 0, 9) * 2; let deck, wd, z0;
-      if (roofWing) { const rw = Math.max(side(zr0 - .06, zr0 + .25, roofMax - .3, roofMax + .1) * 2, .8); deck = top(zr0 - .05, zr0 + .1, rw * .3); wd = Math.min(rw * 1.04 + .08, tailW * .96); z0 = zr0 - .03; } else { deck = top(minZ + .04, minZ + .42, tailW * .36); wd = tailW; z0 = minZ + .05; }
+      if (roofWing) { const rw = Math.max(side(zr0 - .06, zr0 + .25, roofMax - .3, roofMax + .1) * 2, .8); deck = Math.max(roofAt(zr0), roofAt(zr0 + .1)); wd = Math.min(rw * 1.04 + .08, tailW * .96); z0 = zr0 - .03; } else { deck = Math.max(roofAt(minZ + .2), roofAt(minZ + .35), top(minZ + .04, minZ + .42, tailW * .36)); wd = tailW; z0 = minZ + .05; }
       if (L.wing === 1) put(across([[-.26, 0], [-.06, .03], [.02, .085], [.035, .078], [.02, 0]], wd * .86), this.m.paint, 0, deck - .004, roofWing ? z0 : minZ + .05);      // ducktail: rises smoothly from the roof edge or boot lid to a crisp edge
       else { const race = L.wing === 3, ch = race ? .36 : .27, hi = roofWing ? (race ? .2 : .13) : (race ? .36 : .24), w2 = wd * (race ? 1.0 : .88), z = roofWing ? z0 : minZ + (race ? .1 : .18);
         put(across(foil(ch, .13), w2), race ? dark : this.m.paint, 0, deck + hi, z).rotation.x = race ? .2 : .12;
@@ -394,7 +408,7 @@ export class Car {
     if (L.skirt) { const zr = this.wheels.RL.z / this.T.l + this.R / this.T.wheel + .07, zf = this.wheels.FL.z / this.T.l - this.R / this.T.wheel - .07, y0 = low(zr, zf), xs = side(zr, zf, y0, y0 + .22);
       for (const sx of [-1, 1]) { const me = put(ext([[-.04, 0], [.05, 0], [.058, .016], [.0, .075], [-.04, .075]], zf - zr), dark, sx * (xs - .012), y0 - .012, zr); me.scale.x = sx; } }   // a wedge under the sill, arch to arch
     part = 'scoop';
-    if (L.scoop) { const roofLen = zr1 - zr0, hl = clamp(roofLen * .16, .13, .24), sz = clamp(zr1 - roofLen * .4, zr0 + hl + .12, Math.max(zr0 + hl + .12, zr1 - hl - .1)), sy = top(sz - .08, sz + .08, .25) - .012, k = hl / .24;      // on the roof, behind the windscreen header, flush with the roof line
+    if (L.scoop) { const roofLen = zr1 - zr0, hl = clamp(roofLen * .16, .13, .24), sz = clamp(zr1 - roofLen * .4, zr0 + hl + .12, Math.max(zr0 + hl + .12, zr1 - hl - .1)), sy = roofAt(sz) - .012, k = hl / .24;      // on the roof, behind the windscreen header, flush with the roof line
       put(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(.17 * k, .075 * k, hl), this.m.paint, 0, sy, sz);
       put(new THREE.CircleGeometry(1, 16, 0, Math.PI).scale(.14 * k, .055 * k, 1), new THREE.MeshBasicMaterial({ color: 0x050506 }), 0, sy + .004, sz + hl * .96).rotation.x = -.3; }   // the intake mouth
     part = 'pipe';
@@ -434,7 +448,7 @@ export class Car {
     const rimM = L.rim ? new THREE.MeshPhysicalMaterial({ color: RIMS[L.rim], metalness: .85, roughness: .22, clearcoat: .7, clearcoatRoughness: .08 }) : null;
     const shaded = m => { const q = m.clone(); q.vertexColors = true; return q; }, rimS = rimM ? shaded(rimM) : null, rim0 = shaded(this.m.rim);
     for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = o.geometry.attributes.color ? (rimS || rim0) : rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
-    const winM = L.tint ? new THREE.MeshStandardMaterial({ color: new THREE.Color(TINTS[L.tint]).multiplyScalar(.45), roughness: .2, metalness: 0, envMapIntensity: .14, side: THREE.DoubleSide }) : this.m.window;
+    const winM = L.tint ? new THREE.MeshBasicMaterial({ color: new THREE.Color(TINTS[L.tint]).multiplyScalar(.5), side: THREE.DoubleSide }) : this.m.window;      // unlit: every window triangle is identical under any light, so a pane can never shade in halves
     const winS = shaded(winM); for (const m of this.bodyMeshes) if (m.userData.kind === 'window') m.material = m.geometry.attributes.color ? winS : winM;
   }
 
@@ -528,9 +542,9 @@ export class Car {
     this.roll += (Math.atan2((h[0] + h[2] - h[1] - h[3]) / 2, this.tw * 2) - this.roll) * k;
     this.root.position.set(X, this.y + (this.lift || 0), Z); this.root.rotation.set(this.pitch, TH + this.lead, this.roll);
     const mk = Math.sqrt(clamp(this.spec.mass / 1500, .5, 1.8)), stiff = this.spec.body === 'f1' ? .25 : this.spec.klass === 'Super' ? .6 : this.spec.klass === 'Utility' ? 1.5 : 1;
-    this.rollD += (clamp(this.ayS * .017 * mk * stiff, -.16, .16) - this.rollD) * Math.min(1, dt * 6.5 / mk);
-    this.pitchD += (clamp(-this.axS * .0095 * mk * stiff, -.09, .09) - this.pitchD) * Math.min(1, dt * 6.5 / mk);
-    const rough = this.speed > 2 ? (this.grass * .011 + (this.wsurf.includes(KERB) ? .005 : 0)) : 0;
+    this.rollD += (clamp(this.ayS * .026 * mk * stiff, -.22, .22) - this.rollD) * Math.min(1, dt * 6.5 / mk);
+    this.pitchD += (clamp(-this.axS * .0145 * mk * stiff, -.12, .12) - this.pitchD) * Math.min(1, dt * 6.5 / mk);
+    const rough = (this.speed > 2 ? (this.grass * .011 + (this.wsurf.includes(KERB) ? .005 : 0)) : 0) + (this.dead ? 0 : .0006 + (this.rpm || 0) * .0019);      // engine vibration rises with the revs
     this.chassis.rotation.set(this.pitchD + (Math.random() - .5) * rough * .5 + this.dmg.front * .02 + ((this.gone[0] || this.gone[1] ? .06 : 0) - (this.gone[2] || this.gone[3] ? .06 : 0)), 0, ((this.gone[1] || this.gone[3] ? .07 : 0) - (this.gone[0] || this.gone[2] ? .07 : 0)) + this.rollD + (Math.random() - .5) * rough + (this.dmg.left - this.dmg.right) * .035);
     if (this.glowPool) this.glowPool.quaternion.copy(this.chassis.quaternion).invert().multiply(FLATQ);      // the pool of light stays flat on the road while the body rolls and pitches
     this.chassis.position.y = this.rideY + (Math.random() - .5) * rough + (this.rpm > .2 ? Math.sin(performance.now() * .05) * .003 : 0);
@@ -654,6 +668,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   const n = track.n, sp = car.speed, p = track.path;
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
   // drift the racing line towards the inside of the coming corner, and around slower cars
+  if (ai.contactT > 0) ai.contactT -= dt;      // after any touch: lift, give the other car room, and rejoin the line gently
   const ap = p[(car.idx + look + Math.round(34 / track.spacing)) % n], inside = clamp(tgt.k * 300, -1, 1), setup = clamp(ap.k * 300, -1, 1);
   // Apex rules, taken from the track's own corners: brake in a straight line, swing out wide on the approach, turn in LATE, clip the apex after the
   // middle of the corner and get on the power, then run out to the edge of the road on the exit. In an S-bend the exit of one corner blends into the entry of the next.
@@ -680,38 +695,44 @@ export function aiDrive(car, track, ai, cars, dt) {
     }
   }
   let want = lineOff / Math.max(1, wsum) + ai.lane * (1 - clamp(wsum, 0, 1)) + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
-  let brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
+  const rs = clamp(1 - (ai.rt ?? 99) / 15, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
+  let v0cap = 1e9, brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
-    if (o === car || o.out) continue; const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0, pk = o.isPlayer ? 1.75 : 1;      // the player gets a wider berth than other AI cars
+    if (o === car || o.out) continue;
+    { const tau = .5, rx = (o.x + o.vx * tau) - (car.x + car.vx * tau), rz = (o.z + o.vz * tau) - (car.z + car.vz * tau), f2 = rx * sn0 + rz * cs0, l2 = rx * cs0 - rz * sn0;      // where we will be relative to each other in half a second
+      if (Math.abs(f2) < 5.6 && Math.abs(l2) < 2.8 && !(o.held && o.speed < 1)) { if (f2 > -1.5) { brakeFor = Math.max(brakeFor, .7); want += (l2 > 0 ? -1 : 1) * 1.8; } else want += (l2 > 0 ? -1 : 1) * 1.4; } }      // a predicted overlap: lift if it is level or ahead, move away if it is behind
+    const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0, pk = o.isPlayer ? 2 : 1.3;      // everyone gets a wide berth, the player widest
     if (f < -3.5) { if (o.isPlayer) { if (f > -13 && Math.abs(l) < 3.2 && o.vx * sn0 + o.vz * cs0 > car.vf + 1.5) want += (l > 0 ? -1 : 1) * 2.4; continue; }       // a faster player behind: move over and let them through, never defend the line
       if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + 1 && Math.abs(setup) > .3) want += setup * 1.4 * ai.care; continue; }   // a faster car behind before a corner: cover the inside
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
-    if (f > 0 && f < 26 && Math.abs(l) < 2.3 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 6.5, -3) * .9);      // keep a gap: never faster than closes the distance gently
+    if (f > 0 && f < 34 && Math.abs(l) < 2.7 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 8 * rs, -3) * .8);      // keep a gap: never faster than closes the distance gently
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
     else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
-      if (cd && l * cd > 0) { want += -cd * 2.4 * ai.care * pk; brakeFor = Math.max(brakeFor, .1); }          // that car holds the inside: it owns the apex, so give it the room
-      else want += (l > 0 ? -1 : 1) * 1.3 * ai.care * pk;                                                      // otherwise leave a car's width
+      if (cd && l * cd > 0) { want += -cd * 3 * ai.care * pk; brakeFor = Math.max(brakeFor, .1); }          // that car holds the inside: it owns the apex, so give it the room
+      else want += (l > 0 ? -1 : 1) * 2.1 * ai.care * pk;                                                      // otherwise leave more than a car's width
+      if (f > 1.2 && Math.abs(l) < 3.6 * pk) brakeFor = Math.max(brakeFor, .32);                                  // door to door: the car whose nose is behind lifts and drops back, so nobody fights for the same space
     }
   }
-  ai.off += (clamp(want, -ai.max, ai.max) - ai.off) * Math.min(1, dt * 2.7);
+  if (ai.merge > 0) { ai.merge -= dt; v0cap = Math.min(v0cap, 30); }      // just out of the pit lane: slow, and drift onto the line instead of cutting across
+  ai.off += (clamp(want, -ai.max, ai.max) - ai.off) * Math.min(1, dt * (ai.merge > 0 ? .75 : 2.7));
   const tx = tgt.x + tgt.tz * ai.off, tz = tgt.z - tgt.tx * ai.off;
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
-  const B = ai.brain || (ai.brain = { react: .09 + Math.random() * .1, consist: .9 + Math.random() * .09, brave: .97 + Math.random() * .07, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
+  const B = ai.brain || (ai.brain = { react: .09 + Math.random() * .1, consist: .955 + Math.random() * .04, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
   const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
-  const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (chased ? 3 : 1) * (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
+  const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 7.5 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 9.6 * ai.skill;
   for (let i = 0; i < 70; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(q.k), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
-  if (car.grass > .4) v = Math.min(v, 16);
-  v = Math.min(v, vFollow);
+  if (car.grass > .4) v = Math.min(v, 16); v *= 1 - .07 * rs;
+  v = Math.min(v, vFollow, v0cap); if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
   const inp = ai.inp; inp.steer = clamp(ef * 2.4, -1, 1);
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;
   if (sp > 8 && Math.abs(car.beta) > .1) inp.throttle *= Math.abs(car.beta) > .25 ? .15 : .5;   // feather the throttle when the tail steps out

@@ -69,6 +69,42 @@ function draw(dt) { frameN++; if (gfx !== 'high') { renderer.shadowMap.autoUpdat
 addEventListener('resize', resize); setGfx(gfx);
 
 let sky = null, sunDisc = null, baseFog = 0, baseSun = 1, baseHemi = 1;
+// ---------------- time of day ----------------
+// A preset only describes the sky, the sun, the fog and the ambient light; the track keeps its own geometry. Dusk and night are built as night tracks (lit windows, lamps, floodlights).
+const TOD = {
+  dawn:   { skyTop: 0x5a7fc0, skyBot: 0xffb08a, fog: 0xf3c6b0, fogK: 1.7, sun: 0xffa868, sunK: .6, sunDir: [.9, .2, .25], hemiS: 0xffc9a0, hemiG: 0x55603f, hemiK: .8, exposure: 1.02 },
+  noon:   { skyTop: 0x2e7be0, skyBot: 0xd6ebfb, fog: 0xdfeaf2, fogK: .9, sun: 0xfff4e0, sunK: 1.15, sunDir: [.08, 1, .12], hemiS: 0xc8e0ff, hemiG: 0x6b7a4a, hemiK: 1.1, exposure: 1 },
+  golden: { skyTop: 0x4f78c8, skyBot: 0xffc58a, fog: 0xf5c898, fogK: 1.2, sun: 0xffb25e, sunK: .95, sunDir: [-.85, .28, .35], hemiS: 0xffd2a8, hemiG: 0x6a6a3c, hemiK: .9, exposure: 1.02 },
+  dusk:   { skyTop: 0x262a63, skyBot: 0xff7a4a, fog: 0x7c4b5c, fogK: 1.6, sun: 0xff6a35, sunK: .4, sunDir: [-.9, .1, .25], hemiS: 0x8a78c8, hemiG: 0x2e2a3a, hemiK: .75, exposure: 1.08, night: true },
+};
+const todFull = (base, id) => { if (id === 'night') return THEMES.night; const p = TOD[id]; return Object.assign({}, base, { skyTop: p.skyTop, skyBot: p.skyBot, fog: p.fog, fogD: base.fogD * p.fogK, sun: p.sun, sunI: base.sunI * p.sunK, sunDir: p.sunDir, hemiS: p.hemiS, hemiG: p.hemiG, hemiI: base.hemiI * p.hemiK, exposure: p.exposure, night: !!p.night }); };
+window.__todTheme = id => { const base = THEMES[id], t = save.tod || 'default'; if (t === 'default') return base; if (t === 'cycle') return base.night ? base : todFull(base, 'noon'); return todFull(base, t); };
+const DYN_LEN = 420, DYN = ['noon', 'golden', 'dusk', 'night'];      // dynamic: noon -> golden hour -> dusk -> night over seven minutes of racing
+function dynTheme(base, u) { const k = clamp(u, 0, 2.999), i = Math.floor(k), f = k - i, A = todFull(base, DYN[i]), B = todFull(base, DYN[i + 1]), lc = (x, y) => new THREE.Color(x).lerp(new THREE.Color(y), f), ln = (x, y) => x + (y - x) * f; return { skyTop: lc(A.skyTop, B.skyTop), skyBot: lc(A.skyBot, B.skyBot), fog: lc(A.fog, B.fog), fogD: ln(A.fogD, B.fogD), sun: lc(A.sun, B.sun), sunI: ln(A.sunI, B.sunI), sunDir: [0, 1, 2].map(j => ln(A.sunDir[j], B.sunDir[j])), hemiS: lc(A.hemiS, B.hemiS), hemiG: lc(A.hemiG, B.hemiG), hemiI: ln(A.hemiI, B.hemiI), exposure: ln(A.exposure, B.exposure) }; }
+function stepDynamicTime(dt) {
+  if (save.tod !== 'cycle' || !R || R.track.def.theme === 'night' || !sky) return; R.dynT = (R.dynT || 0) + dt; const u = clamp(R.dynT / DYN_LEN * 3, 0, 3), th = dynTheme(THEMES[R.track.def.theme], u);
+  sky.material.uniforms.top.value.copy(th.skyTop); sky.material.uniforms.bot.value.copy(th.skyBot); scene.fog.color.copy(th.fog); baseFog = th.fogD; baseSun = th.sunI; baseHemi = th.hemiI; sun.color.copy(th.sun); hemi.color.copy(th.hemiS); hemi.groundColor.copy(th.hemiG); renderer.toneMappingExposure = th.exposure; R.sunDir = th.sunDir;
+  if (R.flood) R.flood.k = clamp((u - 1.6) / .9, 0, 1); if (!R.lit && u > 1.9) { R.lit = true; for (const c of R.cars) c.setLights(true); }
+  if (sunDisc) sunDisc.visible = u < 2.2; if (post) post.bloom.strength = .26 + .34 * clamp(u - 1.5, 0, 1);
+}
+// Floodlight towers around the circuit: every tower has a lit head and a faint cone of light; only the four nearest ones carry real spotlights, handed over smoothly as you drive.
+function buildFloodlights(tr, G) {
+  const towers = [], n = tr.n, step = Math.max(8, Math.round(115 / tr.spacing)), hw = tr.def.width * .6, B = hw + tr.def.runoff;
+  const poleM = new THREE.MeshStandardMaterial({ color: 0x4a4f58, metalness: .7, roughness: .45 }), headM = new THREE.MeshBasicMaterial({ color: 0xfff3d6 }), coneM = new THREE.MeshBasicMaterial({ color: 0xfff0cc, transparent: true, opacity: .06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  for (let i = 25; i < n - 25; i += step) { const q = tr.path[i], side = towers.length % 2 ? 1 : -1, off = B + 3.6, x = q.x + q.tz * side * off, z = q.z - q.tx * side * off, y0 = tr.height(x, z), g = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(.16, .26, 15, 8), poleM); pole.position.y = 7.5; const bar = new THREE.Mesh(new THREE.BoxGeometry(3, .35, .5), poleM); bar.position.y = 15.1;
+    g.add(pole, bar); for (let k = -1; k <= 1; k += 1) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(.8, .3, .6), headM); lamp.position.set(k * 1.0, 14.85, 0); g.add(lamp); }
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(7.5, 17, 20, 1, true), coneM); cone.position.y = 7; g.add(cone); g.position.set(x, y0, z); g.lookAt(q.x, y0, q.z); g.rotation.x = 0; g.userData.cone = cone; G.add(g);
+    towers.push({ x, y: y0 + 15, z, tx: q.x - side * q.tz * 2, tz: q.z + side * q.tx * 2 }); }
+  const lights = [0, 1, 2, 3].map(() => { const L = new THREE.SpotLight(0xfff0d8, 0, 80, .9, .65, 1.25); scene.add(L, L.target); L.userData.tw = -1; return L; });
+  R.flood = { towers, lights, k: tr.theme.night ? 1 : 0, t: 0 };
+}
+function stepFloodlights(dt, me) {
+  const F = R && R.flood; if (!F) return; F.t -= dt; const want = F.k * 260;
+  if (F.t <= 0) { F.t = .25; const order = F.towers.map((t, i) => [(t.x - me.x) ** 2 + (t.z - me.z) ** 2, i]).sort((a, b) => a[0] - b[0]).slice(0, 4).map(o => o[1]); F.near = order;
+    for (const L of F.lights) if (!order.includes(L.userData.tw)) { const free = order.find(i => !F.lights.some(Q => Q.userData.tw === i)); if (free !== undefined) { const t = F.towers[free]; L.userData.tw = free; L.position.set(t.x, t.y, t.z); L.target.position.set(t.tx, 0, t.tz); L.intensity = 0; } } }
+  for (const L of F.lights) L.intensity += ((L.userData.tw >= 0 ? want : 0) - L.intensity) * Math.min(1, dt * 4);
+}
 function applyTheme(th) {
   if (sky) { scene.remove(sky); sky.geometry.dispose(); sky.material.dispose(); sky = null; }
   if (sunDisc) { scene.remove(sunDisc); sunDisc.geometry.dispose(); sunDisc.material.dispose(); sunDisc = null; }
@@ -244,6 +280,7 @@ function beginCountdown() { if (!R || R.state !== 'wait') return; R.state = 'cou
 function checkGo() { if (R && R.mode === 'online' && isHost && R.state === 'wait' && peerLoaded) { room.send({ k: 'go' }); beginCountdown(); } }
 
 function endRace() {
+  if (R && R.flood) { for (const L of R.flood.lights) { scene.remove(L, L.target); L.dispose && L.dispose(); } R.flood = null; }
   if (!R) return;
   for (const c of R.cars) { scene.remove(c.root); c.dispose(); }
   for (const p of [R.fx.smoke, R.fx.glow]) { scene.remove(p.points); p.geo.dispose(); p.mat.dispose(); }
@@ -347,7 +384,15 @@ function knockout() {      // Knockout: each time the leader completes a lap, th
   else if (act.length === 2 && act[0] === me) { me.finished = true; me.finishTime = R.t * 1000; finishPlayer(); }
 }
 // every contact goes through here: light touches scrape, real hits dent the car, shake the camera and cost the combo
+const feelState = { t: 0, sh: 0 };
+function rumble(ms, strong = .3, weak = .3) { if (save.haptics === false) return; try { if (isTouch && navigator.vibrate) navigator.vibrate(ms); const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(g => g && g.vibrationActuator) : null; if (gp) gp.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) {} }
+function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyres, locked wheels, the limiter, gear changes and runoff each have their own pulse
+  const F = feelState; F.t -= dt; const sh = me.shiftEvt > 0; if (sh && !F.sh) rumble(10, .4, .1); F.sh = sh ? 1 : 0; if (F.t > 0 || me.speed < 6) return;
+  if (me.wsurf.includes(1) && me.speed > 8) { rumble(16, .25, .6); F.t = .11; } else if (me.locked || me.lockF) { rumble(14, .5, .3); F.t = .09; } else if (me.grass > .5) { rumble(14, .2, .7); F.t = .08; }
+  else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; } }
 function impact(car, power, wall) {
+  { const ai0 = R && R.ais && R.ais.get(car); if (ai0 && power > 1.2) ai0.contactT = 1.2 + Math.min(1.2, power * .05); }      // a driver who has touched something yields
+
   if (power < 2) return;
   const me = R.player, near = (car.x - me.x) ** 2 + (car.z - me.z) ** 2 < 3600;
   if (power < 4) { if (car === me && Math.random() < .2) { audio.scrape(power); car.impactFX(R.fx, R.track, power * .4); } return; }
@@ -364,7 +409,7 @@ function impact(car, power, wall) {
   }
   if (car !== me) { if (near) audio.crash(power * .35); return; }
   if (isTouch && navigator.vibrate) navigator.vibrate(Math.min(90, power * 5));
-  audio.crash(power); shake = Math.min(1.2, shake + power / 13); hitPulse = Math.min(1, power / 14); fovPunch = Math.min(6, power * .35);
+  audio.crash(power); rumble(Math.min(220, 40 + power * 9), .9, .7); shake = Math.min(1.2, shake + power / 13); hitPulse = Math.min(1, power / 14); fovPunch = Math.min(6, power * .35);
   if (R.D.combo > 30) flash('Combo lost', true, 900); R.D.combo = 0; R.D.time = 0;
   if (amt > .02 && !R.attract && (me.health < .55 || me.dmg.front > .6) && !R.warned) { R.warned = true; toast('Car damaged — stop in the blue pit box to repair'); }
 }
@@ -482,8 +527,11 @@ function aiPit(car, ai, dt) {
   }
   if (ai.pitState === 'out') {                                                 // back along the lane at the limiter, then merge onto the track
     const dOut = idxAhead(pi, tr.pitOut) * tr.spacing, left = inZone(pi) && dOut < n * tr.spacing * .5;
-    if (!left) { ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 50; return; }
-    laneDrive(dOut < 26 ? laneOff * Math.max(0, dOut / 26) * .6 : laneOff, dOut < 18 ? 26 : PIT_LIMIT);
+    if (!left) { ai.merge = 4.5; ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 50; return; }
+    // Careful exit: at the end of the lane it waits until nothing is closing on the exit from behind, then leaves gently and merges over a long distance.
+    let clear = true; if (dOut < 30) for (const o of R.cars) { if (o === car || o.out || o.inPit || o.isRemote) continue; const dd = idxAhead(o.idx ?? 0, tr.pitOut) * tr.spacing; if (dd > 0 && dd < 40 + o.speed * 1.6) { clear = false; break; } }
+    ai.exitHold = !clear && dOut < 14;
+    laneDrive(dOut < 26 ? laneOff * Math.max(0, dOut / 26) * .6 : laneOff, ai.exitHold ? 0 : dOut < 18 ? 13 : PIT_LIMIT);
   }
 }
 // ---------------- live race events: slipstream, overtakes, oil, bounties, speed traps, haze ----------------
@@ -590,7 +638,12 @@ function setupExtras() {
     R.pit.pad = R.crews[R.myBox].pad; R.pit.th = tr.pitBoxes[R.myBox].th; if (R.remote) { const b2 = tr.pitBoxes[R.rivBox]; R.pit2 = { x: b2.x, z: b2.z, th: b2.th }; } }
   const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 4, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x19a7ce).multiplyScalar(2.2) })); beacon.position.set(R.pit.x, tr.height(R.pit.x, R.pit.z) + 5, R.pit.z); G.add(beacon);
   // marker above the player's car
-  const mk = new THREE.Mesh(new THREE.ConeGeometry(.42, .7, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })); mk.rotation.x = Math.PI; mk.position.y = me.top + 1.5; me.root.add(mk); R.marker = mk;
+  const mk = new THREE.Group(); { const g = new THREE.Mesh(new THREE.ConeGeometry(.55, .95, 4), new THREE.MeshBasicMaterial({ color: 0x2dff72, fog: false })); g.rotation.x = Math.PI; g.userData.arrow = 1;
+    const ed = new THREE.LineSegments(new THREE.EdgesGeometry(g.geometry), new THREE.LineBasicMaterial({ color: 0xffffff, fog: false })); ed.rotation.x = Math.PI;
+    const gc = document.createElement('canvas'); gc.width = gc.height = 64; const gk = gc.getContext('2d'), gr = gk.createRadialGradient(32, 32, 2, 32, 32, 32); gr.addColorStop(0, 'rgba(60,255,120,.95)'); gr.addColorStop(.35, 'rgba(40,255,110,.35)'); gr.addColorStop(1, 'rgba(40,255,110,0)'); gk.fillStyle = gr; gk.fillRect(0, 0, 64, 64);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); glow.scale.setScalar(2.2); glow.userData.glow = 1; glow.material.opacity = .7;
+    const rg = new THREE.Mesh(new THREE.TorusGeometry(.8, .035, 6, 40).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2dff72, fog: false })); rg.position.y = -.75; rg.userData.ring = 1;
+    mk.add(g, ed, glow, rg); mk.scale.setScalar(1.55); mk.traverse(o => { o.renderOrder = 8; }); mk.position.y = me.top + 2.1; me.root.add(mk); R.marker = mk; }
   R.pro = R.rules !== 'arcade';
   if (R.pro && (R.mode === 'race' || R.mode === 'online')) { const field = R.cars.map(c => c.spec); for (const c of R.cars) { const b = balance(c.spec, field); c.bopP = b.p; c.bopG = b.g; } }   // balance of performance
   { const lapT = tr.len / 36, lapsPerTank = Math.max(2.6, R.laps * .62), proBurn = R.mode === 'race' && R.laps >= 3 ? clamp(TUNE.fuel.fullThrottleSeconds * .8 / (lapsPerTank * lapT), 1, 6) : 1;
@@ -618,7 +671,9 @@ function setupExtras() {
   R.rainAt = R.rainAt != null ? R.rainAt : w === 'rain' ? 6 : w === 'storm' ? 0 : (w === 'random' && def.theme !== 'desert' && !def.dev && Math.random() < .3) ? 18 + Math.random() * 30 : Infinity;
   R.roadMats = []; G.traverse(o => { if (o.isMesh && o.material && /racetrack|conc_plates/.test(o.material.name || '')) R.roadMats.push([o.material, o.material.roughness, o.material.metalness]); });
   setupLights();
+  if (tr.theme.night || save.tod === 'cycle') buildFloodlights(tr, G);
   R.lit = !!tr.theme.night || def.theme === 'coast'; for (const c of R.cars) c.setLights(R.lit);
+  { const was = R.lit; if (R.ambient) R.ambient.rain.visible = true; for (const c of R.cars) c.setLights(true); try { renderer.compile(scene, camera); } catch (e) {} if (R.ambient) R.ambient.rain.visible = false; for (const c of R.cars) c.setLights(was); }      // warm-up behind the loading screen: the rain and headlight shaders are compiled now, so the first rain never stalls a frame
 }
 function raceExtras(dt) {
   const tr = R.track, me = R.player, pit = R.pit;
@@ -671,7 +726,7 @@ function raceExtras(dt) {
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
   ambAt.position.set(R.attract ? camera.position.x : cam.look.x, (R.attract ? camera.position.y : cam.look.y + 7), R.attract ? camera.position.z : cam.look.z); R.ambient.update(dt, ambAt, R.wet, sc);   // dust and rain live around the cars, where the beams are
   // --- sun disc + post-processing drivers
-  const d = THEMES[tr.def.theme].sunDir, l = Math.hypot(d[0], d[1], d[2]);
+  const d = R.sunDir || tr.theme.sunDir, l = Math.hypot(d[0], d[1], d[2]);
   if (sunDisc) { sunDisc.position.set(camera.position.x + d[0] / l * 3400, camera.position.y + d[1] / l * 3400, camera.position.z + d[2] / l * 3400); sunDisc.lookAt(camera.position); sunDisc.visible = R.wet < .5; }
   if (!R.lit && R.wet > .3) { R.lit = true; for (const c of R.cars) c.setLights(true); }      // lights come on in the rain
   updateLights(dt);
@@ -702,7 +757,7 @@ function updateRace(dt) {
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
     if (car !== me && live) { const left = R.laps - Math.max(0, car.lap), short = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * Math.min(left, 3) * 1.05 && left > 1, ahead = R.cars.some(o => o !== car && !o.out && o.prog > car.prog && (o.prog - car.prog) * tr.spacing < Math.max(18, car.speed * 1.2)); car.pace = short || car.tyre < .35 ? 0 : ahead && car.tyre > .5 ? 2 : 1; }   // AI manages its pace like a driver: saves when fuel or tyres are short, pushes when a car is within reach
-    car.held = !live || R.t < (car.holdT || 0); aiDrive(car, tr, ai, R.cars, dt);
+    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; aiDrive(car, tr, ai, R.sc ? R.cars.concat([R.sc.car]) : R.cars, dt);      // the safety car is a car like any other: the field slows behind it
     if (car !== me) ai.boost = R.rules === 'arcade' ? ((me.prog - car.prog) * tr.spacing > 50 ? 1.08 : (me.prog - car.prog) * tr.spacing < -70 ? .93 : 1) : 1;   // Arcade keeps the pack together; Professional never touches the cars
     if (car !== me && live) aiPit(car, ai, dt);
     if (car.finished) { ai.inp.throttle *= .5; }
@@ -743,7 +798,7 @@ function updateRace(dt) {
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
     { const rt = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); near.forEach(o => { const dx = o.c.x - me.x, dz = o.c.z - me.z, dd = Math.hypot(dx, dz) || 1; o.pan = clamp((dx * rt.x + dz * rt.z) / 26, -1, 1); o.dop = clamp(-(((o.c.vx - me.vx) * dx + (o.c.vz - me.vz) * dz) / dd) / 343 * 1.5, -.05, .05); }); }
     audio.rivals(near.map(({ c, d, pan, dop }) => ({ pan, dop, snd: c.spec.snd, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
-  audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 });
+  audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 }); if (!R.attract) feel(me, dt); stepDynamicTime(dt); stepFloodlights(dt, me);
   { const cnt = k => me.wsurf.filter(v => v === k).length, tr0 = R.track; const surfK = me.grass > .5 ? 'grass' : R.wet > .5 ? 'wet' : 'road'; R.audioSurf = surfK;
     let zw = 0, zk = 'stand'; for (const z of tr0.audioZones || []) { const d = Math.hypot(me.x - z.x, me.z - z.z), q = clamp(1 - d / z.r, 0, 1) * z.w; if (q > zw) { zw = q; zk = z.kind; } } audio.zone(zw, zk); }
   audio.drive({ surf: R.audioSurf, tmpK: me.tmpK, soft: me.tn.comp === 'soft' ? 1.15 : me.tn.comp === 'hard' ? .85 : 1, rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, sand: tr.def.theme === 'desert', kerb: me.speed > 2 && me.wsurf.includes(1) ? 1 : 0, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
@@ -758,9 +813,9 @@ function updateCamera(dt) {
   if (camera.view && camera.view.enabled && (R.attract || !CAMS[camMode].fixed)) camera.clearViewOffset();
   const me0 = R.player, pitWant = R.pit && (R.pit.busy || (me0.inPit && Math.hypot(me0.x - R.pit.x, me0.z - R.pit.z) < 18)) ? 1 / 1.5 : 1; R.pitZ = (R.pitZ ?? 1) + (pitWant - (R.pitZ ?? 1)) * (1 - Math.exp(-dt * 2.5)); const pz = R.pitZ;      // pit stop: the camera moves in 50% closer
   const me = R.player, m = CAMS[camMode], sp = me.speed, tr = R.track, X = me.rx ?? me.x, Z = me.rz ?? me.z;
-  const d = THEMES[tr.def.theme].sunDir; sun.position.set(X + d[0] * 130, me.y + d[1] * 130, Z + d[2] * 130); sun.target.position.set(X, me.y, Z);
+  const d = R.sunDir || tr.theme.sunDir; sun.position.set(X + d[0] * 130, me.y + d[1] * 130, Z + d[2] * 130); sun.target.position.set(X, me.y, Z);
   if (sky) sky.position.set(X, 0, Z);
-  if (R.marker) { R.marker.position.y = me.top + 1.5 + Math.sin(R.t * 4) * .12; R.marker.visible = !!m.fixed || !!m.follow; }
+  if (R.marker) { const mk = R.marker; mk.position.y = me.top + 1.9 + Math.sin(R.t * 3.6) * .16; mk.rotation.y = R.t * 2.2; const pu = 1 + .12 * Math.sin(R.t * 5); mk.children[2].scale.setScalar(2.2 * pu); mk.children[3].scale.setScalar(1 + .18 * Math.sin(R.t * 3.6 + 1)); mk.visible = !!m.fixed || !!m.follow; }
   if (R.attract) return attractCam(dt);
   if (m.fixed) {       // Circuit camera: fixed heading, smooth pan, a little look-ahead in the direction of travel, no shake
     const yaw = (tr.def.camYaw ?? .65) + (R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 * 1.5 : R.state === 'wait' ? 1.5 : 0), zk = (save.zoom || 1.5) * (camera.aspect < 1 ? 1.35 : 1) / 1.5, la = clamp(sp * .14, 0, 5) * zk * (R.state === 'go' || R.state === 'done' ? 1 : .3), lx = X + (sp > 1 ? me.vx / sp : 0) * la, lz = Z + (sp > 1 ? me.vz / sp : 0) * la, k = 1 - Math.exp(-dt * 3), intro = R.state === 'count' ? clamp(R.countT / 3.6, 0, 1) ** 2 : R.state === 'wait' ? 1 : 0, z = (camera.aspect < 1 ? 1.35 : 1) * (save.zoom || 1.5) * (1 - .62 * intro) * pz * zsm(dt, sp) / 1.3;      // pulls back a little with speed to show more road; the whole follow camera is 30% closer than before
@@ -1000,6 +1055,7 @@ function carThumb() {
   if (!garageCar) return; const W = 800, Hh = 450;
   if (!thumb.rt) { thumb.rt = new THREE.WebGLRenderTarget(W, Hh); thumb.rt.texture.colorSpace = THREE.SRGBColorSpace; thumb.scene = new THREE.Scene(); thumb.scene.environment = scene.environment; thumb.scene.add(new THREE.HemisphereLight(0xffffff, 0x30323a, 1.2)); const dl = new THREE.DirectionalLight(0xffffff, 2.6); dl.position.set(4, 7, 5); thumb.scene.add(dl);
     thumb.cam = new THREE.PerspectiveCamera(28, W / Hh, .1, 60); thumb.cam.position.set(6.2, 2.9, 7); thumb.cam.lookAt(0, .5, 0); thumb.buf = new Uint8Array(W * Hh * 4); thumb.col = new THREE.Color(); }
+  if (window.__thumbCam) { const tc = window.__thumbCam; thumb.cam.position.set(...tc.pos); thumb.cam.fov = tc.fov || 28; thumb.cam.updateProjectionMatrix(); thumb.cam.lookAt(...tc.look); thumb.custom = 1; } else if (thumb.custom) { thumb.custom = 0; thumb.cam.fov = 28; thumb.cam.updateProjectionMatrix(); thumb.cam.position.set(6.2, 2.9, 7); thumb.cam.lookAt(0, .5, 0); }      // developer hook: place the preview camera anywhere
   const root = garageCar.root, par = root.parent, ry = root.rotation.y, vis = root.visible, a0 = renderer.getClearAlpha(); renderer.getClearColor(thumb.col);
   root.rotation.y = thumb.ang || 0; root.visible = true; thumb.scene.add(root); const hid = []; root.traverse(o => { if (o.userData.part === 'glow' && o.visible) { o.visible = false; hid.push(o); } });   /* ground glow has no ground to fall on in the picture */ const prev = renderer.getRenderTarget();
   renderer.setRenderTarget(thumb.rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(thumb.scene, thumb.cam); renderer.readRenderTargetPixels(thumb.rt, 0, 0, W, Hh, thumb.buf); renderer.setRenderTarget(prev); renderer.setClearColor(thumb.col, a0);
@@ -1254,7 +1310,8 @@ $('pauseBtn').addEventListener('pointerdown', e => { if (!document.body.classLis
 $('pauseBtn').addEventListener('click', e => { if (document.body.classList.contains('editTouch')) { e.stopPropagation(); e.preventDefault(); } }, true);
 addEventListener('pointermove', e => { if (!tDrag) return; captureTouchDefaults(); tUI().pos[tKey(tDrag)] = [clamp(e.clientX / innerWidth, .05, .95), clamp(e.clientY / innerHeight, .08, .94)]; applyTouchUI(); });
 addEventListener('pointerup', () => { if (tDrag) { tDrag = null; persist(); } });
-$('touchEditBtn').onclick = enterTouchEdit; $('teDone').onclick = exitTouchEdit;
+$('touchEditBtn').onclick = enterTouchEdit; $('todSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; save.tod = b.dataset.d; persist(); for (const x of $('todSeg').children) x.classList.toggle('on', x.dataset.d === (save.tod || 'default')); }; for (const x of $('todSeg').children) x.classList.toggle('on', x.dataset.d === (save.tod || 'default'));
+$('hapBtn').onclick = () => { save.haptics = save.haptics === false; persist(); $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); if (save.haptics !== false) rumble(40, .5, .5); }; $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); $('teDone').onclick = exitTouchEdit;
 $('teSize').oninput = e => { tUI().scale = +e.target.value / 100; applyTouchUI(); persist(); };
 $('teOp').oninput = e => { tUI().op = +e.target.value / 100; applyTouchUI(); persist(); };
 $('teLefty').onclick = () => { const U = tUI(); captureTouchDefaults(); U.lefty = !U.lefty; for (const k in U.pos) U.pos[k] = [1 - U.pos[k][0], U.pos[k][1]]; $('teLefty').classList.toggle('on', U.lefty); applyTouchUI(); persist(); };

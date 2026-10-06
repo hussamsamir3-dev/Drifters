@@ -7,15 +7,15 @@ export const TUNE = {
   tyre: {
     // lateral force curve: force = cap * sin(C * atan(B * slip)). Fronts peak near 11° and fall away ~25% when over-driven
     // (that is the understeer you feel); rears are stiffer and hold their force deep into a slide, which keeps slides catchable.
-    frontB: 13.5, frontC: 1.36,
+    frontB: 15.5, frontC: 1.36,
     rearB: 9.5, rearC: 1.35,
     driveShare: .32, brakeShare: .38,    // braking uses only part of the grip budget too, so you can brake and turn                    // how much of the drive force competes with cornering in the tyre's grip budget
-    loadSens: .3,                       // how much an axle loses when cornering load shifts to the outside tyres
+    loadSens: .06,                       // how much an axle loses when cornering load shifts to the outside tyres
     wornGrip: .72,                      // grip multiplier of a fully worn tyre (fresh = 1)
     wear: { base: .0011, slip: .011, spin: .008, lock: .03, offroad: .002 },   // per second, scaled by what the tyre is doing
     wetLossSlick: .27, wetLossWet: .07, dryLossWet: .07,
   },
-  steer: { lock: .76, speedK: .085, rate: 6.6, rateSpeedK: .02, returnRate: 7.5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
+  steer: { lock: .78, speedK: .07, rate: 8.8, rateSpeedK: .018, returnRate: 9.5, maxLock: .62 },   // lock shrinks as 1/(1+speedK*v); rates in rad/s
   // Stability assist. `counter` adds automatic counter-steer in a slide, `power` eases the throttle as the slide angle grows.
   assist: { off: 0, low: .4, medium: .7, full: 1 },
   surface: { kerbGrip: .95, grassDrag: .15, roadDrag: .03, airDrag: .25 },
@@ -24,10 +24,11 @@ export const TUNE = {
   pit: { limit: 16.7, tyres: 2.6, fuelFull: 4.0, repairFull: 6.0 },   // limit in m/s (60 km/h); service times in seconds
   damage: { threshold: 3.5, scale: 34, enginePowerLoss: .4, steerPull: .05 },
   // ---- easy-to-drive set-up ----
-  gripScale: 1.282,                     // with this, each car's `grip` is its real cornering grip in g on dry tarmac                       // overall tyre grip. Raise for a more planted car, lower for a looser one
-  rearBias: 1.0,                       // rear grip relative to front. Higher = safer, more understeer
+  gripScale: 1.92,                     // with this, each car's `grip` is its real cornering grip in g on dry tarmac                       // overall tyre grip. Raise for a more planted car, lower for a looser one
+  brakeScale: 1.3,                     // brake power: braking was never limited by the tyres, so this is what shortens stopping distances
+  rearBias: 1.08,                       // rear grip relative to front. Higher = safer, more understeer
   powerSlide: .85,                      // how much full throttle loosens the rear (0 = never, 1 = a lot)
-  slideAid: .75,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
+  slideAid: .9,                        // grip aid strength (1/s): how fast sideways slip is bled away at Assist Full
   assistYawDamp: .6,
   // Drift: hold full steering lock with the throttle on and the rear lets go on purpose. rearCut = how much rear grip is released, build/decay = how fast it comes and goes (1/s).
   slowTurn: .22,                         // extra front bite while the car is slowing (lifting or braking): the nose tucks in
@@ -39,7 +40,7 @@ export const TUNE = {
   visualLead: { steer: .16, yaw: .05, max: .07, rate: 10, fullSpeed: 12 },                   // extra rotation damping at Assist Full
   wall: { bounce: .02, spin: .28, friction: .2, yawKeep: .94 },   // barrier contact: no bounce, little spin, the car settles and slides along   // barrier contact: restitution, share of impulse that may rotate the car, wall friction
   crash: { rest: .2, restMin: 1.5, fric: .4, box: .93 },     // car-to-car contact: restitution (only above restMin m/s), friction coefficient
-  yawDamp: .45, yawDampSpeed: .01,       // yaw damping (1/s), rising with speed for high-speed stability
+  yawDamp: .6, yawDampSpeed: .012,       // yaw damping (1/s), rising with speed for high-speed stability
   // Online sync. hz = state messages per second from each player. The free Supabase plan allows 100 messages/s for the
   // whole project, so 24 keeps a duel safely under it; on a paid plan 30-40 is fine. minBuffer/maxBuffer bound how far in
   // the past the rival is drawn (ms): lower = more immediate, higher = smoother on a poor connection.
