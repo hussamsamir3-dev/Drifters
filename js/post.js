@@ -7,13 +7,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const FX = {
-  uniforms: { haze: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] }, tDiffuse: { value: null }, sunPos: { value: new THREE.Vector2(.5, .5) }, sunVis: { value: 0 }, rays: { value: .085 }, speed: { value: 0 }, hit: { value: 0 }, vig: { value: .32 }, wet: { value: 0 }, tilt: { value: 0 }, grade: { value: 1 }, time: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, sunPos: { value: new THREE.Vector2(.5, .5) }, sunVis: { value: 0 }, rays: { value: .085 }, speed: { value: 0 }, hit: { value: 0 }, vig: { value: .32 }, wet: { value: 0 }, tilt: { value: 0 }, grade: { value: 1 }, time: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 sunPos; uniform float sunVis, rays, speed, hit, vig, wet, tilt, grade, time; uniform vec3 haze[4]; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec2 sunPos; uniform float sunVis, rays, speed, hit, vig, wet, tilt, grade, time; varying vec2 vUv;
     void main(){
       vec2 uv=vUv;
-      for (int i = 0; i < 4; i++) { vec3 h = haze[i]; if (h.z > .01) { float d = distance(uv, h.xy), k = smoothstep(.11, 0., d) * h.z; uv += vec2(sin(uv.y * 95. + time * 13.), cos(uv.x * 80. + time * 11.)) * k * .0042; } }      // heat shimmer over hot exhausts
       if(wet>.05){ float edge=smoothstep(.3,.5,max(abs(uv.x-.5),abs(uv.y-.5)*1.05)); if(edge>.01){ vec2 g=uv*vec2(22.,13.); float hc=fract(sin(floor(g.x)*91.7)*4375.5); g.y+=time*(.02+hc*.05); vec2 id=floor(g), f=fract(g)-.5; float h=fract(sin(dot(id,vec2(127.1,311.7)))*43758.5);
         if(h>.62){ vec2 o=(vec2(fract(h*17.),fract(h*31.))-.5)*.5; float d=length((f-o)*vec2(1.,.75)); uv+=(f-o)*smoothstep(.07+.09*h,0.,d)*wet*edge*.16; } } }   // a few small drops near the screen edges only; the middle stays clear
       vec2 c=uv-.5; vec3 col;

@@ -354,8 +354,20 @@ function buildProc(track) {
 
   // -- ground
   const night = th.night, desert = def.theme === 'desert', day = def.theme === 'day';
-  const gtex = canvasTex(256, 256, (k, W, H) => { noise(k, W, H, desert ? '#d8b26c' : night ? '#2a2d31' : day ? '#55a83a' : '#4f8a3c', .1, 5000); if (day) { k.fillStyle = 'rgba(255,255,255,.055)'; k.fillRect(0, 0, W / 2, H); k.fillStyle = 'rgba(0,40,0,.05)'; k.fillRect(W / 2, 0, W / 2, H); } }, 220, 220);   // mowing stripes
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
+  // Grass that reads as grass: a 1024 px texture (about 1 cm per pixel) with big soft patches, thousands of blade strokes, clover and bare soil, and a mowing pattern, plus a bump map of the blades.
+  const GR = (k, W, H, bump) => { const rnd = (a, b) => a + Math.random() * (b - a), base = desert ? [206, 172, 104] : night ? [34, 40, 44] : day ? [60, 116, 42] : [62, 106, 48];
+    const col = (d, a = 1) => 'rgba(' + [0, 1, 2].map(q => Math.max(0, Math.min(255, base[q] + d * (q === 1 ? 1 : q === 0 ? .8 : .5)))).map(Math.round).join(',') + ',' + a + ')';
+    k.fillStyle = bump ? '#808080' : col(0); k.fillRect(0, 0, W, H);
+    if (!bump) for (let q = 0; q < 70; q++) { const x = rnd(0, W), y = rnd(0, H), r = rnd(50, 200), g = k.createRadialGradient(x, y, 0, x, y, r), d = rnd(-26, 24); g.addColorStop(0, col(d, .5)); g.addColorStop(1, col(d, 0)); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); }
+    const blades = desert ? 6000 : 26000; k.lineCap = 'round';
+    for (let q = 0; q < blades; q++) { const x = rnd(0, W), y = rnd(0, H), a = -Math.PI / 2 + rnd(-.9, .9), l = desert ? rnd(2, 5) : rnd(5, 12), v = rnd(-34, 30); k.strokeStyle = bump ? 'rgba(' + (v > 0 ? 255 : 0) + ',' + (v > 0 ? 255 : 0) + ',' + (v > 0 ? 255 : 0) + ',.14)' : col(v, .55); k.lineWidth = rnd(.7, 1.8); k.beginPath(); k.moveTo(x, y); k.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); k.stroke(); }
+    if (!bump && !night && !desert) { for (let q = 0; q < 260; q++) { const x = rnd(0, W), y = rnd(0, H); k.fillStyle = Math.random() < .4 ? 'rgba(236,236,210,.75)' : col(-18, .6); k.beginPath(); k.arc(x, y, rnd(1.2, 2.8), 0, 7); k.fill(); }       // clover and the odd daisy
+      for (let q = 0; q < 8; q++) { const x = rnd(0, W), y = rnd(0, H), r = rnd(14, 40), g = k.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(112,86,52,.55)'); g.addColorStop(1, 'rgba(112,86,52,0)'); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); } }      // bare soil
+    if (desert) for (let q = 0; q < 380; q++) { const x = rnd(0, W), y = rnd(0, H); k.fillStyle = bump ? 'rgba(255,255,255,.35)' : 'rgba(120,96,58,.5)'; k.beginPath(); k.ellipse(x, y, rnd(1, 4), rnd(.8, 2.5), rnd(0, 3), 0, 7); k.fill(); }
+    if (!bump && day) { k.fillStyle = 'rgba(255,255,255,.045)'; for (let s = 0; s < 8; s += 2) k.fillRect(0, s * H / 8, W, H / 8); }      // mowing bands
+  };
+  const gtex = canvasTex(1024, 1024, (k, W, H) => GR(k, W, H, false), 220, 220); gtex.anisotropy = 8; const gbump = canvasTex(512, 512, (k, W, H) => GR(k, W, H, true), 220, 220); gbump.colorSpace = THREE.NoColorSpace;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), new THREE.MeshStandardMaterial({ map: gtex, bumpMap: gbump, bumpScale: 1.4, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.02, cz); ground.receiveShadow = true; G.add(ground);
 
   // -- road, lines, kerbs
@@ -384,12 +396,19 @@ function buildProc(track) {
   for (const s of [1, -1]) { const km = new THREE.Mesh(ribbon(path, s > 0 ? hw + 1.5 : -hw, s > 0 ? hw : -hw - 1.5, 0.045, 1 / 4, true, curved), kmat); km.receiveShadow = true; G.add(km); }
 
   // -- barriers
-  const wtex = canvasTex(128, 32, (k) => {
-    if (night) { k.fillStyle = '#15161c'; k.fillRect(0, 0, 128, 32); k.fillStyle = '#19d3ff'; k.fillRect(0, 20, 128, 5); k.fillStyle = '#ff2bd0'; k.fillRect(0, 6, 128, 3); }
-    else if (day) { k.fillStyle = '#2d6bd1'; k.fillRect(0, 0, 128, 32); k.fillStyle = '#1c4ea8'; k.fillRect(0, 8, 128, 3); k.fillRect(0, 20, 128, 3); k.fillStyle = '#7a4326'; k.fillRect(0, 0, 7, 32); }
-    else { k.fillStyle = '#e9e9e9'; k.fillRect(0, 0, 128, 32); k.fillStyle = desert ? '#1e88c9' : '#e3262e'; k.fillRect(0, 0, 64, 32); k.fillStyle = 'rgba(0,0,0,.25)'; k.fillRect(0, 0, 128, 3); }
-  });
-  const wmat = new THREE.MeshStandardMaterial({ map: wtex, side: THREE.DoubleSide, roughness: .6, emissive: night ? 0xffffff : 0, emissiveMap: night ? wtex : null, emissiveIntensity: night ? 1.2 : 0 });
+  // Barriers: painted steel crash rail with a corrugated profile, bolted to posts every few metres, scuffed, streaked with rust and dirty at the foot. The bump map carries the corrugation.
+  const BAR = (k, W, H, bump) => { const rnd = (a, b) => a + Math.random() * (b - a), paint = night ? '#15161c' : day ? '#2d63c4' : desert ? '#2a86c6' : '#d9d9dc', hi = night ? '#2a2c36' : day ? '#5a8de6' : desert ? '#6ab8ee' : '#ffffff', lo = night ? '#0c0d11' : day ? '#16408c' : desert ? '#14577f' : '#9a9aa0';
+    k.fillStyle = bump ? '#808080' : paint; k.fillRect(0, 0, W, H);
+    for (let b = 0; b < 2; b++) { const y0 = H * (.12 + b * .42), h = H * .36, g = k.createLinearGradient(0, y0, 0, y0 + h); if (bump) { g.addColorStop(0, '#303030'); g.addColorStop(.25, '#e0e0e0'); g.addColorStop(.5, '#303030'); g.addColorStop(.75, '#e0e0e0'); g.addColorStop(1, '#303030'); } else { g.addColorStop(0, lo); g.addColorStop(.25, hi); g.addColorStop(.5, paint); g.addColorStop(.75, hi); g.addColorStop(1, lo); } k.fillStyle = g; k.fillRect(0, y0, W, h); }
+    if (night) { if (!bump) { k.fillStyle = '#19d3ff'; k.fillRect(0, H * .62, W, H * .05); k.fillStyle = '#ff2bd0'; k.fillRect(0, H * .2, W, H * .03); } }
+    for (let p = 0; p < 2; p++) { const x = p * W / 2; k.fillStyle = bump ? '#202020' : '#1d1b1a'; k.fillRect(x, 0, W * .035, H); k.fillStyle = bump ? '#f0f0f0' : '#9a9a9a'; for (const yy of [.28, .72]) { k.beginPath(); k.arc(x + W * .017, H * yy, H * .035, 0, 7); k.fill(); } }      // posts and bolts
+    if (!bump) { for (let q = 0; q < 90; q++) { const x = rnd(0, W), y = rnd(0, H); k.strokeStyle = 'rgba(255,255,255,' + rnd(.05, .16) + ')'; k.lineWidth = rnd(.6, 1.6); k.beginPath(); k.moveTo(x, y); k.lineTo(x + rnd(8, 40), y + rnd(-6, 6)); k.stroke(); }
+      for (let q = 0; q < 40; q++) { const x = rnd(0, W), y = rnd(0, H); k.strokeStyle = 'rgba(0,0,0,' + rnd(.08, .2) + ')'; k.lineWidth = rnd(1, 3); k.beginPath(); k.moveTo(x, y); k.lineTo(x + rnd(10, 60), y + rnd(-4, 4)); k.stroke(); }
+      for (let p = 0; p < 2; p++) { const g = k.createLinearGradient(0, 0, 0, H * .7); g.addColorStop(0, 'rgba(150,80,30,.22)'); g.addColorStop(1, 'rgba(150,80,30,0)'); k.fillStyle = g; k.fillRect(p * W / 2 + W * .035, 0, W * .02, H * .7); }
+      const dg = k.createLinearGradient(0, H * .6, 0, H); dg.addColorStop(0, 'rgba(40,30,20,0)'); dg.addColorStop(1, 'rgba(40,30,20,.4)'); k.fillStyle = dg; k.fillRect(0, H * .6, W, H * .4); }
+  };
+  const wtex = canvasTex(512, 128, (k, W, H) => BAR(k, W, H, false)), wbump = canvasTex(512, 128, (k, W, H) => BAR(k, W, H, true)); wbump.colorSpace = THREE.NoColorSpace; wtex.anisotropy = 8;
+  const wmat = new THREE.MeshStandardMaterial({ map: wtex, bumpMap: wbump, bumpScale: 2.2, side: THREE.DoubleSide, roughness: .42, metalness: .35, emissive: night ? 0xffffff : 0, emissiveMap: night ? wtex : null, emissiveIntensity: night ? 1.2 : 0 });
   for (const s of [1, -1]) { const wm = new THREE.Mesh(wallStrip(path, s > 0 ? i => inPit(i) ? pitWall : B + .2 : -(B + .2), 1.15, 1 / 6), wmat); wm.castShadow = !night; G.add(wm); }
 
   // -- scenery: scatter props just outside the barriers
@@ -410,13 +429,22 @@ function buildProc(track) {
     const cone = new THREE.ConeGeometry(3.4, 7, 14, 1, true); cone.translate(0, 3.5, 0);     // soft light pools under each lamp
     const cm = instanced(cone, new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: .07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), lp, false); cm.visible = false; G.add(cm);   // flat light cones looked like cut-outs from above; the lamps' glow stays
   } else {
-    const trunk = new THREE.CylinderGeometry(.22, .34, desert || def.theme === 'coast' ? 6 : 2.4, 6); trunk.translate(0, desert || def.theme === 'coast' ? 3 : 1.2, 0);
-    let crown;
-    if (desert || def.theme === 'coast') { crown = new THREE.ConeGeometry(2.6, 1.6, 7); crown.scale(1, .7, 1); crown.translate(0, 6.2, 0); }   // palm
-    else { crown = new THREE.IcosahedronGeometry(2.7, 1); crown.scale(1, .85, 1); crown.translate(0, 4.3, 0); }
+    // Trees with real volume: an oak is a cluster of displaced foliage blobs, light on top and dark underneath, on a flared, barked trunk; a palm has a curved ringed trunk and a crown of drooping fronds.
+    const tcol = (g, c) => { const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let q = 0; q < n; q++) { a[q * 3] = c[0]; a[q * 3 + 1] = c[1]; a[q * 3 + 2] = c[2]; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
+    const mg = gs => mergeGeometries(gs.map(g => g.index ? g.toNonIndexed() : g), false), palm = desert || def.theme === 'coast';
+    const blob = (r, x, y, z, sy, lo, hi) => { const g = new THREE.IcosahedronGeometry(r, 2), P = g.attributes.position, C = new Float32Array(P.count * 3); for (let q = 0; q < P.count; q++) { const px = P.getX(q), py = P.getY(q), pz = P.getZ(q), nz = 1 + .2 * Math.sin(px * 3.1 + pz * 2.3) * Math.cos(py * 2.7 + px * 1.3) + .08 * Math.sin(py * 7 + pz * 5); P.setXYZ(q, px * nz, py * nz * sy, pz * nz); const k = Math.max(0, Math.min(1, (py / r + 1) / 2)) * .85 + Math.random() * .1; C[q * 3] = lo[0] + (hi[0] - lo[0]) * k; C[q * 3 + 1] = lo[1] + (hi[1] - lo[1]) * k; C[q * 3 + 2] = lo[2] + (hi[2] - lo[2]) * k; } g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.translate(x, y, z); return g; };
+    let trunk, crown;
+    if (palm) {
+      const segs = []; for (let s = 0; s < 8; s++) { const g = new THREE.CylinderGeometry(.2 - s * .008, .24 - s * .008, .78, 8); g.translate(s * .06 + (s * s) * .008, s * .76 + .39, 0); segs.push(tcol(g, s % 2 ? [.43, .32, .2] : [.52, .4, .26])); } trunk = mg(segs);
+      const fr = []; for (let f = 0; f < 11; f++) { const a = f / 11 * Math.PI * 2, g = new THREE.PlaneGeometry(.7, 3.6, 1, 8), P = g.attributes.position, C = new Float32Array(P.count * 3); for (let q = 0; q < P.count; q++) { const u = (P.getY(q) + 1.8) / 3.6; P.setZ(q, -Math.pow(u, 2) * 1.5 + (Math.abs(P.getX(q)) * .25) * -1); P.setY(q, u * 3.4); P.setX(q, P.getX(q) * (1 - u * .7)); C[q * 3] = .12 + .12 * u; C[q * 3 + 1] = .34 + .22 * u; C[q * 3 + 2] = .1 + .05 * u; } g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.rotateX(-Math.PI / 2 + .35 + (f % 2) * .18); g.rotateY(a); g.translate(.6, 6.35, 0); fr.push(g); } crown = mg(fr);
+    } else {
+      const bk = []; const tr = new THREE.CylinderGeometry(.2, .36, 2.8, 9); tr.translate(0, 1.4, 0); bk.push(tcol(tr, [.34, .24, .15])); const fl = new THREE.ConeGeometry(.55, .5, 9, 1, true); fl.translate(0, .25, 0); bk.push(tcol(fl, [.3, .21, .13])); for (const [bx, bz, ry] of [[.5, 0, 0], [-.4, .3, 2]]) { const b = new THREE.CylinderGeometry(.07, .12, 1.6, 6); b.rotateZ(.9); b.rotateY(ry); b.translate(bx, 2.7, bz); bk.push(tcol(b, [.3, .21, .13])); } trunk = mg(bk);
+      const lo = day ? [.05, .16, .04] : [.05, .14, .06], hi = day ? [.2, .44, .12] : [.1, .26, .1];
+      crown = mg([blob(2.2, 0, 4.2, 0, .85, lo, hi), blob(1.55, 1.4, 3.6, .5, .85, lo, hi), blob(1.5, -1.3, 3.8, .7, .85, lo, hi), blob(1.4, .3, 5.4, -.6, .85, lo, hi), blob(1.3, -.6, 3.5, -1.3, .85, lo, hi), blob(1.2, 1.0, 4.9, 1.1, .85, lo, hi)]);
+    }
     const trees = spots.filter((_, i) => desert ? i % 3 === 0 : day ? i % 11 !== 5 && i % 11 !== 8 : true);
-    G.add(instanced(trunk, new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1 }), trees));
-    G.add(instanced(crown, new THREE.MeshStandardMaterial({ color: desert ? 0x4e8a3a : day ? 0x3c9440 : 0x2f6b34, roughness: 1, flatShading: true }), trees));
+    G.add(instanced(trunk, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), trees));
+    G.add(instanced(crown, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .92, side: THREE.DoubleSide }), trees));
     if (desert) {
       const pyr = new THREE.ConeGeometry(1, 1, 4); pyr.rotateY(Math.PI / 4); pyr.translate(0, .5, 0);
       const pm = new THREE.MeshStandardMaterial({ color: 0xd2a45c, roughness: 1, flatShading: true });

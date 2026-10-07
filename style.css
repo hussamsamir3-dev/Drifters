@@ -520,3 +520,37 @@ button,.tile,.chip{font-family:inherit;letter-spacing:.02em;transition:transform
 h3{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--acc);opacity:.95}
 .card{background:var(--glass);border:1px solid var(--edge);border-radius:16px;backdrop-filter:blur(12px);box-shadow:0 12px 32px rgba(0,0,0,.35)}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:8px}::-webkit-scrollbar-thumb:hover{background:rgba(255,194,26,.5)}
+
+/* ================= menu layout overhaul: one clear hierarchy, a pinned Start button, compact on phones ================= */
+#menu{grid-template-columns:minmax(340px,440px) 1fr}
+.top{flex-wrap:nowrap;gap:10px;padding:10px 22px;background:linear-gradient(180deg,rgba(9,10,13,.92),rgba(9,10,13,.6));backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);border-bottom:1px solid rgba(255,255,255,.08)}
+.top .tabs{margin-left:12px;flex:1;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.top .tabs::-webkit-scrollbar{display:none}
+.tabs button{padding:8px 16px;border-radius:999px;border:1px solid transparent;border-bottom:1px solid transparent;font-style:normal;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;color:#aeb4c0}
+.tabs button.on{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.07));border-color:rgba(255,255,255,.28);color:#fff;box-shadow:0 0 0 1px rgba(227,38,46,.55),0 8px 22px rgba(227,38,46,.28)}
+.tabs button.on::after,.tabs button:hover::after{display:none}
+.top .level,.top .credits{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);white-space:nowrap}
+.top .credits #credits{font-weight:900;color:#ffc21a}
+.left{background:linear-gradient(90deg,rgba(9,10,13,.8),rgba(9,10,13,.46));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:14px 22px 0;gap:14px;border-right:1px solid rgba(255,255,255,.06)}
+.left h3.sec{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.18em;color:#aeb4c0;margin:2px 0 0;border:0}
+.left h3.sec::before{content:"";width:3px;height:12px;border-radius:2px;background:var(--red,#e3262e)}
+.left h3.sec::after{display:none}
+.card.track{order:-3;padding:14px;border-radius:18px;background:linear-gradient(135deg,rgba(255,255,255,.11),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.14)}
+#tabQuick{order:-2}
+#optsRow{order:-1;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#optsRow>h3{grid-column:1/-1}
+#optsRow .cell{min-width:0}
+#startBtn{order:99;position:sticky;bottom:0;z-index:6;margin-top:auto;padding:17px;font-size:19px;border-radius:16px;box-shadow:0 -22px 26px 4px rgba(9,10,13,.92),0 10px 30px rgba(227,38,46,.45) !important}
+.left::after{content:"";flex:0 0 6px}
+.carpick{padding:14px 16px;border-radius:18px;background:linear-gradient(180deg,rgba(9,10,13,.62),rgba(9,10,13,.4));backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1)}
+@media (max-height:470px){
+  .top{padding:5px 10px;gap:6px}.logo b{display:none}.logo span{font-size:22px}
+  .tabs button{padding:6px 11px;font-size:11px}
+  .top .level,.top .credits{padding:3px 9px;font-size:12px}.top .level div{width:42px}
+  #menu{grid-template-columns:minmax(300px,50%) 1fr}
+  .left{padding:8px 12px 0;gap:8px}
+  .left h3.sec{font-size:10px}
+  .card.track{padding:8px 10px}.card.track canvas{width:76px;height:57px}
+  #startBtn{padding:11px;font-size:16px}
+  .carpick{padding:8px 10px}
+}

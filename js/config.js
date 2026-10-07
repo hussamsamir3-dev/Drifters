@@ -24,7 +24,7 @@ export const TUNE = {
   pit: { limit: 16.7, tyres: 2.6, fuelFull: 4.0, repairFull: 6.0 },   // limit in m/s (60 km/h); service times in seconds
   damage: { threshold: 3.5, scale: 34, enginePowerLoss: .4, steerPull: .05 },
   // ---- easy-to-drive set-up ----
-  gripScale: 1.92,                     // with this, each car's `grip` is its real cornering grip in g on dry tarmac                       // overall tyre grip. Raise for a more planted car, lower for a looser one
+  gripScale: 1.78,                     // with this, each car's `grip` is its real cornering grip in g on dry tarmac                       // overall tyre grip. Raise for a more planted car, lower for a looser one
   brakeScale: 1.3,                     // brake power: braking was never limited by the tyres, so this is what shortens stopping distances
   rearBias: 1.08,                       // rear grip relative to front. Higher = safer, more understeer
   powerSlide: .85,                      // how much full throttle loosens the rear (0 = never, 1 = a lot)
