@@ -113,10 +113,10 @@ export class Car {
     this.wantLight = wantLight;
     this.isAI = !!(look && look.ai); this.spec = spec; this.name = name; this.color = color; this.up = up || { eng: 0, tyre: 0, nitro: 0, armor: 0 };
     this.fuel = 1; this.fuelK = 1; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; this.partK = 1; this.pace = 1; this.bopP = 1; this.bopG = 1; this.shock = 0; this.tc = true; this.abs = true; this.steerK = 1; this.wspinF = 0; this.lost = []; this.noNitro = false; this.assistK = 0; this.inPit = false; this.pitZone = false; this.aF = 0; this.useF = 0; this.useR = 0;
-    this.dirt = 0; this.dirtShown = 0; this.mud = 0; this.mudShown = 0; this.scr = []; this.scrN = 0; this.tT = TUNE.tyreT.start; this.tmpK = 1; this.lz = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
+    this.dirt = 0; this.dirtShown = 0; this.mud = 0; this.mudShown = 0; this.bT = 0; this.eT = .25; this.driftMode = false; this.scr = []; this.scrN = 0; this.tT = TUNE.tyreT.start; this.tmpK = 1; this.lz = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
     const proto = protos[spec.model || spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
-    this.m = mats(color); this.m.caliper = new THREE.MeshStandardMaterial({ color: CAL_COLS[0], roughness: .32, metalness: .35, side: THREE.DoubleSide }); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
+    this.m = mats(color); this.m.disc = this.m.disc.clone(); this.m.disc.emissive = new THREE.Color(1, .32, .04); this.m.disc.emissiveIntensity = 0; this.m.caliper = new THREE.MeshStandardMaterial({ color: CAL_COLS[0], roughness: .32, metalness: .35, side: THREE.DoubleSide }); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
     if (proto.userData.rim != null) { const rm = this.m.rim.clone(); rm.color.setHex(proto.userData.rim); this.m.rim = rm; }      // each car's own wheel colour
     this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dmgScale = 1; this.wear = 1;
     for (const child of proto.children) {
@@ -203,7 +203,8 @@ export class Car {
     if (nit) this.nitro = Math.max(0, this.nitro - dt / (3.2 * (1 + .25 * U.nitro)));
     const vmax = s.top * TN.top * (1 + .04 * U.eng) * (nit ? 1.16 : 1) * (gr > .5 ? .55 : 1) * (1 - .1 * (D.front + D.rear)) * (1 - PT.gearboxTop * P.gearbox);
     if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));     // drift-angle hold: ease the power before a slide becomes a spin
-    let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, s.pw / (s.acc * m) / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 8, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
+    const dm0 = this.driftMode ? 1 : 0, hotK = (this.eT > 1 ? Math.max(.35, 1 - (this.eT - 1) * 1.4) : 1) * (1 + .35 * dm0);      // overheating cuts power; drift mode adds torque
+    let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * hotK * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, s.pw / (s.acc * m) / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 8, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
     Fdrive *= TUNE.enginePower * this.bopP * PC.pow * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
     // exhaust pops: rare, short, and only on cars that have them (turbo or tuned). A cooldown stops bursts chaining into a flame that never goes out.
     this.bfCool = Math.max(0, (this.bfCool || 0) - dt); const popper = s.pops || s.turbo;
@@ -212,8 +213,8 @@ export class Car {
     this._thr = thr; this.backfire = Math.max(0, (this.backfire || 0) - dt);
     const bf = rev ? 0 : Math.min(brk * s.brake * TUNE.brakeScale * m * g * clamp((muF + muR) * .5 * tmpK * 1.12, .3, 1), m * Math.abs(vf) / dt);      // the surface and the tyre temperature limit how hard you can brake
     this.braking = brk > .1 && !rev;
-    const dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? TN.split : 0, crn = clamp(Math.abs(this.ayS) / (g * .8), 0, 1) * clamp(thr, 0, 1), trac = 1 - (1 - TN.diff) * .2 * crn, und = 1 - TN.diff * .1 * crn;      // diff: open loses traction out of corners, locked pushes the nose wide
-    const capF = muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.2 : 1) * und * (dF > .5 ? trac : 1 - (1 - trac) * dF) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (1 - trac) * (1 - dF)) * (1 + TN.diff * .03 * crn) * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
+    const dm = dm0, dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? TN.split : 0, crn = clamp(Math.abs(this.ayS) / (g * .8), 0, 1) * clamp(thr, 0, 1), trac = 1 - (1 - TN.diff) * .2 * crn, und = 1 - TN.diff * .1 * crn;      // diff: open loses traction out of corners, locked pushes the nose wide
+    const capF = (1 + dm * .12) * muF * gripK * Nf * ltF * (s.drive === 'fwd' ? 1.2 : 1) * und * (dF > .5 ? trac : 1 - (1 - trac) * dF) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = (1 - dm * (.06 + .24 * clamp(thr, 0, 1))) * muR * gripK * s.rear * TUNE.rearBias * Nr * ltR * (1 - (1 - trac) * (1 - dF)) * (1 + TN.diff * .03 * crn) * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0;
     let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
 
@@ -261,6 +262,8 @@ export class Car {
     if (this.rpmR >= red && this.cutT <= 0) this.cutT = .08; this.limiter = this.cutT > 0;
     this.rpm = clamp((this.rpmR - idle) / (red - idle), 0, 1.02); this.load = live ? thr * (this.shiftT > 0 ? .2 : 1) : inp.throttle * .45;
     this.dirt = clamp(this.dirt + dt * (gr * Math.min(1, speed / 15) * .07 - wet * .03), 0, 1);
+    this.bT = clamp(this.bT + (brk * speed * .013 - this.bT * (.16 + speed * .006)) * dt, 0, 1);      // brake discs heat with braking and speed and cool in the air
+    { const Dd = this.dmg; this.eT = clamp(this.eT + ((.02 + .1 * thr * (this.rpm || 0)) * (1 + 2.2 * Dd.front) - this.eT * (.09 + speed * .004) * (1 - .6 * Dd.front)) * dt, 0, 1.4); }      // engine temperature: a damaged radiator (front damage) cannot shed the heat
     this.mud = clamp(this.mud + dt * (gr * Math.min(1, speed / 15) * .03 - wet * .04), 0, 1);      // mud builds up in the runoff and washes off in rain
     { const use = clamp(((this.useF + this.useR) / 2 - .25) / .75, 0, 1), amb = track.def && track.def.theme === 'night' ? TUNE.tyreT.ambientNight : (track.wet || 0) > .4 ? TUNE.tyreT.ambientWet : TUNE.tyreT.ambient;
       const heat = 3.4 * use ** 1.3 * (.4 + speed / 45) + (speed > 2 ? .2 : 0) + this.wspin * 2.2 + (this.locked ? 3 : 0), cool = (this.tT - amb) * (.022 + speed * .0007) * (1 + (track.wet || 0) * 1.2); this.tT = clamp(this.tT + (heat - cool) * dt, amb, 135); }      // tyre temperature: heat from slip and load, cooling with air and rain
@@ -496,13 +499,21 @@ export class Car {
       const glare = new THREE.Mesh(LAMP.glare, LAMP.glareM); glare.rotation.x = -Math.PI / 2; glare.position.y = .1; glare.scale.setScalar(Math.max(.3, lr * T.w * 5.2));                // the lamp itself, seen from above
       g.add(fan, glare); g.visible = false; this.root.add(g); return { g, ok: true, sx: lx >= 0 ? 1 : -1 }; };
     this.lamps = lampSet.map(mk); this.lightsOn = false;
+    if (!LAMP.lensBase) { LAMP.lensBase = new THREE.MeshStandardMaterial({ color: 0xe9eef5, metalness: .9, roughness: .07, emissive: 0xffefc8, emissiveIntensity: .04, envMapIntensity: 1.2 }); LAMP.lensG = new THREE.SphereGeometry(1, 18, 12); }
+    this.lensM = LAMP.lensBase.clone(); this.lamps.forEach((l, i) => { const [lx, ly, lz, lr] = lampSet[i], r = Math.max(.06, lr * T.w * .85), m = new THREE.Mesh(LAMP.lensG, this.lensM); m.scale.set(r, r, r * .45); m.position.set(lx * T.w, ly * T.h, lz * T.l + .012); m.rotation.y = l.g.rotation.y; this.root.add(m); l.lens = m; });      // a real chrome-and-glass lens in every headlight, where the model only had black paint
     if (!LAMP.glareR) { const g = document.createElement('canvas'); g.width = g.height = 64; const gk = g.getContext('2d'), gr = gk.createRadialGradient(32, 32, 1, 32, 32, 32); gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(.3, 'rgba(255,30,20,.6)'); gr.addColorStop(1, 'rgba(255,20,10,0)'); gk.fillStyle = gr; gk.fillRect(0, 0, 64, 64);
       LAMP.glareR = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(g), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }); }
     this.rlMat = LAMP.glareR.clone(); this.rlMat.opacity = 0;
     const rearSet = LR && LR.length ? LR : [[this.hw0 / T.w * .62, .62, -this.zr0 / T.l, .09], [-this.hw0 / T.w * .62, .62, -this.zr0 / T.l, .09]];
     this.rlamps = rearSet.map(([lx, ly, lz, lr]) => { const m = new THREE.Mesh(LAMP.glare, this.rlMat); m.rotation.x = -Math.PI / 2; m.position.set(lx * T.w, ly * T.h + .12, lz * T.l); m.scale.setScalar(Math.max(.3, lr * T.w * 5)); this.root.add(m); return m; });
   }
-  setLights(on) { this.lightsOn = on; for (const l of this.lamps) l.g.visible = on && l.ok; }
+  setLights(on) { this.lightsOn = on; for (const l of this.lamps) l.g.visible = on && l.ok; if (this.lensM) this.lensM.emissiveIntensity = on ? 2.4 : .04; }
+  fitLamps() {      // the lamps and their lenses move with the bodywork when it is bent or crushed
+    if (!this.lamps) return; const T = this.T;
+    for (const l of this.lamps) { if (!l.base) { l.base = l.g.position.clone(); l.idx = []; const bx = l.base.x / T.w, by = l.base.y / T.h, bz = l.base.z / T.l; this.bodyMeshes.forEach((mm, mi) => { const O = mm.userData.orig; for (let i = 0; i < O.length; i += 3) { const dx = O[i] - bx, dy = O[i + 1] - by, dz = O[i + 2] - bz; if (dx * dx + dy * dy + dz * dz < .16) l.idx.push(mi, i); } }); }
+      let sx = 0, sy = 0, sz = 0, k = 0; for (let q = 0; q < l.idx.length; q += 2) { const mm = this.bodyMeshes[l.idx[q]], i = l.idx[q + 1], A = mm.geometry.attributes.position.array, O = mm.userData.orig; sx += A[i] - O[i]; sy += A[i + 1] - O[i + 1]; sz += A[i + 2] - O[i + 2]; k++; }
+      const ox = k ? sx / k * T.w : 0, oy = k ? sy / k * T.h : 0, oz = k ? sz / k * T.l : 0; l.g.position.set(l.base.x + ox, l.base.y + oy, l.base.z + oz); if (l.lens) { l.lens.position.set(l.base.x + ox, l.base.y + oy, l.base.z + oz + .012); l.lens.visible = l.ok; } }
+  }
 
   toLocal(wx, wz) { const dx = wx - this.x, dz = wz - this.z, sn = Math.sin(this.th), cs = Math.cos(this.th); return [dx * cs - dz * sn, dx * sn + dz * cs]; }
 
@@ -511,7 +522,7 @@ export class Car {
     if (power < 2.5 || !this.hitL) return; const T = this.T, x = this.hitL[0] / T.w, z = this.hitL[1] / T.l; this.scr.push({ x, y: .45 + Math.random() * .3, z, r: Math.min(.95, .22 + power * .028) }); if (this.scr.length > 6) this.scr.shift();
   }
   damage(power, shock = true) {
-    this.addScratch(power);
+    this.addScratch(power); this.fitDirty = true;
     const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale; if (amt <= 0 || !this.hitL) return 0;
     if (shock && power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
@@ -542,12 +553,13 @@ export class Car {
   get health() { const D = this.dmg, P = this.parts; return Math.max(.05, 1 - (D.front + D.rear + D.left + D.right) / 4 * .55 - P.engine * .2 - P.gearbox * .1 - (P.wheels[0] + P.wheels[1] + P.wheels[2] + P.wheels[3]) / 4 * .25); }
   get stranded() { return this.fuelK > 0 && this.fuel <= 0 && this.speed < 1; }   // only an empty tank strands a car now
   repair() {
-    this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.mud = 0; this.scr = []; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { o.visible = true; }); this.dress(this.look); for (const l of this.lamps) l.ok = true; this.setLights(this.lightsOn);
+    this.fitDirty = true; this.bT = 0; this.eT = .25; this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dirt = 0; this.mud = 0; this.scr = []; this.parts = { engine: 0, gearbox: 0, wheels: [0, 0, 0, 0] }; this.gone = [false, false, false, false]; for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { o.visible = true; }); this.dress(this.look); for (const l of this.lamps) l.ok = true; this.setLights(this.lightsOn);
     for (const mesh of this.bodyMeshes) { mesh.geometry.attributes.position.array.set(mesh.userData.orig); mesh.geometry.attributes.position.needsUpdate = true; mesh.geometry.computeVertexNormals(); }
   }
 
   // ---- visuals: ride height from the track, body roll, wheel spin + steer
   render(dt, track, al = 1) {
+    this.m.disc.emissiveIntensity = Math.pow(this.bT || 0, 1.4) * 2.6; if (this.fitDirty) { this.fitDirty = false; this.fitLamps(); }      // hot brake discs glow orange
     if (this.tex) for (const k in this.tex) { const U = this.tex[k].userData.rc; U.uDirt.value = this.dirt; U.uMud.value = this.mud; for (let q = 0; q < 6; q++) { const s = this.scr[q]; U.uScr.value[q].set(s ? s.x : 0, s ? s.y : 0, s ? s.z : 0, s ? s.r : 0); } }
     const X = this.rx = this.px + (this.x - this.px) * al, Z = this.rz = this.pz + (this.z - this.pz) * al, TH = this.pth + wrap(this.th - this.pth) * al;
     { const VL = TUNE.visualLead, sp = Math.hypot(this.vx, this.vz), want = clamp(this.steer * VL.steer + this.r * VL.yaw, -VL.max, VL.max) * Math.min(1, sp / VL.fullSpeed) * (this.vf > 1 && !(this.touchT > 0) ? 1 : 0); this.touchT = Math.max(0, (this.touchT || 0) - dt); this.lead += (want - this.lead) * Math.min(1, dt * VL.rate); }
@@ -594,6 +606,7 @@ export class Car {
         this.lastSk[i - 2] = [l, r];
       } else this.lastSk[i - 2] = null;
     }
+    if (this.eT > .72 && n > 0 && Math.random() < .55) { const q = this.eT - .7, ex = this.x + Math.sin(this.th) * this.zf * .72, ez = this.z + Math.cos(this.th) * this.zf * .72, gy = track.height(this.x, this.z) + .85; fx.smoke.emit(ex + (Math.random() - .5) * .6, gy, ez + (Math.random() - .5) * .6, this.vx * .3 + (Math.random() - .5) * .8, 1.6 + Math.random() * 1.4, this.vz * .3 + (Math.random() - .5) * .8, .8 + Math.random() * .7, .35 + q * .4, 1.2, .93, .95, .98, .3 + q * .3, -.6); }      // steam from an overheating engine
     if (this.scrapeT > 0) { this.scrapeT -= dt; if (sp > 3 && n > 0) { const nn = this.hitN || [0, 0], tx = -nn[1], tz = nn[0], along = Math.sign(this.vx * tx + this.vz * tz) || 1, gy = track.height(this.x, this.z);
         for (let k = 0; k < n * 2; k++) { const s = (3 + Math.random() * 8) * along; fx.glow.emit(this.x + (Math.random() - .5), gy + .35 + Math.random() * .3, this.z + (Math.random() - .5), tx * s + this.vx * .35, .4 + Math.random() * 3.5, tz * s + this.vz * .35, .25 + Math.random() * .35, .12, 0, 1, .7, .26, 1, 15); }
         if (Math.random() < .6) fx.glow.emit(this.x - this.vx * .08, gy + .04, this.z - this.vz * .08, 0, 0, 0, 1.4 + Math.random(), .1, 0, 1, .42, .1, .8, 0); } }
@@ -726,21 +739,24 @@ export function aiDrive(car, track, ai, cars, dt) {
     const dir = Math.sign(kk(s)); let e = s; q = 0; while (q++ < 70 && Math.abs(kk(e + 1)) > T0 * .7 && Math.sign(kk(e + 1)) === dir) e++;
     return { s, e, dir, len: e - s + 1, inside: from >= s && from <= e };
   };
-  const RL = track.rl || (track.rl = buildRaceLine(track, ai.max)), rix = (car.idx + look + 7) % n; let cd = 0;      // cd: which way the corner ahead turns (the inside car owns the apex)
+  const RL = track.rl || (track.rl = buildRaceLine(track, ai.max)), rix = (car.idx + look + 7) % n; let cd = 0;
+  if (ai.init === undefined) { const q0 = p[car.idx % n]; ai.off = (car.x - q0.x) * q0.tz - (car.z - q0.z) * q0.tx; ai.init = 1; }      // start from where the car actually is on the grid, so there is no sudden swerve onto the line      // cd: which way the corner ahead turns (the inside car owns the apex)
   { const k1 = RL.k[(car.idx + look + 3) % n], k2 = RL.k[(car.idx + look + 12) % n], kc = Math.abs(k1) > Math.abs(k2) ? k1 : k2; if (Math.abs(kc) > .004) cd = Math.sign(kc); }
   let want = RL.o[rix] + ai.lane * clamp(1 - (ai.rt ?? 99) / 12, 0, 1) * .8 + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
-  const rs = clamp(1 - (ai.rt ?? 99) / 15, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
+  const rs = clamp(1 - (ai.rt ?? 99) / 22, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
   let v0cap = 1e9, brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
     if (o === car || o.out) continue;
     { const tau = .5, rx = (o.x + o.vx * tau) - (car.x + car.vx * tau), rz = (o.z + o.vz * tau) - (car.z + car.vz * tau), f2 = rx * sn0 + rz * cs0, l2 = rx * cs0 - rz * sn0;      // where we will be relative to each other in half a second
       if (Math.abs(f2) < 5.6 && Math.abs(l2) < 2.8 && !(o.held && o.speed < 1)) { if (f2 > -1.5) { brakeFor = Math.max(brakeFor, .7); want += (l2 > 0 ? -1 : 1) * 1.8; } else want += (l2 > 0 ? -1 : 1) * 1.4; } }      // a predicted overlap: lift if it is level or ahead, move away if it is behind
+    { const qf = (o.x - car.x) * sn0 + (o.z - car.z) * cs0, ql = (o.x - car.x) * cs0 - (o.z - car.z) * sn0;      // a slow or spun car ahead in my lane: slow down early and pass it wide, like a driver who has seen the incident
+      if (qf > 2 && qf < 55 && Math.abs(ql) < 3.2 && o.speed < car.speed * .5 && car.speed > 8) { brakeFor = Math.max(brakeFor, clamp((car.speed - o.speed) / (qf + 2) * .7, 0, 1)); want += (ql > 0 ? -1 : 1) * 2.4; } }
     const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0, pk = o.isPlayer ? 2 : 1.3;      // everyone gets a wide berth, the player widest
     if (f < -3.5) { if (o.isPlayer) { if (f > -13 && Math.abs(l) < 3.2 && o.vx * sn0 + o.vz * cs0 > car.vf + 1.5) want += (l > 0 ? -1 : 1) * 2.4; continue; }       // a faster player behind: move over and let them through, never defend the line
       if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + 1 && Math.abs(setup) > .3) want += setup * 1.4 * ai.care; continue; }   // a faster car behind before a corner: cover the inside
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
-    if (f > 0 && f < 34 && Math.abs(l) < 2.7 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 8 * rs, -3) * .8);      // keep a gap: never faster than closes the distance gently
+    if (f > 0 && f < 34 && Math.abs(l) < 2.7 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 14 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6);      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
     else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
@@ -750,7 +766,7 @@ export function aiDrive(car, track, ai, cars, dt) {
     }
   }
   if (ai.merge > 0) { ai.merge -= dt; v0cap = Math.min(v0cap, 30); }      // just out of the pit lane: slow, and drift onto the line instead of cutting across
-  ai.off += (clamp(want, -ai.max, ai.max) - ai.off) * Math.min(1, dt * (ai.merge > 0 ? .75 : 2.7));
+  { const kk = Math.min(1, dt * (ai.merge > 0 ? .75 : 2.7)), dOff = (clamp(want, -ai.max, ai.max) - ai.off) * kk, lim = (ai.merge > 0 ? 1.3 : (ai.rt ?? 99) < 10 ? .9 + (ai.rt ?? 0) * .25 : 99) * dt; ai.off += clamp(dOff, -lim, lim); }      // the first ten seconds: the line is joined gradually
   const tx = tgt.x + tgt.tz * ai.off, tz = tgt.z - tgt.tx * ai.off;
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
@@ -765,7 +781,7 @@ export function aiDrive(car, track, ai, cars, dt) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
-  if (car.grass > .4) v = Math.min(v, 16); v *= 1 - .07 * rs;
+  if (car.grass > .4) v = Math.min(v, 16); v *= 1 - .12 * rs;
   v = Math.min(v, vFollow, v0cap); if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
   const inp = ai.inp; inp.steer = clamp(ef * 2.4, -1, 1);
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;

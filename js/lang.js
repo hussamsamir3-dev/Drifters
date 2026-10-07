@@ -63,6 +63,7 @@ export const AR = {
   'Red line': 'خط أحمر',
   'Yellow line': 'خط أصفر',
   'Blood': 'الدم',
+  'Race engineer voice': 'صوت مهندس السباق',
   'Go': 'انطلق', 'Final lap': 'اللفة الأخيرة', 'Wrong way': 'اتجاه خاطئ', 'Repaired': 'تم الإصلاح', 'Combo lost': 'ضاعت السلسلة',
   'Lights out. Clean first corner.': 'انطفأت الأضواء. خُذ المنعطف الأول بهدوء.', 'Last lap. Everything you have.': 'اللفة الأخيرة. أعطِ كل ما عندك.',
   'Tyres are nearly gone. Box at the blue pit.': 'الإطارات انتهت تقريباً. ادخل الصيانة.', 'Fuel is low. Box this lap or you will not make it.': 'الوقود قليل. ادخل الصيانة هذه اللفة.',

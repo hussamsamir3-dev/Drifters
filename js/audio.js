@@ -89,6 +89,13 @@ export class GameAudio {
     clearInterval(this.fade); this.fade = setInterval(() => { const tgt = on && this.on ? this.mvol : 0, d = tgt - el.volume; if (Math.abs(d) < .05) { el.volume = tgt; clearInterval(this.fade); if (!tgt) el.pause(); } else el.volume = Math.max(0, Math.min(1, el.volume + Math.sign(d) * .04)); }, 60);
   }
   setCar(spec) { this.spec = spec; }
+  ui(kind) {      // soft, warm interface sounds: sine and triangle tones with slow attacks through a gentle low-pass, quiet by design
+    if (!this.ctx || this.state !== 'ready' || this.ctx.state !== 'running') return; const c = this.ctx, t = c.currentTime, now = performance.now(); if (now - (this._uiT || 0) < (kind === 'hover' ? 70 : 30)) return; this._uiT = now;
+    const S = { hover: [[880, 0, .05, .014]], click: [[392, 0, .11, .05], [587, .015, .09, .025]], tab: [[523, 0, .12, .04], [659, .05, .14, .03]], confirm: [[523, 0, .16, .05], [659, .08, .16, .045], [784, .16, .3, .04]], back: [[494, 0, .13, .04], [370, .07, .18, .035]] }[kind] || [[440, 0, .1, .03]];
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.connect(this.sfx || this.master);
+    for (const [f, d, len, vol] of S) { const o = c.createOscillator(), g = c.createGain(); o.type = kind === 'hover' ? 'sine' : 'triangle'; o.frequency.setValueAtTime(f, t + d); o.frequency.exponentialRampToValueAtTime(f * (kind === 'back' ? .92 : 1.03), t + d + len);
+      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(vol, t + d + .012); g.gain.exponentialRampToValueAtTime(.0008, t + d + len); o.connect(g); g.connect(lp); o.start(t + d); o.stop(t + d + len + .02); }
+  }
   snd(name) { const set = ENGINE_SETS[name]; return set && set.loops.every(l => this.buf[l.file]) ? name : '01_Turbo_Inline4'; }      // an engine whose files did not load falls back to the basic four-cylinder loop, so the car is never silent
   zone(w, kind) { if (!this.bigG) return; const t = this.ctx.currentTime; this.bigG.gain.setTargetAtTime(w * (kind === 'bridge' ? .9 : .42), t, .25); this.bigLP.frequency.setTargetAtTime(kind === 'bridge' ? 2300 : 4200, t, .3); }
 

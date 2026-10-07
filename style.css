@@ -491,3 +491,32 @@ body.editTouch #hud{display:block !important;pointer-events:none;background:line
 body.editTouch #hud>*:not(#touch):not(#pauseBtn){display:none !important}
 body.editTouch #touch{display:block !important;pointer-events:auto}
 body.editTouch #touch .t,body.editTouch #pauseBtn{outline:2px dashed rgba(255,194,26,.9);outline-offset:3px;cursor:grab;pointer-events:auto;opacity:1 !important}
+
+/* lap pace bars: this lap against the one before */
+#paceBars{margin-top:6px;display:grid;gap:3px;padding:6px 8px;border-radius:10px;background:rgba(14,15,18,.55)}
+#paceBars .pb{display:grid;grid-template-columns:26px 1fr 46px;gap:6px;align-items:center;font-size:11px;font-weight:700}
+#paceBars .bar{height:7px;border-radius:4px;background:rgba(255,255,255,.08);position:relative;overflow:hidden}
+#paceBars .bar i{position:absolute;top:0;bottom:0;border-radius:4px}
+#paceBars .bar i.g{left:50%;background:linear-gradient(90deg,#1fa84f,#4cff8a);box-shadow:0 0 8px rgba(76,255,138,.6)}
+#paceBars .bar i.r{right:50%;background:linear-gradient(270deg,#b3212b,#ff5963);box-shadow:0 0 8px rgba(255,89,99,.6)}
+#paceBars .bar i{max-width:50%}
+#paceBars b{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ================= premium interface layer: one consistent button system, glass surfaces, soft motion ================= */
+:root{--acc:#ffc21a;--acc2:#ff8a1a;--red:#e3262e;--glass:linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.025));--edge:rgba(255,255,255,.14)}
+button,.tile,.chip{font-family:inherit;letter-spacing:.02em;transition:transform .16s cubic-bezier(.2,.8,.2,1),box-shadow .2s,background .2s,border-color .2s,color .2s}
+.tile,.seg button,.chip,.paints button{background:var(--glass);border:1px solid var(--edge);backdrop-filter:blur(10px) saturate(1.2);-webkit-backdrop-filter:blur(10px) saturate(1.2);border-radius:12px;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 6px 18px rgba(0,0,0,.28)}
+.tile:hover,.seg button:hover,.chip:hover{transform:translateY(-2px);border-color:rgba(255,194,26,.55);box-shadow:0 1px 0 rgba(255,255,255,.14) inset,0 10px 26px rgba(0,0,0,.4),0 0 0 1px rgba(255,194,26,.22)}
+.tile:active,.seg button:active,.chip:active,button:active{transform:translateY(0) scale(.97)}
+.tile.on,.seg button.on{background:linear-gradient(180deg,#fff,#e9e9ee);color:#14151a;border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.6),0 8px 24px rgba(255,194,26,.25)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:12px}
+#startBtn,.primary{background:linear-gradient(180deg,#f2343c,#b81a22) !important;border:1px solid rgba(255,255,255,.35) !important;border-radius:14px !important;box-shadow:0 10px 30px rgba(227,38,46,.45),0 1px 0 rgba(255,255,255,.35) inset !important;position:relative;overflow:hidden;text-transform:uppercase;letter-spacing:.14em}
+#startBtn::after,.primary::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);animation:shimmer 3.4s ease-in-out infinite}
+@keyframes shimmer{0%,60%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+[data-tab]{position:relative;transition:color .2s,text-shadow .2s}
+[data-tab]::after{content:"";position:absolute;left:12%;right:12%;bottom:-4px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--acc),transparent);transform:scaleX(0);transition:transform .25s}
+[data-tab]:hover::after,[data-tab].on::after{transform:scaleX(1)}
+[data-tab]:hover{text-shadow:0 0 14px rgba(255,194,26,.5)}
+h3{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--acc);opacity:.95}
+.card{background:var(--glass);border:1px solid var(--edge);border-radius:16px;backdrop-filter:blur(12px);box-shadow:0 12px 32px rgba(0,0,0,.35)}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:8px}::-webkit-scrollbar-thumb:hover{background:rgba(255,194,26,.5)}
