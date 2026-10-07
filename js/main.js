@@ -64,8 +64,15 @@ function setGfx(g) {
   if (g === 'high' && !post) { try { post = new Post(renderer, scene, camera); } catch (e) { console.warn(e); gfx = 'medium'; } }
   resize();
 }
+const perf = { avg: .016, lvl: 0, cool: 6 };
+function perfGuard(dt) {      // if frames stay slow, the quality steps down by itself, so a weak phone is never driven into a freeze or a crash
+  if (dt > .3 || document.hidden) return; perf.avg += (dt - perf.avg) * .05; perf.cool -= dt; if (perf.cool > 0 || perf.avg < .052) return; perf.cool = 4; perf.lvl++;
+  if (perf.lvl === 1) { pixelRatio = Math.min(pixelRatio, 1); resize(); toast('Performance mode: lower resolution'); }
+  else if (perf.lvl === 2) { if (gfx === 'high') gfx = 'medium'; toast('Performance mode: effects reduced'); }
+  else if (perf.lvl === 3) { pixelRatio = Math.min(pixelRatio, .75); resize(); sun.castShadow = false; toast('Performance mode: shadows off'); }
+}
 let frameN = 0;
-function draw(dt) { frameN++; if (gfx !== 'high') { renderer.shadowMap.autoUpdate = false; if (frameN & 1) renderer.shadowMap.needsUpdate = true; } else renderer.shadowMap.autoUpdate = true;   // Medium refreshes shadows every other frame
+function draw(dt) { perfGuard(dt); frameN++; if (gfx !== 'high') { renderer.shadowMap.autoUpdate = false; if (frameN & 1) renderer.shadowMap.needsUpdate = true; } else renderer.shadowMap.autoUpdate = true;   // Medium refreshes shadows every other frame
   updateMotes(dt); if (gfx === 'high' && post) post.render(dt); else renderer.render(scene, camera); }
 addEventListener('resize', resize); setGfx(gfx);
 
@@ -450,7 +457,7 @@ function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyre
   const F = feelState; F.t -= dt; const sh = me.shiftEvt > 0; if (sh && !F.sh) rumble(10, .4, .1); F.sh = sh ? 1 : 0; if (F.t > 0 || me.speed < 6) return;
   if (me.wsurf.includes(1) && me.speed > 8) { rumble(16, .25, .6); F.t = .11; } else if (me.locked || me.lockF) { rumble(14, .5, .3); F.t = .09; } else if (me.grass > .5) { rumble(14, .2, .7); F.t = .08; }
   else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; } }
-const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .45, medium: 1, high: 1.8 })[save.dmg || 'medium']; };
+const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .3, medium: .7, high: 1.4 })[save.dmg || 'medium']; };
 function impact(car, power, wall) {
   if (R && car === R.player && power > 5 && R.eng && R.t - (R.eng.last.dmg ?? -999) > 12) { R.eng.last.dmg = R.t; engineer(ENG.damage(), true); }
   { const ai0 = R && R.ais && R.ais.get(car); if (ai0 && power > 1.2) ai0.contactT = 1.2 + Math.min(1.2, power * .05); }      // a driver who has touched something yields
@@ -730,6 +737,8 @@ function setupExtras() {
   R.crews = [];
   if (tr.pitBoxes) { const pal = [0xe3262e, 0x19a7ce, 0xffc21a, 0x2fb457, 0xff7ab0, 0xf3f4f6];
     tr.pitBoxes.forEach((b, j) => { const owner = j === R.myBox ? me : j === R.rivBox && R.remote ? R.remote : R.cars[j]; R.crews[j] = buildCrew(tr.group, b, owner ? (owner.color ?? pal[j % 6]) : pal[j % 6], owner ? owner.name : '', { mine: j === R.myBox }); });
+    for (const cr of R.crews) if (cr) cr.group.traverse(o => { if (o.isMesh) o.castShadow = false; });
+    { const saved = []; for (const cr of R.crews) if (cr) { cr.group.traverse(o => { saved.push([o, o.visible]); o.visible = true; }); } try { renderer.compile(scene, camera); } catch (e) {} for (const [o, v] of saved) o.visible = v; for (const cr of R.crews) if (cr) cr.group.visible = false; }      // everything in the crews (jacks, guns, held wheels, hidden until the stop) is revealed for one compile      // the crews' shaders are compiled behind the loading screen, not the first time you drive past
     R.pit.pad = R.crews[R.myBox].pad; R.pit.th = tr.pitBoxes[R.myBox].th; if (R.remote) { const b2 = tr.pitBoxes[R.rivBox]; R.pit2 = { x: b2.x, z: b2.z, th: b2.th }; } }
   const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 4, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x19a7ce).multiplyScalar(2.2) })); beacon.position.set(R.pit.x, tr.height(R.pit.x, R.pit.z) + 5, R.pit.z); G.add(beacon);
   // marker above the player's car
@@ -783,7 +792,7 @@ function raceExtras(dt) {
       if (!pit.busy) { pit.busy = true; pit.t = 0; pit.jobs = jobs; pit.total = est; }
       pit.t += dt; pit.tick -= dt; if (pit.tick <= 0) { pit.tick = .55; audio.wrench(); }
       let acc2 = 0, cur = pit.jobs[0][0]; for (const j of pit.jobs) { if (pit.t >= acc2) cur = j[0]; acc2 += j[1]; }
-      flash(cur + '  ' + Math.max(0, pit.total - pit.t).toFixed(1) + 's', false, 250);
+      pit.fl = (pit.fl || 0) - dt; if (pit.fl <= 0) { pit.fl = .2; flash(cur + '  ' + Math.max(0, pit.total - pit.t).toFixed(1) + 's', false, 320); }
       if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); radio((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
     }
   }
@@ -792,7 +801,7 @@ function raceExtras(dt) {
   // --- pit crews: yours, and in an online duel your rival's, working at their own box on both screens
   me.pitBusy = !!pit.busy;
   { const busy = pit.busy, T = performance.now() / 1000;
-    for (let j = 0; j < (R.crews || []).length; j++) { const cr = R.crews[j]; if (!cr) continue; const b = cr.box, near = Math.hypot(me.x - b.x, me.z - b.z) < 150 || R.cars.some(c => !c.isRemote && Math.hypot(c.x - b.x, c.z - b.z) < 70); cr.group.visible = near; if (!near) continue;
+    for (let j = 0; j < (R.crews || []).length; j++) { const cr = R.crews[j]; if (!cr) continue; const b = cr.box, dme = Math.hypot(me.x - b.x, me.z - b.z), near = j === R.myBox ? dme < 110 : dme < 75 && (!!b.svc || R.cars.some(c => !c.isRemote && Math.hypot(c.x - b.x, c.z - b.z) < 28));      // only the crews that are in use are drawn: a dozen idle crews cost thousands of draw calls cr.group.visible = near; if (!near) continue;
       let svc = null;
       if (j === R.myBox) { if (busy) svc = { t: pit.t, jobs: pit.jobs, car: me }; }
       else if (R.remote && j === R.rivBox) { const rb = !!R.remote.pitBusy; R.p2t = rb ? (R.p2t || 0) + dt : 0; if (rb) svc = { t: R.p2t % 9, jobs: [['Tyres', 3], ['Fuel', 3], ['Bodywork', 3]], car: R.remote }; }
@@ -1181,7 +1190,8 @@ function arenaDirector(dt, T) {
   const A = arena, cars = A.cars, nar = innerWidth < 820, ease = x => x * x * (3 - 2 * x), lerp = (a, b, t) => a + (b - a) * t;
   const D = A.dir || (A.dir = { n: -1, t0: -99, dur: 0, seq: 0, car: cars[0], from: null, blend: 1, look: new THREE.Vector3(), fov: 34 });
   if (T - D.t0 > D.dur) { D.from = { pos: camera.position.clone(), look: D.look.clone(), fov: camera.fov }; D.blend = D.n < 0 ? 1 : 0; D.seq++; D.n = (D.n + 1) % 7; D.t0 = T; D.dur = [8.5, 7.5, 8.5, 9, 8.5, 7.5, 8][D.n]; D.car = cars[[0, 0, 1, 0, 2, 0, 1][D.seq % 7] % cars.length]; D.side = D.seq % 2 ? 1 : -1; D.a0 = Math.atan2(D.car.x, D.car.z); }
-  const c = D.car, u = Math.min(1, (T - D.t0) / D.dur), e = ease(u), X = c.x, Z = c.z, ang = Math.atan2(X, Z);
+  { const c0 = D.car; if (D.lx !== undefined && Math.hypot(c0.x - D.lx, c0.z - D.lz) > 12 && D.n >= 0) D.t0 = T - D.dur - 1; D.lx = c0.x; D.lz = c0.z; }      // the car being filmed was reset across the arena: cut to the next shot instead of whipping the camera over
+  const c = D.car, u = Math.min(1, (T - D.t0) / D.dur), e = ease(u), X = Number.isFinite(c.x) ? clamp(c.x, -70, 70) : 0, Z = Number.isFinite(c.z) ? clamp(c.z, -70, 70) : 0, ang = Math.atan2(X, Z);
   let px = 0, py = 20, pz = 50, tx = 0, ty = 0, tz = 0, fov = 34;
   const mix = k => { tx = lerp(0, X, k); tz = lerp(0, Z, k); };         // aim: 0 = the middle of the arena, 1 = the car
   switch (D.n) {
@@ -1197,6 +1207,8 @@ function arenaDirector(dt, T) {
   const want = new THREE.Vector3(px, Math.max(py, 9), pz), look = new THREE.Vector3(tx, ty, tz);
   for (const q of cars) { const ddx = want.x - q.x, ddz = want.z - q.z, dd = Math.hypot(ddx, ddz); if (dd < 24 && dd > .01) { want.x = q.x + ddx / dd * 24; want.z = q.z + ddz / dd * 24; } }      // never close to a car
   if (D.blend < 1) { D.blend = Math.min(1, D.blend + dt / 1.5); const b = ease(D.blend); want.lerpVectors(D.from.pos, want, b); look.lerpVectors(D.from.look, look, b); fov = D.from.fov + (fov - D.from.fov) * b; }
+  if (![want.x, want.y, want.z, look.x, look.y, look.z].every(Number.isFinite)) { want.set(0, 20, 50); look.set(0, 0, 0); D.sl = D.sp = null; D.from = null; D.blend = 1; }      // never aim the camera at garbage
+  { const kL = 1 - Math.exp(-Math.min(dt, .1) * 4.5), kP = 1 - Math.exp(-Math.min(dt, .1) * 3); D.sl = D.sl ? D.sl.lerp(look, kL) : look.clone(); D.sp = D.sp ? D.sp.lerp(want, kP) : want.clone(); look.copy(D.sl); want.copy(D.sp); }      // the aim and the position glide, so the camera never snaps
   D.look.copy(look); D.fov = fov;
   camera.position.copy(want); camera.lookAt(look);
   if (Math.abs(camera.fov - fov) > .02) { camera.fov = fov; camera.updateProjectionMatrix(); }
@@ -1209,7 +1221,7 @@ function arenaTick(dt) {
     for (const c of A.cars) {          // a simple driver: aim along the circle, turn in if running wide, keep the power on so the tail hangs out
       const dist = Math.hypot(c.x, c.z), ang = Math.atan2(c.x, c.z), err = wrap(ang + c.dir * (Math.PI / 2 + clamp((dist - c.R0) * .3, -1.2, 1.2)) - c.th);
       c.inp.steer = clamp(err * 1.7, -1, 1); { const vT = c.R0 > 20 ? 14 : c.R0 > 12 ? 11.6 : 8.4; c.inp.throttle = c.speed < vT ? 1 : c.speed < vT + 1.2 ? .45 : 0; c.inp.brake = c.speed > vT + 3 ? .5 : 0; } c.step(H, c.inp, tr, true);
-      if (dist > c.R0 + 16 || (c.speed < 1 && A.t > 3)) { const a = Math.random() * 6.28; c.reset(Math.sin(a) * c.R0, Math.cos(a) * c.R0, a + c.dir * Math.PI / 2); c.vx = Math.sin(c.th) * 9; c.vz = Math.cos(c.th) * 9; c.ruts = [null, null]; } }
+      if (!(dist <= c.R0 + 16) || !Number.isFinite(c.vx + c.vz + c.r + c.th + c.x + c.z) || (c.speed < 1 && A.t > 3)) { const a = Math.random() * 6.28; c.reset(Math.sin(a) * c.R0, Math.cos(a) * c.R0, a + c.dir * Math.PI / 2); c.vx = Math.sin(c.th) * 9; c.vz = Math.cos(c.th) * 9; c.ruts = [null, null]; } }
     for (let i = 0; i < A.cars.length; i++) for (let j = i + 1; j < A.cars.length; j++) A.cars[i].bump(A.cars[j], false); }
   A.cars.forEach((c, i) => { c.render(dt, tr, clamp(A.acc / H, 0, 1)); c.effects(dt, A.fx, tr, A.donut ? .38 : .8);
     const sn = Math.sin(c.th), cs = Math.cos(c.th);

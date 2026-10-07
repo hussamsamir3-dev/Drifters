@@ -221,6 +221,7 @@ export class Car {
     const ab = Math.abs(beta);
     this.shock = Math.max(0, this.shock - dt); const K = this.shock > 0 ? 0 : this.assistK;   // a big hit knocks the aids out for a moment
     if (K > 0 && vf > 5) { target = target * (1 - K * clamp((ab - .3) * 1.6, 0, .8)) + K * clamp(beta * .75, -.5, .5); }
+    if (this.driftMode && vf > 4) { const cb = clamp((ab - .5) / .5, 0, 1) * .92; target = target * (1 - cb) + clamp(beta * 1.15, -.6, .6) * cb; }      // drift control: past about 22 deg of slide the steering blends towards counter-steer (fully by about 50 deg), so the angle is held, not wound up into a spin
     if (speed > 3) target += (D.left - D.right) * .05 + (P.wheels[0] - P.wheels[1]) * PT.wheelPull + D.front * .02 * Math.sin(this.x * .7 + this.z * .9);   // bent suspension pulls and shimmies
     target = clamp(target, -.62, .62);
     const sr = (inp.steer === 0 ? TUNE.steer.returnRate : TUNE.steer.rate * this.steerK / (1 + speed * TUNE.steer.rateSpeedK)) * dt;
@@ -242,7 +243,8 @@ export class Car {
     const nit = this.nitroOn = !!(inp.nitro && !this.noNitro && this.nitro > 0 && thr > 0 && live && vf > 3);
     if (nit) this.nitro = Math.max(0, this.nitro - dt / (3.2 * (1 + .25 * U.nitro)));
     const vmax = s.top * TN.top * (1 + .04 * U.eng) * (nit ? 1.16 : 1) * (gr > .5 ? .55 : 1) * (1 - .1 * (D.front + D.rear)) * (1 - PT.gearboxTop * P.gearbox);
-    if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));     // drift-angle hold: ease the power before a slide becomes a spin
+    if (K > 0 && ab > .42) thr *= 1 - K * (1 - clamp(1 - (ab - .42) / .3, .2, 1));
+    if (this.driftMode && ab > .85) thr *= 1 - clamp((ab - .85) / .35, 0, .8);      // and the power eases off beyond about 40 deg     // drift-angle hold: ease the power before a slide becomes a spin
     const dm0 = this.driftMode ? 1 : 0, hotK = (this.eT > 1 ? Math.max(.35, 1 - (this.eT - 1) * 1.4) : 1) * (1 + .35 * dm0);      // overheating cuts power; drift mode adds torque
     let Fdrive = rev ? -brk * s.acc * m * .5 * clamp(1 + vf / 12, 0, 1) : thr * s.acc * TN.acc * hotK * (1 + .06 * U.eng) * (1 + .12 * this.draft) * m * boost * Math.max(PT.limp, 1 - PT.enginePower * P.engine) * (1 - .2 * P.gearbox) * (nit ? 1.5 : 1) * Math.min(1, s.pw / (s.acc * m) / Math.max(vf, 1)) * clamp(1 - (vf / vmax) ** 8, 0, 1);   // traction-limited low down, power-limited above ~58 km/h
     Fdrive *= TUNE.enginePower * this.bopP * PC.pow * (this.shiftT > 0 ? .2 : 1); if (burn) Fdrive *= .3;
@@ -284,7 +286,7 @@ export class Car {
     const ay = FyB / m;
     this.vx += (ax * sn + ay * cs) * dt; this.vz += (ax * cs - ay * sn) * dt;
     if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt) * (1 - this.di); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
-    this.r += Mz / this.I * dt; this.r -= this.r * (TUNE.yawDamp + speed * TUNE.yawDampSpeed + K * TUNE.assistYawDamp) * dt;
+    this.r += Mz / this.I * dt; this.r -= this.r * (TUNE.yawDamp + speed * TUNE.yawDampSpeed + K * TUNE.assistYawDamp) * dt; if (this.driftMode) this.r -= this.r * 2.8 * clamp((ab - .62) / .5, 0, 1) * dt;      // yaw damping resists the car winding up past the drift angle
     if (thr === 0 && (brk === 0 || !live) && speed < .5) { this.vx *= .9; this.vz *= .9; this.r *= .85; }
     if (!live) { this.vx = this.vz = this.r = 0; }
     this.th += this.r * dt; this.x += this.vx * dt; this.z += this.vz * dt;
@@ -577,7 +579,7 @@ export class Car {
   damage(power, shock = true) {
     if ((TUNE.dmgK ?? 1) <= 0) return 0;      // damage switched off in the menu
     this.addScratch(power); this.fitDirty = true;
-    const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale * (TUNE.dmgK ?? 1); if (amt <= 0 || !this.hitL) return 0;
+    const amt = Math.max(0, power - 5.5) / 40 * this.dmgScale * (TUNE.dmgK ?? 1);      // less sensitive: a knock under about 20 km/h does nothing, and the rest is scaled down if (amt <= 0 || !this.hitL) return 0;
     if (shock && power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
     D[zone] = Math.min(1, D[zone] + amt); this.crackU.value.set(D.front, D.rear, D.left, D.right);

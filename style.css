@@ -505,7 +505,7 @@ body.editTouch #touch .t,body.editTouch #pauseBtn{outline:2px dashed rgba(255,19
 /* ================= premium interface layer: one consistent button system, glass surfaces, soft motion ================= */
 :root{--acc:#ffc21a;--acc2:#ff8a1a;--red:#e3262e;--glass:linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.025));--edge:rgba(255,255,255,.14)}
 button,.tile,.chip{font-family:inherit;letter-spacing:.02em;transition:transform .16s cubic-bezier(.2,.8,.2,1),box-shadow .2s,background .2s,border-color .2s,color .2s}
-.tile,.seg button,.chip,.paints button{background:var(--glass);border:1px solid var(--edge);backdrop-filter:blur(10px) saturate(1.2);-webkit-backdrop-filter:blur(10px) saturate(1.2);border-radius:12px;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 6px 18px rgba(0,0,0,.28)}
+.tile,.seg button,.chip{background:var(--glass);border:1px solid var(--edge);backdrop-filter:blur(10px) saturate(1.2);-webkit-backdrop-filter:blur(10px) saturate(1.2);border-radius:12px;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 6px 18px rgba(0,0,0,.28)}
 .tile:hover,.seg button:hover,.chip:hover{transform:translateY(-2px);border-color:rgba(255,194,26,.55);box-shadow:0 1px 0 rgba(255,255,255,.14) inset,0 10px 26px rgba(0,0,0,.4),0 0 0 1px rgba(255,194,26,.22)}
 .tile:active,.seg button:active,.chip:active,button:active{transform:translateY(0) scale(.97)}
 .tile.on,.seg button.on{background:linear-gradient(180deg,#fff,#e9e9ee);color:#14151a;border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.6),0 8px 24px rgba(255,194,26,.25)}
@@ -563,9 +563,9 @@ h3{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--acc)
 .seg{display:grid !important;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;border:0 !important;background:none !important;padding:0 !important;box-shadow:none !important}
 .seg.wide{grid-auto-flow:row;grid-template-columns:repeat(3,1fr)}
 .seg.wide.two{grid-template-columns:repeat(2,1fr)}
-.seg button,.tile,.paints button,.chip{position:relative;padding:11px 10px;border-radius:12px !important;border:1px solid rgba(255,255,255,.15) !important;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.03)) !important;color:#dfe3ea !important;font-weight:700;font-size:13px;letter-spacing:.03em;font-style:normal !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 3px 10px rgba(0,0,0,.35) !important;text-shadow:none !important;backdrop-filter:none !important;overflow:visible}
+.seg button,.tile,.chip{position:relative;padding:11px 10px;border-radius:12px !important;border:1px solid rgba(255,255,255,.15) !important;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.03)) !important;color:#dfe3ea !important;font-weight:700;font-size:13px;letter-spacing:.03em;font-style:normal !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 3px 10px rgba(0,0,0,.35) !important;text-shadow:none !important;backdrop-filter:none !important;overflow:visible}
 .seg button:hover,.tile:hover,.chip:hover{border-color:rgba(255,255,255,.38) !important;transform:translateY(-1px);filter:brightness(1.12)}
-.seg button.on,.tile.on,.paints button.on{background:linear-gradient(180deg,#ff555d 0%,#d71f29 55%,#a8131b 100%) !important;border-color:#ff9094 !important;color:#fff !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 6px 16px rgba(227,38,46,.42) !important;text-shadow:0 1px 2px rgba(0,0,0,.45) !important;transform:none}
+.seg button.on,.tile.on{background:linear-gradient(180deg,#ff555d 0%,#d71f29 55%,#a8131b 100%) !important;border-color:#ff9094 !important;color:#fff !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 6px 16px rgba(227,38,46,.42) !important;text-shadow:0 1px 2px rgba(0,0,0,.45) !important;transform:none}
 .seg button.on::before,.seg button.on::after,.tile.on::before{display:none !important}
 .stepper{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.12)}
 .stepper span{flex:1;color:#aeb4c0;font-size:13px;font-weight:700;letter-spacing:.04em}
@@ -584,3 +584,8 @@ h3{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--acc)
 @media (max-height:470px){.left{padding:8px 12px 14px;gap:8px}.lscroll{gap:10px}.seg button,.tile{padding:8px 6px;font-size:12px}#startBtn{padding:11px !important;font-size:15px}.stepper{padding:5px 8px}.stepper button{width:28px;height:28px}}
 
 .lscroll{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent)}
+
+/* paint, wheel, caliper, glass and underglow swatches show their own colour (the button system must not paint over them) */
+.paints button{width:28px;height:28px;padding:0 !important;border-radius:50% !important;border:2px solid rgba(255,255,255,.32) !important;box-shadow:0 2px 6px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.35) !important;transition:transform .15s,border-color .15s,box-shadow .15s}
+.paints button:hover{transform:scale(1.14);border-color:#fff !important}
+.paints button.on{border-color:#fff !important;box-shadow:0 0 0 3px rgba(227,38,46,.95),0 3px 10px rgba(0,0,0,.5) !important;transform:scale(1.06)}
