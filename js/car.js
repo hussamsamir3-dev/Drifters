@@ -110,6 +110,7 @@ function mats(color) {
 
 // Cracked glass: a procedural pattern (the edges of a Voronoi diagram, like crazed laminated glass) drawn into the window material. Each pane cracks with the damage on its own side of the
 // car (windscreen with the front, rear glass with the rear, side glass with that side): a few cracks at first, a shattered web with a dense star at the impact when it is badly hit.
+let CAR_ENV = null; export function setCarEnv(t) { CAR_ENV = t; }      // the environment map that the paint and glass reflect
 const CRACK_GLSL = `
   float ch(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   vec2 ch2(vec2 p){ return vec2(ch(p), ch(p + 19.19)); }
@@ -136,7 +137,7 @@ export class Car {
     this.dirt = 0; this.dirtShown = 0; this.mud = 0; this.mudShown = 0; this.bT = 0; this.eT = .25; this.driftMode = false; this.muW = [1, 1, 1, 1]; this.crackU = { value: new THREE.Vector4(0, 0, 0, 0) }; this.hk = null; this.sus = null; this.stW = null; this.landEvt = 0; this.sat = 0; this.scr = []; this.scrN = 0; this.tT = TUNE.tyreT.start; this.tmpK = 1; this.lz = 0; this.wetTyres = false; this.baseColor = new THREE.Color(color);
     const proto = protos[spec.model || spec.id], root = this.root = new THREE.Group(); root.rotation.order = 'YXZ';
     const chassis = this.chassis = new THREE.Group(); root.add(chassis);
-    this.m = mats(color); this.m.window = this.m.window.clone(); this.m.disc = this.m.disc.clone(); this.m.disc.emissive = new THREE.Color(1, .32, .04); this.m.disc.emissiveIntensity = 0; this.m.caliper = new THREE.MeshStandardMaterial({ color: CAL_COLS[0], roughness: .32, metalness: .35, side: THREE.DoubleSide }); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
+    this.m = mats(color); this.m.window = new THREE.MeshPhysicalMaterial({ color: 0x04060a, metalness: .55, roughness: .045, clearcoat: 1, clearcoatRoughness: .02, envMap: CAR_ENV, envMapIntensity: 1.7, side: THREE.DoubleSide }); this.m.paint.envMap = CAR_ENV; this.m.paint.envMapIntensity = 2.1; this.m.paint.roughness = .26; this.m.disc = this.m.disc.clone(); this.m.disc.emissive = new THREE.Color(1, .32, .04); this.m.disc.emissiveIntensity = 0; this.m.caliper = new THREE.MeshStandardMaterial({ color: CAL_COLS[0], roughness: .32, metalness: .35, side: THREE.DoubleSide }); this.wheels = {}; this.bodyMeshes = []; this.texCar = false;
     if (proto.userData.rim != null) { const rm = this.m.rim.clone(); rm.color.setHex(proto.userData.rim); this.m.rim = rm; }      // each car's own wheel colour
     this.dmg = { front: 0, rear: 0, left: 0, right: 0 }; this.tyre = 1; this.dmgScale = 1; this.wear = 1;
     for (const child of proto.children) {
@@ -512,7 +513,7 @@ export class Car {
     const rimM = L.rim ? new THREE.MeshPhysicalMaterial({ color: RIMS[L.rim], metalness: .85, roughness: .22, clearcoat: .7, clearcoatRoughness: .08 }) : null;
     const shaded = m => { const q = m.clone(); q.vertexColors = true; return q; }, rimS = rimM ? shaded(rimM) : null, rim0 = shaded(this.m.rim);
     for (const k in this.wheels) this.wheels[k].mesh.traverse(o => { if (o.isMesh && o.userData.kind && o.userData.kind.startsWith('rim')) o.material = o.geometry.attributes.color ? (rimS || rim0) : rimM || (o.userData.kind === 'rim6' ? this.m.rimDark : this.m.rim); });
-    const winM = L.tint ? new THREE.MeshBasicMaterial({ color: new THREE.Color(TINTS[L.tint]).multiplyScalar(.5), side: THREE.DoubleSide }) : this.m.window;      // unlit: every window triangle is identical under any light, so a pane can never shade in halves
+    const winM = L.tint ? new THREE.MeshPhysicalMaterial({ color: new THREE.Color(TINTS[L.tint]).multiplyScalar(.35), metalness: .55, roughness: .05, clearcoat: 1, clearcoatRoughness: .02, envMap: CAR_ENV, envMapIntensity: 2.4, side: THREE.DoubleSide }) : this.m.window;      // unlit: every window triangle is identical under any light, so a pane can never shade in halves
     const winS = shaded(winM); crackify(winM, this.crackU); crackify(winS, this.crackU); for (const m of this.bodyMeshes) if (m.userData.kind === 'window') m.material = m.geometry.attributes.color ? winS : winM;
   }
 
@@ -544,7 +545,6 @@ export class Car {
       g.add(fan, glare); g.visible = false; this.root.add(g); return { g, ok: true, sx: lx >= 0 ? 1 : -1 }; };
     this.lamps = lampSet.map(mk); this.lightsOn = false;
     if (!LAMP.lensBase) { LAMP.lensBase = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: .35, roughness: .12, emissive: 0xffefc8, emissiveIntensity: .04, envMapIntensity: .8 }); LAMP.lensG = new THREE.SphereGeometry(1, 18, 12); }
-    this.lensM = LAMP.lensBase.clone(); this.lamps.forEach((l, i) => { const [lx, ly, lz, lr] = lampSet[i], r = Math.max(.05, lr * T.w * .62), m = new THREE.Mesh(LAMP.lensG, this.lensM); m.scale.set(r, r, r * .3); m.position.set(lx * T.w, ly * T.h, lz * T.l + .012); m.rotation.y = l.g.rotation.y; this.root.add(m); l.lens = m; });      // a real chrome-and-glass lens in every headlight, where the model only had black paint
     if (!LAMP.glareR) { const g = document.createElement('canvas'); g.width = g.height = 64; const gk = g.getContext('2d'), gr = gk.createRadialGradient(32, 32, 1, 32, 32, 32); gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(.3, 'rgba(255,30,20,.6)'); gr.addColorStop(1, 'rgba(255,20,10,0)'); gk.fillStyle = gr; gk.fillRect(0, 0, 64, 64);
       LAMP.glareR = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(g), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }); }
     this.rlMat = LAMP.glareR.clone(); this.rlMat.opacity = 0;
@@ -575,8 +575,9 @@ export class Car {
     if (power < 2.5 || !this.hitL) return; const T = this.T, x = this.hitL[0] / T.w, z = this.hitL[1] / T.l; this.scr.push({ x, y: .45 + Math.random() * .3, z, r: Math.min(.95, .22 + power * .028) }); if (this.scr.length > 6) this.scr.shift();
   }
   damage(power, shock = true) {
+    if ((TUNE.dmgK ?? 1) <= 0) return 0;      // damage switched off in the menu
     this.addScratch(power); this.fitDirty = true;
-    const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale; if (amt <= 0 || !this.hitL) return 0;
+    const amt = Math.max(0, power - 3.5) / 34 * this.dmgScale * (TUNE.dmgK ?? 1); if (amt <= 0 || !this.hitL) return 0;
     if (shock && power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
     D[zone] = Math.min(1, D[zone] + amt); this.crackU.value.set(D.front, D.rear, D.left, D.right);
@@ -660,6 +661,8 @@ export class Car {
       } else this.lastSk[i - 2] = null;
     }
     if (this.eT > .72 && n > 0 && Math.random() < .55) { const q = this.eT - .7, ex = this.x + Math.sin(this.th) * this.zf * .72, ez = this.z + Math.cos(this.th) * this.zf * .72, gy = track.height(this.x, this.z) + .85; fx.smoke.emit(ex + (Math.random() - .5) * .6, gy, ez + (Math.random() - .5) * .6, this.vx * .3 + (Math.random() - .5) * .8, 1.6 + Math.random() * 1.4, this.vz * .3 + (Math.random() - .5) * .8, .8 + Math.random() * .7, .35 + q * .4, 1.2, .93, .95, .98, .3 + q * .3, -.6); }      // steam from an overheating engine
+    if (fx.sparks && this.scrapeT > 0 && this.hitN) { const nn = this.hitN, sp = Math.min(30, this.speed), cnt = 2 + Math.min(9, sp * .3) | 0, gy = track.height(this.hitX, this.hitZ);      // grinding along a wall or another car: a steady shower of sparks
+      for (let i = 0; i < cnt; i++) fx.sparks.emit(this.hitX, gy + .3 + Math.random() * .45, this.hitZ, -this.vx * (.1 + Math.random() * .3) + nn[0] * (1 + Math.random() * 3.5) + (Math.random() - .5) * 2, .5 + Math.random() * 3.2, -this.vz * (.1 + Math.random() * .3) + nn[1] * (1 + Math.random() * 3.5) + (Math.random() - .5) * 2, .2 + Math.random() * .45); }
     if (this.scrapeT > 0) { this.scrapeT -= dt; if (sp > 3 && n > 0) { const nn = this.hitN || [0, 0], tx = -nn[1], tz = nn[0], along = Math.sign(this.vx * tx + this.vz * tz) || 1, gy = track.height(this.x, this.z);
         for (let k = 0; k < n * 2; k++) { const s = (3 + Math.random() * 8) * along; fx.glow.emit(this.x + (Math.random() - .5), gy + .35 + Math.random() * .3, this.z + (Math.random() - .5), tx * s + this.vx * .35, .4 + Math.random() * 3.5, tz * s + this.vz * .35, .25 + Math.random() * .35, .12, 0, 1, .7, .26, 1, 15); }
         if (Math.random() < .6) fx.glow.emit(this.x - this.vx * .08, gy + .04, this.z - this.vz * .08, 0, 0, 0, 1.4 + Math.random(), .1, 0, 1, .42, .1, .8, 0); } }
@@ -706,6 +709,8 @@ export class Car {
       for (let i = 0; i < 3 + v0 * 12; i++) { const d = (.5 + Math.random() * (3 + v0 * 9)) * al0; fx.glow.emit(this.hitX + tx0 * d, gy, this.hitZ + tz0 * d, 0, 0, 0, 1.3 + Math.random() * 1.6, .11, 0, 1, .45, .12, .85, 0); } }      // embers: glowing specks that lie on the road and cool slowly
     const y = track.height(this.hitX, this.hitZ) + .45, n = this.hitN || [0, 0], tx = -n[1], tz = n[0], along = Math.sign(this.vx * tx + this.vz * tz) || 1, v = Math.min(1, power / 20);
     for (let i = 0; i < 5 + v * 26; i++) { const s = (4 + Math.random() * 10) * along * (.4 + v); fx.glow.emit(this.hitX, y + Math.random() * .3, this.hitZ, tx * s + n[0] * (1 + Math.random() * 4) + this.vx * .3, .5 + Math.random() * 4.5, tz * s + n[1] * (1 + Math.random() * 4) + this.vz * .3, .2 + Math.random() * .4, .13, 0, 1, .72, .28, 1, 15); }
+    if (fx.sparks) { const n2 = Math.min(120, 8 + power * 4.5) | 0, sp0 = 6 + power * .55;      // metal sparks: a burst along the scraped surface, thrown forward with the car's motion
+      for (let i = 0; i < n2; i++) { const s = (3 + Math.random() * sp0) * (Math.random() < .78 ? along : -along) * (.5 + Math.random()), up = .8 + Math.random() * (3 + power * .14); fx.sparks.emit(this.hitX + (Math.random() - .5) * .3, y, this.hitZ + (Math.random() - .5) * .3, tx * s + n[0] * Math.random() * 3 + this.vx * .35, up, tz * s + n[1] * Math.random() * 3 + this.vz * .35, .25 + Math.random() * .6); } }
     if (power > 6) {
       const c = new THREE.Color(this.color);
       for (let i = 0; i < 3 + v * 10; i++) fx.smoke.emit(this.hitX, y, this.hitZ, n[0] * (2 + Math.random() * 5) + (Math.random() - .5) * 5 + this.vx * .4, 2 + Math.random() * 5, n[1] * (2 + Math.random() * 5) + (Math.random() - .5) * 5 + this.vz * .4, .7 + Math.random() * .5, .16 + Math.random() * .12, 0, i % 2 ? c.r : .08, i % 2 ? c.g : .08, i % 2 ? c.b : .09, 1, 13);

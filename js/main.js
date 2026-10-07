@@ -5,10 +5,10 @@ import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS } from './tra
 import { CLASSES, balance, TUNE } from './config.js';
 import { buildCrew } from './pit.js';
 import { Marshals } from './people.js';
-import { CARS, PAINTS, RIMS, TINTS, LIVC, Car, loadCars, aiDrive, tuneOf, RIM_STYLES, TYRE_STYLES, CAL_COLS } from './car.js';
+import { CARS, PAINTS, RIMS, TINTS, LIVC, Car, loadCars, aiDrive, tuneOf, RIM_STYLES, TYRE_STYLES, CAL_COLS, setCarEnv } from './car.js';
 import { AR } from './lang.js';
 import { MenuBg } from './menubg.js';
-import { Particles, Skids, Ambient, Debris, Props, LIGHTS } from './fx.js';
+import { Particles, Skids, Ambient, Debris, Props, LIGHTS, Sparks } from './fx.js';
 import { GLOWS } from './car.js';
 import { Post } from './post.js';
 import { GameAudio, ENGINE_SETS } from './audio.js';
@@ -50,7 +50,7 @@ let pixelRatio = gfx === 'low' ? 1 : Math.min(devicePixelRatio || 1, 1.5);
 renderer.setPixelRatio(pixelRatio); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(55, 1, .3, 9000);
-scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture; setCarEnv(scene.environment);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1), sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; sun.shadow.normalBias = .04;
 function fitShadow() { const h = 30 * (save.zoom || 1.5) + 18, c = sun.shadow.camera; Object.assign(c, { left: -h, right: h, top: h, bottom: -h, near: 1, far: 360 }); c.updateProjectionMatrix(); const sz = 2048; if (sun.shadow.mapSize.x !== sz) { sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } }   // shadows cover what the camera shows, no more
@@ -296,7 +296,7 @@ async function startRace(o) {
   scene.add(track.group); applyTheme(track.theme);
   R = { ...o, track, cars: [], ais: new Map(), t: 0, state: 'wait', countT: 3.6, drift: 0, D: { combo: 0, time: 0, mult: 1, grace: 0 }, fx: null, sendT: 0, waitT: 0, bestThisRace: null };
   R.rules = o.rules || 'circuit'; R.arc = R.rules === 'arcade' || o.mode === 'drift';
-  R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene) }; R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
+  R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.driftMode = o.mode === 'drift'; if (me.driftMode) me.assistK = .22;      // drift: a counter-steer aid stays on, so the car holds a big angle instead of spinning me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
   const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - 2.9), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
@@ -333,6 +333,7 @@ function checkGo() { if (R && R.mode === 'online' && isHost && R.state === 'wait
 function endRace() {
   if (R && R.people) { R.people.dispose(); R.people = null; }
   if (R && R.refl) { scene.remove(R.refl.warm, R.refl.red); R.refl = null; }
+  if (R && R.fx && R.fx.sparks) scene.remove(R.fx.sparks.mesh);
   if (R && R.flood) { for (const L of R.flood.lights) { scene.remove(L, L.target); L.dispose && L.dispose(); } R.flood = null; }
   if (!R) return;
   for (const c of R.cars) { scene.remove(c.root); c.dispose(); }
@@ -449,6 +450,7 @@ function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyre
   const F = feelState; F.t -= dt; const sh = me.shiftEvt > 0; if (sh && !F.sh) rumble(10, .4, .1); F.sh = sh ? 1 : 0; if (F.t > 0 || me.speed < 6) return;
   if (me.wsurf.includes(1) && me.speed > 8) { rumble(16, .25, .6); F.t = .11; } else if (me.locked || me.lockF) { rumble(14, .5, .3); F.t = .09; } else if (me.grass > .5) { rumble(14, .2, .7); F.t = .08; }
   else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; } }
+const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .45, medium: 1, high: 1.8 })[save.dmg || 'medium']; };
 function impact(car, power, wall) {
   if (R && car === R.player && power > 5 && R.eng && R.t - (R.eng.last.dmg ?? -999) > 12) { R.eng.last.dmg = R.t; engineer(ENG.damage(), true); }
   { const ai0 = R && R.ais && R.ais.get(car); if (ai0 && power > 1.2) ai0.contactT = 1.2 + Math.min(1.2, power * .05); }      // a driver who has touched something yields
@@ -522,10 +524,13 @@ const ENG = {
   damage: () => ({ en: 'Contact! Checking the damage.', ar: 'احتكاك! بنراجع الأضرار.' }), hurt: () => ({ en: 'The car is hurt. Bring it home carefully.', ar: 'العربية متضررة. رجّعها بحذر.' }),
   posUp: p => ({ en: `Good move. P${p}.`, ar: `حركة حلوة. المركز ${p}.` }), posDown: p => ({ en: `You lost a place. P${p}. Get it back.`, ar: `خسرت مركز. أنت دلوقتي ${p}. استرجعه.` }), final: () => ({ en: 'Final lap. Everything you have got.', ar: 'آخر لفة. ادّي كل اللي عندك.' }), start: () => ({ en: 'Radio check. Clean start, we are with you.', ar: 'اختبار الراديو. بداية نظيفة، إحنا معاك.' }),
 };
+const voiceScore = v => { const n = v.name.toLowerCase(); let s = 0; if (/natural|neural|online/.test(n)) s += 50; if (/google/.test(n)) s += 20; if (/ryan|guy|davis|thomas|daniel|james|alex|oliver|arthur|hamed|naayf|maged|shakir|tarik|salma/.test(n)) s += 15; if (/en-gb|en_gb/.test(v.lang.toLowerCase()) || /ar-eg/.test(v.lang.toLowerCase())) s += 8; if (/compact|espeak|robot/.test(n)) s -= 40; if (!v.localService) s += 5; return s; };
 function engineer(msg, urgent) {
   const lang = save.lang === 'ar' ? 'ar' : 'en', text = msg[lang]; (window.__engLog || (window.__engLog = [])).push(lang + ': ' + text); radio(text, true);
-  if (save.engVoice === false || !window.speechSynthesis) return;
-  try { const u = new SpeechSynthesisUtterance(text); u.lang = lang === 'ar' ? 'ar-EG' : 'en-GB'; u.rate = 1.05; u.pitch = .92; u.volume = .85; const vs = speechSynthesis.getVoices(), v = vs.find(x => x.lang.toLowerCase().startsWith(lang === 'ar' ? 'ar' : 'en-gb')) || vs.find(x => x.lang.toLowerCase().startsWith(lang)); if (v) u.voice = v; if (urgent) speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+  const timed = () => { audio.radio('open'); setTimeout(() => audio.radio('close'), 600 + text.length * 62); };
+  if (save.engVoice === false || !window.speechSynthesis) { if (save.engVoice !== false) timed(); return; }
+  try { const u = new SpeechSynthesisUtterance(text.replace(/\. /g, '. , ')), vs = voicesFor(), v = vs.find(x => x.name === save.engVoiceName) || vs[0]; u.lang = lang === 'ar' ? 'ar-EG' : 'en-GB'; if (v) { u.voice = v; u.lang = v.lang; } u.rate = lang === 'ar' ? .98 : 1.02; u.pitch = /female|zira|salma|hazel|susan|samantha/i.test((v && v.name) || '') ? 1 : .86; u.volume = .9;
+    u.onstart = () => audio.radio('open'); u.onend = u.onerror = () => audio.radio('close'); if (urgent) speechSynthesis.cancel(); speechSynthesis.speak(u); if (!v) setTimeout(() => { if (!speechSynthesis.speaking) audio.radio('close'); }, 400); } catch (e) { timed(); }
 }
 function engineerTick(me, dt) {
   const E = R.eng || (R.eng = { cd: 6, last: {}, pos: null, hot: 0, cold: 0 }); E.cd -= dt; if (R.state !== 'go' || E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 7; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
@@ -879,7 +884,7 @@ function updateRace(dt) {
   const detail = pixelRatio < 1.2 ? .6 : 1;
   if (tr2Tick(tr), !$('tele').hidden) telemetry(me, dt);
   for (const c of R.cars) { c.render(dt, tr, c.isRemote ? 1 : clamp(acc / H, 0, 1)); c.effects(dt, R.fx, tr, c === me ? detail : detail * .6); }
-  R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr, R.cars); if (R.people) R.people.update(dt, R.cars, tr); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
+  R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.sparks.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr, R.cars); if (R.people) R.people.update(dt, R.cars, tr); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
   updateCamera(dt);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360)); R.fx.smoke.mat.uniforms.uScale.value = R.fx.glow.mat.uniforms.uScale.value = sc;
   updateHUD(dt);
@@ -1402,6 +1407,11 @@ $('pauseBtn').addEventListener('click', e => { if (document.body.classList.conta
 addEventListener('pointermove', e => { if (!tDrag) return; captureTouchDefaults(); tUI().pos[tKey(tDrag)] = [clamp(e.clientX / innerWidth, .05, .95), clamp(e.clientY / innerHeight, .08, .94)]; applyTouchUI(); });
 addEventListener('pointerup', () => { if (tDrag) { tDrag = null; persist(); } });
 $('touchEditBtn').onclick = enterTouchEdit; $('todSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; save.tod = b.dataset.d; persist(); for (const x of $('todSeg').children) x.classList.toggle('on', x.dataset.d === (save.tod || 'default')); }; for (const x of $('todSeg').children) x.classList.toggle('on', x.dataset.d === (save.tod || 'default'));
+const markDmg = () => { for (const b of document.querySelectorAll('#dmgSeg button')) b.classList.toggle('on', b.dataset.k === (save.dmg || 'medium')); }; markDmg();
+$('dmgSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; save.dmg = b.dataset.k; persist(); applyDmg(); markDmg(); };
+const voicesFor = () => { const L = save.lang === 'ar' ? 'ar' : 'en', vs = (window.speechSynthesis ? speechSynthesis.getVoices() : []).filter(v => v.lang.toLowerCase().startsWith(L)); return vs.sort((a, b) => voiceScore(b) - voiceScore(a)); };
+const labelVoice = () => { const v = voicesFor().find(x => x.name === save.engVoiceName) || voicesFor()[0]; $('voiceBtn').textContent = tx('Voice') + ': ' + (v ? v.name.replace(/Microsoft |Google |Online \(Natural\) - |\(Natural\)/g, '').slice(0, 22) : 'default'); };
+$('voiceBtn').onclick = () => { const vs = voicesFor(); if (!vs.length) return; const i = vs.findIndex(x => x.name === save.engVoiceName); save.engVoiceName = vs[(i + 1) % vs.length].name; persist(); labelVoice(); engineer(ENG.start(), true); }; if (window.speechSynthesis) speechSynthesis.addEventListener('voiceschanged', labelVoice); labelVoice();
 $('radioBtn').onclick = () => { save.engVoice = save.engVoice === false; persist(); $('radioBtn').textContent = tx('Race engineer voice') + ': ' + tx(save.engVoice === false ? 'Off' : 'On'); if (save.engVoice !== false) engineer(ENG.start(), true); }; $('radioBtn').textContent = tx('Race engineer voice') + ': ' + tx(save.engVoice === false ? 'Off' : 'On');
 $('hapBtn').onclick = () => { save.haptics = save.haptics === false; persist(); $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); if (save.haptics !== false) rumble(40, .5, .5); }; $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); $('teDone').onclick = exitTouchEdit;
 $('teSize').oninput = e => { tUI().scale = +e.target.value / 100; applyTouchUI(); persist(); };

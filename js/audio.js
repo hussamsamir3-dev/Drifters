@@ -89,6 +89,17 @@ export class GameAudio {
     clearInterval(this.fade); this.fade = setInterval(() => { const tgt = on && this.on ? this.mvol : 0, d = tgt - el.volume; if (Math.abs(d) < .05) { el.volume = tgt; clearInterval(this.fade); if (!tgt) el.pause(); } else el.volume = Math.max(0, Math.min(1, el.volume + Math.sign(d) * .04)); }, 60);
   }
   setCar(spec) { this.spec = spec; }
+  // The engineer comes over an intercom: the key opens with a squelch click, the line hisses and crackles while he talks, and it closes with a short blip. (The voice itself is the
+  // device's speech engine and cannot be filtered, so the radio character is built around it.)
+  radio(state) {
+    if (!this.ctx || this.ctx.state !== 'running') return; const c = this.ctx, t = c.currentTime, out = this.sfx || this.master;
+    if (!this._nb) { const n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < .004 ? 2.2 : 1); this._nb = b; }
+    const burst = (len, f, q, vol) => { const s = c.createBufferSource(); s.buffer = this._nb; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0008, t + len); s.connect(bp); bp.connect(g); g.connect(out); s.start(t, Math.random()); s.stop(t + len + .02); };
+    const blip = (f, len, vol) => { const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0008, t + len); const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; o.connect(lp); lp.connect(g); g.connect(out); o.start(t); o.stop(t + len + .02); };
+    if (state === 'open') { burst(.1, 2200, .8, .1); blip(1480, .055, .035); if (this._rb) return;
+      const s = c.createBufferSource(); s.buffer = this._nb; s.loop = true; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1700; bp.Q.value = .6; const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.022, t + .08); s.connect(hp); hp.connect(bp); bp.connect(g); g.connect(out); s.start(t); this._rb = { s, g }; }
+    else if (this._rb) { const r = this._rb; this._rb = null; r.g.gain.cancelScheduledValues(t); r.g.gain.setValueAtTime(r.g.gain.value, t); r.g.gain.linearRampToValueAtTime(0, t + .07); r.s.stop(t + .1); burst(.08, 2000, .9, .08); blip(1180, .045, .03); }
+  }
   ui(kind) {      // soft, warm interface sounds: sine and triangle tones with slow attacks through a gentle low-pass, quiet by design
     if (!this.ctx || this.state !== 'ready' || this.ctx.state !== 'running') return; const c = this.ctx, t = c.currentTime, now = performance.now(); if (now - (this._uiT || 0) < (kind === 'hover' ? 70 : 30)) return; this._uiT = now;
     const S = { hover: [[880, 0, .05, .014]], click: [[392, 0, .11, .05], [587, .015, .09, .025]], tab: [[523, 0, .12, .04], [659, .05, .14, .03]], confirm: [[523, 0, .16, .05], [659, .08, .16, .045], [784, .16, .3, .04]], back: [[494, 0, .13, .04], [370, .07, .18, .035]] }[kind] || [[440, 0, .1, .03]];

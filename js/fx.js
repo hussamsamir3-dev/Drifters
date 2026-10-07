@@ -162,3 +162,23 @@ export class Props {
   }
   dispose() { for (const it of this.items) this.scene.remove(it.m); this.items = []; }
 }
+
+// Metal sparks: bright streaks (each is a short line along its own velocity) that fly off a scraped wall or a car, arc under gravity, bounce on the road and cool from white-yellow to orange to nothing.
+export class Sparks {
+  constructor(scene, N = 800) {
+    this.N = N; this.p = new Float32Array(N * 3); this.v = new Float32Array(N * 3); this.life = new Float32Array(N); this.max = new Float32Array(N).fill(1); this.i = 0;
+    const g = new THREE.BufferGeometry(); this.pos = new Float32Array(N * 6); this.col = new Float32Array(N * 6); g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); this.mesh.frustumCulled = false; this.mesh.renderOrder = 9; scene.add(this.mesh);
+  }
+  emit(x, y, z, vx, vy, vz, life) { const i = this.i++ % this.N, a = i * 3; this.p[a] = x; this.p[a + 1] = y; this.p[a + 2] = z; this.v[a] = vx; this.v[a + 1] = vy; this.v[a + 2] = vz; this.life[i] = this.max[i] = life; }
+  update(dt) {
+    const P = this.p, V = this.v, pos = this.pos, col = this.col;
+    for (let i = 0; i < this.N; i++) { const a = i * 3, b = i * 6;
+      if (this.life[i] <= 0) { if (col[b] !== 0 || col[b + 3] !== 0) { col.fill(0, b, b + 6); pos.fill(0, b, b + 6); } continue; }
+      this.life[i] -= dt; V[a + 1] -= 17 * dt; const dr = 1 - 1.1 * dt; V[a] *= dr; V[a + 1] *= dr; V[a + 2] *= dr; P[a] += V[a] * dt; P[a + 1] += V[a + 1] * dt; P[a + 2] += V[a + 2] * dt;
+      if (P[a + 1] < .03) { P[a + 1] = .03; V[a + 1] *= -.38; V[a] *= .7; V[a + 2] *= .7; }
+      const k = Math.max(0, this.life[i] / this.max[i]); pos[b] = P[a]; pos[b + 1] = P[a + 1]; pos[b + 2] = P[a + 2]; pos[b + 3] = P[a] - V[a] * .05; pos[b + 4] = P[a + 1] - V[a + 1] * .05; pos[b + 5] = P[a + 2] - V[a + 2] * .05;
+      const hk = Math.sqrt(k); col[b] = 1.4 * hk; col[b + 1] = (.25 + .75 * k) * 1.1 * hk; col[b + 2] = (k * k * .6) * hk; col[b + 3] = .9 * k; col[b + 4] = .22 * k; col[b + 5] = 0; }
+    this.mesh.geometry.attributes.position.needsUpdate = true; this.mesh.geometry.attributes.color.needsUpdate = true;
+  }
+}
