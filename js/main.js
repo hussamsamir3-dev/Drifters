@@ -1,5 +1,6 @@
 // Tafheet ~ تفحيط — game loop, race rules, camera, HUD, menus and online lobby.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS } from './tracks.js';
 import { CLASSES, balance, TUNE } from './config.js';
@@ -451,6 +452,17 @@ function knockout() {      // Knockout: each time the leader completes a lap, th
   else if (act.length === 2 && act[0] === me) { me.finished = true; me.finishTime = R.t * 1000; finishPlayer(); }
 }
 // every contact goes through here: light touches scrape, real hits dent the car, shake the camera and cost the combo
+// A pit crew is about 190 meshes; twelve of them are over 1,500 draw calls, which is what froze weaker devices at the pits. So each crew also gets a static copy in its resting pose, merged into
+// one mesh per material (about 18 draw calls), shown whenever the crew is idle; only a crew that is working is drawn as the full animated crew.
+function makeStaticCrew(cr) {
+  const g = cr.group; g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), by = new Map();
+  g.traverse(o => { if (!o.isMesh || !o.geometry || Array.isArray(o.material)) return; let vis = true, p = o; while (p && p !== g.parent) { if (!p.visible) vis = false; p = p.parent; } if (!vis) return;
+    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+    if (!geo.attributes.normal) geo.computeVertexNormals(); if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); let e = by.get(o.material.uuid); if (!e) by.set(o.material.uuid, e = { mat: o.material, geos: [] }); e.geos.push(geo); });
+  const st = new THREE.Group(); for (const { mat, geos } of by.values()) { const mm = new THREE.Mesh(mergeGeometries(geos, false), mat); mm.castShadow = false; st.add(mm); }
+  cr.live = g.children.slice(); g.add(st); cr.stat = st; for (const o of cr.live) o.visible = false;
+}
 const feelState = { t: 0, sh: 0 };
 function rumble(ms, strong = .3, weak = .3) { if (save.haptics === false) return; try { if (isTouch && navigator.vibrate) navigator.vibrate(ms); const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(g => g && g.vibrationActuator) : null; if (gp) gp.vibrationActuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) {} }
 function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyres, locked wheels, the limiter, gear changes and runoff each have their own pulse
@@ -737,6 +749,7 @@ function setupExtras() {
   R.crews = [];
   if (tr.pitBoxes) { const pal = [0xe3262e, 0x19a7ce, 0xffc21a, 0x2fb457, 0xff7ab0, 0xf3f4f6];
     tr.pitBoxes.forEach((b, j) => { const owner = j === R.myBox ? me : j === R.rivBox && R.remote ? R.remote : R.cars[j]; R.crews[j] = buildCrew(tr.group, b, owner ? (owner.color ?? pal[j % 6]) : pal[j % 6], owner ? owner.name : '', { mine: j === R.myBox }); });
+    for (const cr of R.crews) if (cr) makeStaticCrew(cr);
     for (const cr of R.crews) if (cr) cr.group.traverse(o => { if (o.isMesh) o.castShadow = false; });
     { const saved = []; for (const cr of R.crews) if (cr) { cr.group.traverse(o => { saved.push([o, o.visible]); o.visible = true; }); } try { renderer.compile(scene, camera); } catch (e) {} for (const [o, v] of saved) o.visible = v; for (const cr of R.crews) if (cr) cr.group.visible = false; }      // everything in the crews (jacks, guns, held wheels, hidden until the stop) is revealed for one compile      // the crews' shaders are compiled behind the loading screen, not the first time you drive past
     R.pit.pad = R.crews[R.myBox].pad; R.pit.th = tr.pitBoxes[R.myBox].th; if (R.remote) { const b2 = tr.pitBoxes[R.rivBox]; R.pit2 = { x: b2.x, z: b2.z, th: b2.th }; } }
@@ -801,12 +814,16 @@ function raceExtras(dt) {
   // --- pit crews: yours, and in an online duel your rival's, working at their own box on both screens
   me.pitBusy = !!pit.busy;
   { const busy = pit.busy, T = performance.now() / 1000;
-    for (let j = 0; j < (R.crews || []).length; j++) { const cr = R.crews[j]; if (!cr) continue; const b = cr.box, dme = Math.hypot(me.x - b.x, me.z - b.z), near = j === R.myBox ? dme < 110 : dme < 75 && (!!b.svc || R.cars.some(c => !c.isRemote && Math.hypot(c.x - b.x, c.z - b.z) < 28));      // only the crews that are in use are drawn: a dozen idle crews cost thousands of draw calls cr.group.visible = near; if (!near) continue;
+    for (let j = 0; j < (R.crews || []).length; j++) { const cr = R.crews[j]; if (!cr) continue; const b = cr.box, dme = Math.hypot(me.x - b.x, me.z - b.z), near = dme < 170 || R.cars.some(c => !c.isRemote && Math.hypot(c.x - b.x, c.z - b.z) < 70);
+      cr.group.visible = near; if (!near) continue;
       let svc = null;
       if (j === R.myBox) { if (busy) svc = { t: pit.t, jobs: pit.jobs, car: me }; }
       else if (R.remote && j === R.rivBox) { const rb = !!R.remote.pitBusy; R.p2t = rb ? (R.p2t || 0) + dt : 0; if (rb) svc = { t: R.p2t % 9, jobs: [['Tyres', 3], ['Fuel', 3], ['Bodywork', 3]], car: R.remote }; }
       else if (b.svc) svc = b.svc;
-      cr.update(dt, svc); }
+      if (svc) cr.hold = 3; else cr.hold = Math.max(0, (cr.hold || 0) - dt);
+      const act = cr.hold > 0 || (j === R.myBox && dme < 24);      // every team is always visible: an idle crew is one merged mesh per material, a crew at work (or yours as you arrive) is the full animated crew
+      if (cr.stat) { for (const o of cr.live) o.visible = act; cr.stat.visible = !act; }
+      if (act) cr.update(dt, svc); }
     if (pit.pad) pit.pad.material.opacity = me.inPit && !busy ? .65 + Math.sin(T * 6) * .35 : .8;
     if (me.inPit && !busy && R.state === 'go') { const d = Math.hypot(pit.x - me.x, pit.z - me.z), ahead = (pit.x - me.x) * Math.sin(me.th) + (pit.z - me.z) * Math.cos(me.th) > 0; setTxt('hEvent', ahead ? tx('Your pit box') + '  ' + Math.round(d) + ' m' : ''); R.pitHint = true; } else if (R.pitHint) { R.pitHint = false; setTxt('hEvent', ''); } }
   // --- pickups
@@ -1541,5 +1558,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();
