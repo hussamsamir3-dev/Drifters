@@ -72,7 +72,7 @@ function perfGuard(dt) {      // if frames stay slow, the quality steps down by 
   else if (perf.lvl === 2) { if (gfx === 'high') gfx = 'medium'; toast('Performance mode: effects reduced'); }
   else if (perf.lvl === 3) { pixelRatio = Math.min(pixelRatio, .75); resize(); sun.castShadow = false; toast('Performance mode: shadows off'); }
 }
-let frameN = 0;
+let rawDt = .016, frameN = 0;      // rawDt: the real frame time, so the pit stop runs in real seconds even when the game slows down
 function draw(dt) { perfGuard(dt); frameN++; if (gfx !== 'high') { renderer.shadowMap.autoUpdate = false; if (frameN & 1) renderer.shadowMap.needsUpdate = true; } else renderer.shadowMap.autoUpdate = true;   // Medium refreshes shadows every other frame
   updateMotes(dt); if (gfx === 'high' && post) post.render(dt); else renderer.render(scene, camera); }
 addEventListener('resize', resize); setGfx(gfx);
@@ -457,7 +457,7 @@ function knockout() {      // Knockout: each time the leader completes a lap, th
 function makeStaticCrew(cr) {
   const g = cr.group; g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), by = new Map();
   g.traverse(o => { if (!o.isMesh || !o.geometry || Array.isArray(o.material)) return; let vis = true, p = o; while (p && p !== g.parent) { if (!p.visible) vis = false; p = p.parent; } if (!vis) return;
-    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && !(k === 'color' && o.material.vertexColors)) geo.deleteAttribute(k);      // (vertex colours are kept: the new crew figures are painted with them)
     if (!geo.attributes.normal) geo.computeVertexNormals(); if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
     geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); let e = by.get(o.material.uuid); if (!e) by.set(o.material.uuid, e = { mat: o.material, geos: [] }); e.geos.push(geo); });
   const st = new THREE.Group(); for (const { mat, geos } of by.values()) { const mm = new THREE.Mesh(mergeGeometries(geos, false), mat); mm.castShadow = false; st.add(mm); }
@@ -820,7 +820,7 @@ function raceExtras(dt) {
     R.wasPit = me.inPit;
     if (pit.busy || (d2 < 10 && me.speed < 2 && est > .3)) {
       if (!pit.busy) { pit.busy = true; pit.t = 0; pit.jobs = jobs; pit.total = est; }
-      pit.t += dt; pit.tick -= dt; if (pit.tick <= 0) { pit.tick = .55; audio.wrench(); }
+      pit.t += Math.max(dt, rawDt); pit.tick -= dt; if (pit.tick <= 0) { pit.tick = .55; audio.wrench(); }
       let acc2 = 0, cur = pit.jobs[0][0]; for (const j of pit.jobs) { if (pit.t >= acc2) cur = j[0]; acc2 += j[1]; }
       pit.fl = (pit.fl || 0) - dt; if (pit.fl <= 0) { pit.fl = .2; flash(cur + '  ' + Math.max(0, pit.total - pit.t).toFixed(1) + 's', false, 320); }
       if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); radio((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
@@ -840,7 +840,7 @@ function raceExtras(dt) {
       if (svc) cr.hold = 3; else cr.hold = Math.max(0, (cr.hold || 0) - dt);
       const act = cr.hold > 0 || (j === R.myBox && dme < 24);      // every team is always visible: an idle crew is one merged mesh per material, a crew at work (or yours as you arrive) is the full animated crew
       if (cr.stat) { for (const o of cr.live) o.visible = act; cr.stat.visible = !act; }
-      if (act) cr.update(dt, svc); }
+      if (act) cr.update(Math.max(dt, rawDt), svc); }
     if (pit.pad) pit.pad.material.opacity = me.inPit && !busy ? .65 + Math.sin(T * 6) * .35 : .8;
     if (me.inPit && !busy && R.state === 'go') { const d = Math.hypot(pit.x - me.x, pit.z - me.z), ahead = (pit.x - me.x) * Math.sin(me.th) + (pit.z - me.z) * Math.cos(me.th) > 0; setTxt('hEvent', ahead ? tx('Your pit box') + '  ' + Math.round(d) + ' m' : ''); R.pitHint = true; } else if (R.pitHint) { R.pitHint = false; setTxt('hEvent', ''); } }
   // --- pickups
@@ -1555,7 +1555,7 @@ function frame(now) {
   // dynamic resolution: if frames are taking too long the picture is rendered slightly smaller, and it sharpens again when there is headroom
   { const raw = Math.min(.1, Math.max(0, (now - last) / 1000)); ftAvg += (raw - ftAvg) * .04; drsT += raw;
     if (drsT > 1.2 && gfx !== 'low') { drsT = 0; const cap = Math.min(devicePixelRatio || 1, 1.5), lo = Math.max(.6, cap * .55); if (ftAvg > 1 / 50 && pixelRatio > lo) { pixelRatio = Math.max(lo, pixelRatio - .12); resize(); } else if (ftAvg < 1 / 58 && pixelRatio < cap) { pixelRatio = Math.min(cap, pixelRatio + .06); resize(); } } }
-  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)) * (save.dev ? save.devScale || 1 : 1); last = now;
+  rawDt = Math.max(0, Math.min(.25, (now - last) / 1000)); const dt = Math.max(0, Math.min(.05, (now - last) / 1000)) * (save.dev ? save.devScale || 1 : 1); last = now;
   if (auOn && !racing()) auTick();
   if (R) { if (!paused) { try { updateRace(dt); } catch (e) { if (!window.__errOnce) { window.__errOnce = 1; console.error('RACE ERROR ' + e.message + ' cars=' + R.cars.length + ' t=' + R.t + ' state=' + R.state + ' mode=' + R.mode + ' attract=' + R.attract + ' keys=' + Object.keys(R).slice(0, 12)); } } } }
   else if (box.on) boxTick(dt);
@@ -1575,5 +1575,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { THREE, get tts() { return { synth: ttsSynth, TTS }; }, get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) updateRace(fdt); }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { THREE, get tts() { return { synth: ttsSynth, TTS }; }, get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) { rawDt = fdt; updateRace(fdt); } }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

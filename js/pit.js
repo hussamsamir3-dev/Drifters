@@ -2,6 +2,7 @@
 // a windscreen/bodywork man and a marshal with an extinguisher. When a car stops they run to it, jack it up (the car really rises), swap every wheel
 // (gun, old wheel off, new wheel on, gun again), fuel through a hose, work on repairs, then drop the car and signal go.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 let K = null;
@@ -11,26 +12,43 @@ function kit() {
   K = {
     torso: new THREE.CapsuleGeometry(.17, .34, 3, 8).translate(0, .3, 0), head: new THREE.SphereGeometry(.15, 10, 8).translate(0, .8, 0), helm: new THREE.SphereGeometry(.165, 10, 6, 0, Math.PI * 2, 0, 1.55).translate(0, .82, 0),
     visor: new THREE.BoxGeometry(.2, .06, .1).translate(0, .8, .1), upper: limb(.3, .055), fore: limb(.3, .048), hand: new THREE.SphereGeometry(.06, 7, 6), leg: limb(.86, .085), shoe: new THREE.BoxGeometry(.13, .08, .26).translate(0, -.86, .05),
-    tyre: new THREE.TorusGeometry(.3, .13, 8, 16), rimD: new THREE.CylinderGeometry(.22, .22, .1, 14).rotateX(Math.PI / 2), cyl: new THREE.CylinderGeometry(1, 1, 1, 10), box: new THREE.BoxGeometry(1, 1, 1), disc: new THREE.CylinderGeometry(.34, .34, .05, 20).rotateX(Math.PI / 2),
+    tyre: new THREE.TorusGeometry(.3, .13, 10, 20), rimD: (() => { const gs = [new THREE.CylinderGeometry(.22, .22, .08, 24).rotateX(Math.PI / 2), new THREE.CylinderGeometry(.06, .06, .14, 10).rotateX(Math.PI / 2)]; for (let i = 0; i < 5; i++) gs.push(new THREE.BoxGeometry(.04, .2, .05).translate(0, .11, .03).rotateZ(i / 5 * Math.PI * 2)); return mergeGeometries(gs.map(g => g.index ? g.toNonIndexed() : g), false); })(), cyl: new THREE.CylinderGeometry(1, 1, 1, 10), box: new THREE.BoxGeometry(1, 1, 1), disc: new THREE.CylinderGeometry(.34, .34, .05, 20).rotateX(Math.PI / 2),
     sphere: new THREE.SphereGeometry(1, 10, 8),
   };
   const m = (c, r = .6, mt = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: mt });
   K.m = { dark: m(0x17181c), helm: m(0xf3f4f6, .35), glove: m(0x222428, .7), tyre: m(0x0c0c0d, .9), rim: m(0xb8bcc4, .3, .8), steel: m(0x8e949e, .35, .8), red: m(0xe3262e, .45, .3), black: m(0x15161a, .5, .3), yellow: m(0xffc21a, .5), skin: m(0xc99a78, .8),
-    stop: new THREE.MeshBasicMaterial({ color: 0xe3262e }), go: new THREE.MeshBasicMaterial({ color: 0x2fe05a }), gauge: new THREE.MeshBasicMaterial({ color: 0x22d3ee }), hose: m(0x232427, .6) };
+    stop: new THREE.MeshBasicMaterial({ color: 0xe3262e }), go: new THREE.MeshBasicMaterial({ color: 0x2fe05a }), gauge: new THREE.MeshBasicMaterial({ color: 0x22d3ee }), hose: m(0x232427, .6), part: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .62, metalness: .04 }) };
   return K;
 }
-function fig(suitMat) {
-  const k = kit(), M = k.m, g = new THREE.Group(), hip = new THREE.Group(); hip.position.y = .9; g.add(hip);
-  const torso = new THREE.Group(); hip.add(torso); torso.add(new THREE.Mesh(k.torso, suitMat), new THREE.Mesh(k.head, M.skin), new THREE.Mesh(k.helm, M.helm), new THREE.Mesh(k.visor, M.dark));
-  const arm = sx => { const sh = new THREE.Group(); sh.position.set(sx * .23, .55, 0); sh.add(new THREE.Mesh(k.upper, suitMat)); const el = new THREE.Group(); el.position.y = -.3; el.add(new THREE.Mesh(k.fore, suitMat)); const hd = new THREE.Mesh(k.hand, M.glove); hd.position.y = -.32; el.add(hd); const hold = new THREE.Group(); hold.position.y = -.34; el.add(hold); sh.add(el); torso.add(sh); return { sh, el, hold }; };
-  const leg = sx => { const l = new THREE.Group(); l.position.set(sx * .1, 0, 0); l.add(new THREE.Mesh(k.leg, M.dark), new THREE.Mesh(k.shoe, M.black)); hip.add(l); return l; };
-  const f = { g, hip, torso, aL: arm(1), aR: arm(-1), lL: leg(1), lR: leg(-1) }; g.scale.setScalar(1.4); return f;
+// ---- the crew members: a race suit with stripes, shoulder, elbow and knee pads, a full-face helmet with a visor and a headset, gloves and boots. Every part is one merged mesh with
+// vertex colours, so a figure costs a handful of draw calls and an idle crew merges into almost nothing.
+const colG = (g, hex) => { const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
+const mgc = gs => mergeGeometries(gs.map(g => g.index ? g.toNonIndexed() : g), false);
+function crewParts(main, accent, helm, trim) {
+  const cap = (r, len) => new THREE.CapsuleGeometry(r, len, 2, 7), box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z), sph = (r, x, y, z, sx = 1, sy = 1, sz = 1) => new THREE.SphereGeometry(r, 9, 6).scale(sx, sy, sz).translate(x, y, z), cyl = (r1, r2, h, x, y, z) => new THREE.CylinderGeometry(r1, r2, h, 8).translate(x, y, z);
+  const skin = 0xc99a78, dark = 0x1a1b1f, glove = 0x202226, boot = 0x151618;
+  const torso = mgc([colG(box(.34, .2, .22, 0, 0, 0), main), colG(sph(.19, 0, .3, 0, 1, 1.45, .68), main), colG(sph(.23, 0, .52, 0, 1, .4, .62), main), colG(cyl(.055, .065, .1, 0, .64, 0), skin), colG(cyl(.085, .09, .05, 0, .6, 0), accent),
+    colG(box(.4, .035, .27, 0, .36, 0), trim), colG(box(.4, .035, .27, 0, .22, 0), trim), colG(box(.38, .05, .24, 0, -.08, 0), dark), colG(box(.13, .07, .02, 0, .3, .135), accent), colG(box(.16, .09, .02, 0, .32, -.125), accent)]);
+  const head = mgc([colG(sph(.105, 0, 0, 0, 1, 1.12, 1.02), skin), colG(new THREE.SphereGeometry(.128, 12, 8, 0, Math.PI * 2, 0, Math.PI * .66).translate(0, .025, 0), helm), colG(box(.2, .07, .1, 0, .005, .105), dark), colG(box(.13, .05, .09, 0, -.08, .085), helm),
+    colG(box(.035, .02, .26, 0, .125, 0), accent), colG(sph(.03, -.125, -.005, 0, .6, 1.2, 1.1), dark), colG(sph(.03, .125, -.005, 0, .6, 1.2, 1.1), dark), colG(box(.012, .012, .11, -.1, -.045, .1), dark)]);
+  const uarm = mgc([colG(cap(.055, .2).translate(0, -.165, 0), main), colG(sph(.07, 0, 0, 0), accent), colG(sph(.052, 0, -.3, 0.012), accent)]);
+  const farm = mgc([colG(cap(.046, .17).translate(0, -.14, 0), main), colG(cyl(.055, .055, .04, 0, -.255, 0), accent), colG(sph(.052, 0, -.3, 0, 1, 1.18, 1), glove), colG(box(.05, .02, .09, 0, -.285, .0), trim)]);
+  const thigh = mgc([colG(cap(.088, .27).translate(0, -.22, 0), main), colG(sph(.095, 0, 0, 0), main), colG(sph(.07, 0, -.44, .06, 1, 1, .8), accent)]);
+  const shin = mgc([colG(cap(.062, .24).translate(0, -.2, 0), main), colG(box(.105, .095, .25, 0, -.395, .05), boot), colG(box(.108, .03, .27, 0, -.445, .05), 0x0b0b0c), colG(box(.07, .03, .07, 0, -.1, .06), accent)]);
+  return { torso, head, uarm, farm, thigh, shin };
+}
+function fig(P) {
+  const k = kit(), M = k.m, g = new THREE.Group(), hip = new THREE.Group(); hip.position.y = .9; g.add(hip); const mat = M.part;
+  const torso = new THREE.Group(); hip.add(torso); torso.add(new THREE.Mesh(P.torso, mat)); const head = new THREE.Group(); head.position.y = .7; torso.add(head); head.add(new THREE.Mesh(P.head, mat));
+  const arm = sx => { const sh = new THREE.Group(); sh.position.set(sx * .23, .55, 0); sh.add(new THREE.Mesh(P.uarm, mat)); const el = new THREE.Group(); el.position.y = -.3; el.add(new THREE.Mesh(P.farm, mat)); const hold = new THREE.Group(); hold.position.y = -.34; el.add(hold); sh.add(el); torso.add(sh); return { sh, el, hold }; };
+  const leg = sx => { const l = new THREE.Group(); l.position.set(sx * .1, 0, 0); l.add(new THREE.Mesh(P.thigh, mat)); const kn = new THREE.Group(); kn.position.y = -.44; kn.add(new THREE.Mesh(P.shin, mat)); l.add(kn); hip.add(l); return { l, kn }; };
+  const lL = leg(1), lR = leg(-1), f = { g, hip, torso, head, aL: arm(1), aR: arm(-1), lL: lL.l, lR: lR.l, kL: lL.kn, kR: lR.kn }; g.scale.setScalar(1.4); return f;
 }
 const ptm = (a, b, ph) => a + (b - a) * ph;
 
 export function buildCrew(G, box, suitHex, label, opts = {}) {
   const k = kit(), M = k.m, th0 = box.th, group = new THREE.Group(); G.add(group);
-  const suit = new THREE.MeshStandardMaterial({ color: new THREE.Color(suitHex), roughness: .7 });
+  const sc0 = new THREE.Color(suitHex), PT = crewParts(sc0.getHex(), sc0.clone().offsetHSL(0, 0, .25).getHex(), 0xf2f3f5, 0xffffff), PL = crewParts(0xffd400, 0x2a2a2a, 0xffd400, 0xdfe4e8), PM = crewParts(0xf1f1f1, 0xe3262e, 0xf1f1f1, 0xe3262e);      // team suits, a hi-vis lollipop man, a white-and-red marshal
   const F0 = new THREE.Vector3(Math.sin(th0), 0, Math.cos(th0)), L0 = new THREE.Vector3(Math.cos(th0), 0, -Math.sin(th0));
   const at = (l, f, y = 0, o = box) => new THREE.Vector3(o.x + L0.x * l + F0.x * f, y, o.z + L0.z * l + F0.z * f);
   // ---- box furniture: the yellow pad (yours), the team board and its posts
@@ -57,7 +75,7 @@ export function buildCrew(G, box, suitHex, label, opts = {}) {
   // ---- people. roles: 0-3 wheel men (FL, FR, RL, RR), 4 front jack, 5 rear jack, 6 fueller, 7 lollipop, 8 windscreen / bodywork, 9 marshal
   const ROLE = ['tyre', 'tyre', 'tyre', 'tyre', 'jackF', 'jackR', 'fuel', 'lolly', 'clean', 'marshal'], WK = ['FL', 'FR', 'RL', 'RR'];
   const homes = [[3.6, -3.6], [3.6, -2.2], [3.6, -.8], [3.6, .6], [3.6, 2.0], [3.6, 3.4], [3.6, -5.0], [4.8, 1.6], [4.8, .2], [4.8, -1.2]].map(([l, f]) => at(l, f));
-  const people = ROLE.map((role, i) => { const p = fig(suit); p.role = role; p.home = homes[i].clone(); p.g.position.copy(p.home); p.g.rotation.y = th0 - Math.PI / 2; p.wi = i; p.ph = i * 1.37; group.add(p.g);
+  const people = ROLE.map((role, i) => { const p = fig(role === 'lolly' ? PL : role === 'marshal' ? PM : PT); p.role = role; p.home = homes[i].clone(); p.g.position.copy(p.home); p.g.rotation.y = th0 - Math.PI / 2; p.wi = i; p.ph = i * 1.37; group.add(p.g);
     if (role === 'tyre') { p.gun = gun(); p.aR.hold.add(p.gun); p.gun.rotation.x = -.3; p.held = heldWheel(); p.torso.add(p.held); p.held.position.set(0, .25, .36); p.held.rotation.x = Math.PI / 2 - .2; p.held.scale.setScalar(.9); }
     if (role === 'fuel') { p.aR.hold.add(nozzle); nozzle.position.z = .1; }
     if (role === 'lolly') { p.aR.hold.add(lolly); lolly.position.set(0, 0, 0); }
@@ -118,8 +136,13 @@ export function buildCrew(G, box, suitHex, label, opts = {}) {
       else if (mode === 'hammer') { hipY = .75; bend = .35; aRs = -1.7 + Math.sin(T * 12) * .7; aRe = -.9; aLs = -1.0; aLe = -.4; }
       else if (mode === 'crouch') { hipY = .6; bend = .4; aLs = aRs = -1.0; aLe = aRe = -.4; lL = -1.0; lR = -.4; }
       else if (mode === 'cheer') { aLs = aRs = -2.8 + Math.sin(T * 6 + p.ph) * .2; aLe = aRe = -.1; }
-      p.hip.position.y = hipY + hy; p.torso.rotation.x = bend; p.torso.rotation.y = twist; p.lL.rotation.x = lL; p.lR.rotation.x = lR;
-      const kneel = hipY < .85 ? (.9 - hipY) / .38 : 0; p.lL.rotation.x += kneel * .1; p.aL.sh.rotation.x = aLs; p.aL.el.rotation.x = aLe; p.aR.sh.rotation.x = aRs; p.aR.el.rotation.x = aRe;
+      // poses are eased, never snapped: every joint chases its target, quickly while running and a touch slower when working
+      const S = p.S || (p.S = { hipY: .9, bend: 0, twist: 0, lL: 0, lR: 0, aLs: 0, aLe: 0, aRs: 0, aRe: 0, hy: 0 }), kk2 = Math.min(1, dt * (moving ? 30 : 14)), tg2 = { hipY, bend, twist, lL, lR, aLs, aLe, aRs, aRe, hy }; for (const key in tg2) S[key] += (tg2[key] - S[key]) * kk2;
+      const breathe = Math.sin(T * 1.9 + p.ph) * .012, crouch = clamp((.9 - S.hipY) / .38, 0, 1);
+      p.hip.position.y = S.hipY + S.hy; p.torso.rotation.x = S.bend + breathe; p.torso.rotation.y = S.twist; p.lL.rotation.x = S.lL - crouch * .1; p.lR.rotation.x = S.lR - crouch * .1;
+      p.kL.rotation.x = Math.max(0, -S.lL) * .95 + crouch * 1.55 + Math.max(0, S.lL) * .1; p.kR.rotation.x = Math.max(0, -S.lR) * .95 + crouch * 1.15 + Math.max(0, S.lR) * .1;      // knees bend as a leg swings back and when crouching
+      p.aL.sh.rotation.x = S.aLs; p.aL.el.rotation.x = S.aLe; p.aR.sh.rotation.x = S.aRs; p.aR.el.rotation.x = S.aRe;
+      { const toCar = car ? Math.atan2(cx - p.g.position.x, cz - p.g.position.z) : face, rel = Math.atan2(Math.sin(toCar - p.g.rotation.y), Math.cos(toCar - p.g.rotation.y)); p.head.rotation.y += ((busy ? clamp(rel, -.9, .9) : Math.sin(T * .7 + p.ph) * .15) - p.head.rotation.y) * Math.min(1, dt * 8); p.head.rotation.x = -S.bend * .7 + (busy ? .08 : 0); }      // the head stays level and watches the car
       if (p.gun) { p.gun.userData.n.rotation.z = T * 40; p.gun.visible = mode === 'gun' || mode === 'ready' || moving; p.held.visible = (mode === 'wheel') || (mode === 'ready' && !busy) || (busy && !tyres && mode !== 'gun' && mode !== 'cheer' && false) || (tyres && p.q > .62 && false); }
       if (p.role === 'tyre' && tyres) { const q = p.q, kk = WK[p.wi]; car.wheels[kk].pivot.visible = !(q > .2 && q < .6); }
       if (p.role === 'tyre' && !tyres && car) car.wheels[WK[p.wi]].pivot.visible = true;
