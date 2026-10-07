@@ -221,7 +221,7 @@ export class Car {
     const ab = Math.abs(beta);
     this.shock = Math.max(0, this.shock - dt); const K = this.shock > 0 ? 0 : this.assistK;   // a big hit knocks the aids out for a moment
     if (K > 0 && vf > 5) { target = target * (1 - K * clamp((ab - .3) * 1.6, 0, .8)) + K * clamp(beta * .75, -.5, .5); }
-    if (this.driftMode && vf > 4) { const cb = clamp((ab - .5) / .5, 0, 1) * .92; target = target * (1 - cb) + clamp(beta * 1.15, -.6, .6) * cb; }      // drift control: past about 22 deg of slide the steering blends towards counter-steer (fully by about 50 deg), so the angle is held, not wound up into a spin
+    if (this.driftMode && vf > 5 && (ab > .1 || inp.hand)) target = clamp(beta + inp.steer * .22, -.6, .6);      // drift: the front wheels point where the car is going (automatic counter-steer); your steering only nudges them either side
     if (speed > 3) target += (D.left - D.right) * .05 + (P.wheels[0] - P.wheels[1]) * PT.wheelPull + D.front * .02 * Math.sin(this.x * .7 + this.z * .9);   // bent suspension pulls and shimmies
     target = clamp(target, -.62, .62);
     const sr = (inp.steer === 0 ? TUNE.steer.returnRate : TUNE.steer.rate * this.steerK / (1 + speed * TUNE.steer.rateSpeedK)) * dt;
@@ -286,7 +286,8 @@ export class Car {
     const ay = FyB / m;
     this.vx += (ax * sn + ay * cs) * dt; this.vz += (ax * cs - ay * sn) * dt;
     if (K > 0 && speed > 3 && !inp.hand) { const vl2 = this.vx * cs - this.vz * sn, q = Math.min(1, TUNE.slideAid * K * dt) * (1 - this.di); this.vx -= cs * vl2 * q; this.vz += sn * vl2 * q; }   // grip aid: bleeds off sideways slip so the car goes where it points (handbrake switches it off)
-    this.r += Mz / this.I * dt; this.r -= this.r * (TUNE.yawDamp + speed * TUNE.yawDampSpeed + K * TUNE.assistYawDamp) * dt; if (this.driftMode) this.r -= this.r * 2.8 * clamp((ab - .62) / .5, 0, 1) * dt;      // yaw damping resists the car winding up past the drift angle
+    this.r += Mz / this.I * dt; this.r -= this.r * (TUNE.yawDamp + speed * TUNE.yawDampSpeed + K * TUNE.assistYawDamp) * dt;
+    if (this.driftMode && vf > 5 && (ab > .1 || inp.hand)) { const bt = -clamp(inp.steer, -1, 1) * .62 * Math.min(1, speed / 14); this.r += clamp((beta - bt) * 7.5, -5, 5) * dt; this.r -= this.r * 1.6 * dt; }      // drift: your steering sets the slide angle (steer more to slide more, ease off to straighten) and the yaw is eased towards it, so the car holds the angle instead of spinning      // yaw damping resists the car winding up past the drift angle
     if (thr === 0 && (brk === 0 || !live) && speed < .5) { this.vx *= .9; this.vz *= .9; this.r *= .85; }
     if (!live) { this.vx = this.vz = this.r = 0; }
     this.th += this.r * dt; this.x += this.vx * dt; this.z += this.vz * dt;
@@ -588,7 +589,7 @@ export class Car {
   damage(power, shock = true) {
     if ((TUNE.dmgK ?? 1) <= 0) return 0;      // damage switched off in the menu
     this.addScratch(power); this.fitDirty = true;
-    const amt = Math.max(0, power - 5.5) / 40 * this.dmgScale * (TUNE.dmgK ?? 1);      // less sensitive: a knock under about 20 km/h does nothing, and the rest is scaled down if (amt <= 0 || !this.hitL) return 0;
+    const amt = Math.max(0, power - 8) / 48 * this.dmgScale * (TUNE.dmgK ?? 1);      // less sensitive: a knock under about 20 km/h does nothing, and the rest is scaled down if (amt <= 0 || !this.hitL) return 0;
     if (shock && power > TUNE.shock.minHit) this.shock = Math.min(TUNE.shock.max, power * TUNE.shock.perMs);
     const [lx, lz] = this.hitL, D = this.dmg, zone = lz > this.zf * .55 ? 'front' : lz < -this.zr * .55 ? 'rear' : lx > 0 ? 'left' : 'right';
     D[zone] = Math.min(1, D[zone] + amt); this.crackU.value.set(D.front, D.rear, D.left, D.right);
@@ -776,7 +777,9 @@ function buildRaceLine(track, maxOff) {
   for (let i = 0; i < m; i++) { const J = [(i + m - 1) % m, i, (i + 1) % m], dx = cx[J[0]] - 2 * cx[i] + cx[J[2]], dz = cz[J[0]] - 2 * cz[i] + cz[J[2]];
     for (let a = 0; a < 3; a++) { const ja = J[a]; b[ja] += co[a] * (nx[ja] * dx + nz[ja] * dz); for (let c2 = 0; c2 < 3; c2++) { const jc = J[c2]; M[ja * m + jc] += co[a] * co[c2] * (nx[ja] * nx[jc] + nz[ja] * nz[jc]); } } }
   for (let i = 0; i < m; i++) M[i * m + i] += 1e-6;
-  const o = new Float64Array(m), fixed = new Uint8Array(m);
+  const o = new Float64Array(m), fixed = new Uint8Array(m), hwT = track.def.width * .6;
+  for (const a of track.apexes || []) { if ((TUNE.apexIn ?? 1.6) < 0) break; const ia = Math.round(a.i / st) % m; fixed[ia] = 1; o[ia] = a.side * (hwT - (TUNE.apexIn ?? 1.6)); /* the apex may go closer to the edge than the rest of the line */ }      // the line clips the kerb at every apex: the inside tyres just on the kerb
+
   for (let round = 0; round < 14; round++) {      // active set: solve for the free offsets, pin whichever hit the road edge, repeat
     const fr = []; for (let i = 0; i < m; i++) if (!fixed[i]) fr.push(i); const f = fr.length; if (!f) break;
     const A = new Float64Array(f * (f + 1)); for (let r = 0; r < f; r++) { let rhs = -b[fr[r]]; for (let q = 0; q < m; q++) if (fixed[q]) rhs -= M[fr[r] * m + q] * o[q]; for (let q = 0; q < f; q++) A[r * (f + 1) + q] = M[fr[r] * m + fr[q]]; A[r * (f + 1) + f] = rhs; }
@@ -813,7 +816,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (ai.init === undefined) { const q0 = p[car.idx % n]; ai.off = (car.x - q0.x) * q0.tz - (car.z - q0.z) * q0.tx; ai.init = 1; }      // start from where the car actually is on the grid, so there is no sudden swerve onto the line      // cd: which way the corner ahead turns (the inside car owns the apex)
   { const k1 = RL.k[(car.idx + look + 3) % n], k2 = RL.k[(car.idx + look + 12) % n], kc = Math.abs(k1) > Math.abs(k2) ? k1 : k2; if (Math.abs(kc) > .004) cd = Math.sign(kc); }
   let want = RL.o[rix] + ai.lane * clamp(1 - (ai.rt ?? 99) / 12, 0, 1) * .8 + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
-  const rs = clamp(1 - (ai.rt ?? 99) / 22, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
+  const rs = clamp(1 - (ai.rt ?? 99) / 12, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
   let v0cap = 1e9, brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
     if (o === car || o.out) continue;
@@ -826,7 +829,7 @@ export function aiDrive(car, track, ai, cars, dt) {
       if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + 1 && Math.abs(setup) > .3) want += setup * 1.4 * ai.care; continue; }   // a faster car behind before a corner: cover the inside
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
-    if (f > 0 && f < 34 && Math.abs(l) < 2.7 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 14 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6);      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
+    if (f > 0 && f < 34 && Math.abs(l) < 2.7 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 9 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6);      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
     else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
@@ -846,13 +849,14 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) ** 2 * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
   for (let i = 0; i < 70; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
-  if (car.grass > .4) v = Math.min(v, 16); v *= 1 - .12 * rs;
-  v = Math.min(v, vFollow, v0cap); if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
+  if (car.grass > .4) v = Math.min(v, 16); 
+  v = Math.min(v, vFollow, v0cap); const rsc = clamp((18 - (ai.rt ?? 99)) / 10, 0, 1); if (rsc > 0 && Math.abs(tgt.k) > .003) v *= 1 - .1 * rsc;      /* the opening seconds: a little less speed into corners while the pack is bunched (the launch itself is full throttle) */
+  if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
   const inp = ai.inp; inp.steer = clamp(ef * 2.4, -1, 1);
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;
   if (sp > 8 && Math.abs(car.beta) > .1) inp.throttle *= Math.abs(car.beta) > .25 ? .15 : .5;   // feather the throttle when the tail steps out

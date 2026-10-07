@@ -589,3 +589,7 @@ h3{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--acc)
 .paints button{width:28px;height:28px;padding:0 !important;border-radius:50% !important;border:2px solid rgba(255,255,255,.32) !important;box-shadow:0 2px 6px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.35) !important;transition:transform .15s,border-color .15s,box-shadow .15s}
 .paints button:hover{transform:scale(1.14);border-color:#fff !important}
 .paints button.on{border-color:#fff !important;box-shadow:0 0 0 3px rgba(227,38,46,.95),0 3px 10px rgba(0,0,0,.5) !important;transform:scale(1.06)}
+
+/* cinematic bars over the menu showcase */
+#letterbox{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;transition:opacity 1.4s ease;background:linear-gradient(#000 0,#000 6.5%,transparent 6.5%,transparent 93.5%,#000 93.5%,#000 100%)}
+body.cine #letterbox{opacity:1}

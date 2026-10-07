@@ -102,14 +102,14 @@ export class GameAudio {
   }
   // The engineer's synthesised voice, played through an intercom: band-limited to the telephone range, a mid boost, a little saturation, hard compression and a short hollow echo, with the
   // squelch and hiss of radio() around it. `urgent` cuts off a line that is still playing; otherwise an overlapping line is dropped.
-  radioVoice(pcm, rate, urgent) {
+  radioVoice(pcm, rate, urgent, E = {}) {
     if (!this.ctx || this.ctx.state !== 'running' || !pcm || !pcm.length) return false; const c = this.ctx, out = this.sfx || this.master;
     if (this._rv) { if (!urgent) return true; try { this._rv.stop(); } catch (e) {} this._rv = null; }
     const buf = c.createBuffer(1, pcm.length, rate); buf.copyToChannel(pcm, 0); const src = c.createBufferSource(); src.buffer = buf;
     const bq = (type, f, q, g) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q || .7; if (g) n.gain.value = g; return n; };
     const hp = bq('highpass', 420, .8), hp2 = bq('highpass', 420, .8), lp = bq('lowpass', 3000, .8), lp2 = bq('lowpass', 3000, .8), pk = bq('peaking', 1700, 1.1, 8), sh = c.createWaveShaper(), cmp = c.createDynamicsCompressor(), gain = c.createGain(), dl = c.createDelay(.05), fb = c.createGain();
-    const k = 2.6, curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); } sh.curve = curve; sh.oversample = '2x';
-    cmp.threshold.value = -34; cmp.knee.value = 6; cmp.ratio.value = 14; cmp.attack.value = .002; cmp.release.value = .09; gain.gain.value = 1.15; dl.delayTime.value = .006; fb.gain.value = .22; dl.connect(fb); fb.connect(dl);
+    const k = E.k || 2.6, curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); } sh.curve = curve; sh.oversample = '2x';
+    cmp.threshold.value = -34; cmp.knee.value = 6; cmp.ratio.value = 14; cmp.attack.value = .002; cmp.release.value = .09; gain.gain.value = E.g || 1.15; dl.delayTime.value = .006; fb.gain.value = .22; dl.connect(fb); fb.connect(dl);
     src.connect(hp); hp.connect(hp2); hp2.connect(lp); lp.connect(lp2); lp2.connect(pk); pk.connect(sh); sh.connect(cmp); cmp.connect(gain); cmp.connect(dl); dl.connect(gain); gain.connect(out);
     this.radio('open'); this._rv = src; src.onended = () => { if (this._rv === src) this._rv = null; this.radio('close'); }; src.start(c.currentTime + .1); return true;
   }

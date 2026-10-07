@@ -142,8 +142,8 @@ function updateRefl() {
   for (const c of R.cars) { if ((c.x - px) ** 2 + (c.z - pz) ** 2 > 6400 || !(R.lit || c.braking)) continue; const s = Math.sin(c.th), co = Math.cos(c.th);
     if (R.lit) for (const sx of [-.7, .7]) if (nw < 480) put(F.warm, nw++, c.x + s * 2.6 + co * sx, c.z + co * 2.6 - s * sx, .8);
     for (const sx of [-.75, .75]) if (nr < 400) put(F.red, nr++, c.x - s * 2.6 + co * sx, c.z - co * 2.6 - s * sx, c.braking ? 1.1 : .55); }
-  F.warm.count = nw; F.red.count = nr; F.warm.instanceMatrix.needsUpdate = true; F.red.instanceMatrix.needsUpdate = true; F.warm.material.opacity = Math.min(.75, w * .8); F.red.material.opacity = Math.min(.75, w * .85);
-  for (const [mm, r0, m0] of R.roadMats || []) mm.envMapIntensity = 1 + 1.8 * w;      // the road also mirrors the sky and the glow of the city
+  F.warm.count = nw; F.red.count = nr; F.warm.instanceMatrix.needsUpdate = true; F.red.instanceMatrix.needsUpdate = true; F.warm.material.opacity = Math.min(.26, w * .28); F.red.material.opacity = Math.min(.28, w * .3);
+  for (const [mm, r0, m0] of R.roadMats || []) mm.envMapIntensity = 1 + .45 * w;      // the road also mirrors the sky and the glow of the city
 }
 function applyTheme(th) {
   if (sky) { scene.remove(sky); sky.geometry.dispose(); sky.material.dispose(); sky = null; }
@@ -307,10 +307,10 @@ async function startRace(o) {
   ttsWarm(); R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.driftMode = o.mode === 'drift'; if (me.driftMode) me.assistK = .22;      // drift: a counter-steer aid stays on, so the car holds a big angle instead of spinning me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
-  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - 2.9), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
+  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
   R.ais.set(me, mkAI(.95));     // used when the player's car goes on autopilot after the flag
   if (o.mode === 'race') {
-    const base = [.80, .90, 1.0][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
+    const base = [.80, .93, 1.06][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
       const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), LO = aiLoadout(s, o.diff, !!riv), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], LO.up, { wing: s.wing ? 0 : LO.wing, split: LO.split, rim: 0, ai: 1 }, Object.assign(LO.tune.tyre ? LO.tune : { tyre: ['soft', 'medium', 'medium', 'medium', 'hard'][Math.random() * 5 | 0] }, o.weather === 'rain' ? { tyre: 'rain' } : {})); livUsed.add(s.id);
@@ -469,7 +469,7 @@ function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyre
   const F = feelState; F.t -= dt; const sh = me.shiftEvt > 0; if (sh && !F.sh) rumble(10, .4, .1); F.sh = sh ? 1 : 0; if (F.t > 0 || me.speed < 6) return;
   if (me.wsurf.includes(1) && me.speed > 8) { rumble(16, .25, .6); F.t = .11; } else if (me.locked || me.lockF) { rumble(14, .5, .3); F.t = .09; } else if (me.grass > .5) { rumble(14, .2, .7); F.t = .08; }
   else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; } }
-const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .3, medium: .7, high: 1.4 })[save.dmg || 'medium']; };
+const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .12, medium: .3, high: .7 })[save.dmg || 'medium']; };
 function impact(car, power, wall) {
   if (R && car === R.player && power > 5 && R.eng && R.t - (R.eng.last.dmg ?? -999) > 12) { R.eng.last.dmg = R.t; engineer(ENG.damage(), true); }
   { const ai0 = R && R.ais && R.ais.get(car); if (ai0 && power > 1.2) ai0.contactT = 1.2 + Math.min(1.2, power * .05); }      // a driver who has touched something yields
@@ -537,22 +537,32 @@ let radioT = 0, radioLast = -9;
 // ---------------- the race engineer: live calls in English and Arabic, shown as subtitles and spoken by the device's voice ----------------
 const spokenT = (lt, lang) => { const mm = Math.floor(lt / 60), s = Math.floor(lt % 60), h = Math.round((lt % 1) * 10); return lang === 'ar' ? (mm ? mm + ' دقيقة و ' : '') + s + (h ? ' فاصلة ' + h : '') + ' ثانية' : (mm ? mm + ' minute ' : '') + s + (h ? ' point ' + h : '') + ' seconds'; };
 const ENG = {
-  lapFast: (t, d, lt) => ({ en: `Lap ${t}. ${d} seconds quicker than the last one. Keep it up.`, ar: `لفة ${t}. أسرع من اللفة السابقة بـ ${d} ثانية. استمر.`, enS: `${spokenT(lt, 'en')}. ${Number(d).toFixed(1)} seconds quicker.`, arS: `${spokenT(lt, 'ar')}. أسرع بـ ${Number(d).toFixed(1)} ثانية.` }),
-  lapSlow: (t, d, lt) => ({ en: `Lap ${t}. ${d} slower than last lap. Find the time in the corners.`, ar: `لفة ${t}. أبطأ من اللفة السابقة بـ ${d} ثانية. ابحث عن الوقت في المنعطفات.`, enS: `${spokenT(lt, 'en')}. ${Number(d).toFixed(1)} seconds slower.`, arS: `${spokenT(lt, 'ar')}. أبطأ بـ ${Number(d).toFixed(1)} ثانية.` }),
-  gapAhead: g => ({ en: `Car ahead is ${g} seconds up the road.`, ar: `السيارة التي أمامك تبعد ${g} ثانية.` }), gapBehind: g => ({ en: `Car behind is ${g} seconds back. Keep your line.`, ar: `السيارة التي خلفك تبعد ${g} ثانية. حافظ على خطك.` }),
-  tyreCold: () => ({ en: 'Tyres are cold. Build the temperature gently.', ar: 'الإطارات باردة. سخنها بهدوء.' }), tyreHot: () => ({ en: 'Tyres are overheating. Ease the slides.', ar: 'الإطارات ساخنة جدا. خفف الانزلاق.' }), tyreWorn: () => ({ en: 'Tyres are nearly gone. Box this lap if you can.', ar: 'الإطارات شارفت على النهاية. ادخل إلى الحظيرة هذه اللفة إن استطعت.' }),
-  fuel: () => ({ en: 'Fuel is low. Plan a stop.', ar: 'الوقود قليل. خطط للتوقف.' }), engineHot: () => ({ en: 'Engine temperature critical. Lift off and let it cool.', ar: 'حرارة المحرك حرجة. ارفع قدمك ودعه يبرد.' }),
-  damage: () => ({ en: 'Contact! Checking the damage.', ar: 'اصطدام! نفحص الأضرار.' }), hurt: () => ({ en: 'The car is hurt. Bring it home carefully.', ar: 'السيارة متضررة. أعدها بحذر.' }),
-  posUp: p => ({ en: `Good move. P${p}.`, ar: `حركة ممتازة. المركز ${p}.`, enS: `Good move. Position ${p}.` }), posDown: p => ({ en: `You lost a place. P${p}. Get it back.`, ar: `خسرت مركزا. أنت الآن في المركز ${p}. استعده.`, enS: `You lost a place. Position ${p}. Get it back.` }), final: () => ({ en: 'Final lap. Everything you have got.', ar: 'اللفة الأخيرة. أعطها كل ما لديك.' }), start: () => ({ en: 'Radio check. Clean start, we are with you.', ar: 'اختبار الراديو. انطلاقة نظيفة، نحن معك.' }),
+  lapFast: (t, d, lt) => ({ emo: 'happy', en: `Lap ${t}. ${d} seconds quicker than the last one. Keep it up.`, ar: `لفة ${t}. أسرع من اللفة السابقة بـ ${d} ثانية. استمر.`, enS: `Yes! ${spokenT(lt, 'en')}. ${Number(d).toFixed(1)} seconds quicker. Brilliant!`, arS: `ممتاز! ${spokenT(lt, 'ar')}. أسرع بـ ${Number(d).toFixed(1)} ثانية. رائع!` }),
+  lapSlow: (t, d, lt) => ({ emo: 'concerned', en: `Lap ${t}. ${d} slower than last lap. Find the time in the corners.`, ar: `لفة ${t}. أبطأ من اللفة السابقة بـ ${d} ثانية. ابحث عن الوقت في المنعطفات.`, enS: `${spokenT(lt, 'en')}. ${Number(d).toFixed(1)} seconds slower. Come on, find it in the corners.`, arS: `${spokenT(lt, 'ar')}. أبطأ بـ ${Number(d).toFixed(1)} ثانية. هيا، ابحث عنه في المنعطفات.` }),
+  gapAhead: g => ({ emo: 'calm', en: `Car ahead is ${g} seconds up the road.`, ar: `السيارة التي أمامك تبعد ${g} ثانية.`, enS: `Car ahead, ${g} seconds. You can catch them.`, arS: `السيارة التي أمامك، ${g} ثانية. تستطيع اللحاق بها.` }),
+  gapBehind: g => ({ emo: 'tense', en: `Car behind is ${g} seconds back. Keep your line.`, ar: `السيارة التي خلفك تبعد ${g} ثانية. حافظ على خطك.`, enS: `Car behind, ${g} seconds. Stay sharp, keep your line.`, arS: `السيارة التي خلفك، ${g} ثانية. ابق متيقظا وحافظ على خطك.` }),
+  tyreCold: () => ({ emo: 'calm', en: 'Tyres are cold. Build the temperature gently.', ar: 'الإطارات باردة. سخنها بهدوء.' }),
+  tyreHot: () => ({ emo: 'concerned', en: 'Tyres are overheating. Ease the slides.', ar: 'الإطارات ساخنة جدا. خفف الانزلاق.', enS: 'Careful, the tyres are overheating. Ease the slides.', arS: 'انتبه، الإطارات ساخنة جدا. خفف الانزلاق.' }),
+  tyreWorn: () => ({ emo: 'concerned', en: 'Tyres are nearly gone. Box this lap if you can.', ar: 'الإطارات شارفت على النهاية. ادخل إلى الحظيرة هذه اللفة إن استطعت.', enS: 'The tyres are nearly gone. Box, box this lap if you can.', arS: 'الإطارات شارفت على النهاية. ادخل الحظيرة هذه اللفة إن استطعت.' }),
+  fuel: () => ({ emo: 'concerned', en: 'Fuel is low. Plan a stop.', ar: 'الوقود قليل. خطط للتوقف.', enS: 'Fuel is getting low. Start thinking about a stop.', arS: 'الوقود يقل. ابدأ التفكير في التوقف.' }),
+  engineHot: () => ({ emo: 'urgent', en: 'Engine temperature critical. Lift off and let it cool.', ar: 'حرارة المحرك حرجة. ارفع قدمك ودعه يبرد.', enS: 'Warning! Engine temperature critical. Lift off now, let it cool!', arS: 'تحذير! حرارة المحرك حرجة. ارفع قدمك الآن ودعه يبرد!' }),
+  damage: () => ({ emo: 'urgent', en: 'Contact! Checking the damage.', ar: 'اصطدام! نفحص الأضرار.', enS: 'Contact! Are you okay? Checking the damage.', arS: 'اصطدام! هل أنت بخير؟ نفحص الأضرار.' }),
+  hurt: () => ({ emo: 'sad', en: 'The car is hurt. Bring it home carefully.', ar: 'السيارة متضررة. أعدها بحذر.', enS: 'The car is hurt. Look after it, bring it home safe.', arS: 'السيارة متضررة. اعتن بها وأعدها بسلام.' }),
+  posUp: p => ({ emo: 'excited', en: `Good move. P${p}.`, ar: `حركة ممتازة. المركز ${p}.`, enS: `Yes! Great move! Position ${p}!`, arS: `رائع! حركة ممتازة! المركز ${p}!` }),
+  posDown: p => ({ emo: 'sad', en: `You lost a place. P${p}. Get it back.`, ar: `خسرت مركزا. أنت الآن في المركز ${p}. استعده.`, enS: `Ah, we lost a place. Position ${p}. Let's get it back.`, arS: `آه، خسرنا مركزا. المركز ${p}. لنستعده.` }),
+  final: () => ({ emo: 'excited', en: 'Final lap. Everything you have got.', ar: 'اللفة الأخيرة. أعطها كل ما لديك.', enS: 'Final lap! Everything you have got! Go, go, go!', arS: 'اللفة الأخيرة! أعطها كل ما لديك! هيا، هيا!' }),
+  start: () => ({ emo: 'calm', en: 'Radio check. Clean start, we are with you.', ar: 'اختبار الراديو. انطلاقة نظيفة، نحن معك.' }),
 };
+// how each feeling is voiced: speed and pitch offsets, how much the pitch moves (range), loudness, and how hard the radio chain is driven (k) and boosted (g)
+const EMO = { calm: { r: 0, p: 0, rg: 50, amp: 100, k: 2.6, g: 1.15 }, happy: { r: 10, p: 7, rg: 80, amp: 112, k: 2.8, g: 1.2 }, excited: { r: 20, p: 11, rg: 92, amp: 122, k: 3.4, g: 1.28 }, urgent: { r: 28, p: 6, rg: 70, amp: 128, k: 4.2, g: 1.35 }, tense: { r: 12, p: 4, rg: 60, amp: 108, k: 3, g: 1.2 }, concerned: { r: -10, p: -4, rg: 45, amp: 100, k: 2.4, g: 1.1 }, sad: { r: -20, p: -8, rg: 32, amp: 92, k: 2.2, g: 1.0 } };
 // ---- the voice: eSpeak NG in a worker (see voice/), played through the radio filter in audio.js. 'device' uses the phone's or computer's own speech voices instead (natural, but it cannot be filtered).
 const TTS = { w: null, id: 0, pend: new Map(), cache: new Map(), dead: false };
 function ttsWorker() { if (!TTS.w && !TTS.dead) { try { TTS.w = new Worker('voice/tts-worker.js', { type: 'module' }); TTS.w.onmessage = e => { const p = TTS.pend.get(e.data.id); if (p) { TTS.pend.delete(e.data.id); p(e.data); } }; TTS.w.onerror = () => { TTS.dead = true; TTS.w = null; for (const [, p] of TTS.pend) p({ error: 'worker' }); TTS.pend.clear(); }; } catch (e) { TTS.dead = true; } } return TTS.w; }
-function ttsSynth(text, lang, voice) {
-  const key = lang + '|' + voice + '|' + text; if (TTS.cache.has(key)) return Promise.resolve(TTS.cache.get(key));
+function ttsSynth(text, lang, voice, emo = 'calm') {
+  const key = lang + '|' + voice + '|' + emo + '|' + text; if (TTS.cache.has(key)) return Promise.resolve(TTS.cache.get(key)); const E = EMO[emo] || EMO.calm, j = () => (Math.random() - .5);      // (a little random variation, so the same line is never said the same way twice)
   return new Promise((res, rej) => { const w = ttsWorker(); if (!w) return rej(new Error('no worker')); const id = ++TTS.id, to = setTimeout(() => { TTS.pend.delete(id); rej(new Error('timeout')); }, 15000);
-    TTS.pend.set(id, d => { clearTimeout(to); if (d.error) return rej(new Error(d.error)); const r = { pcm: d.pcm, rate: d.rate }; TTS.cache.set(key, r); if (TTS.cache.size > 60) TTS.cache.delete(TTS.cache.keys().next().value); res(r); });
-    w.postMessage({ id, lang: lang === 'ar' ? 'ar' : 'en-us', text, voice, rate: lang === 'ar' ? 185 : voice === 'f3' ? 165 : 170, pitch: voice === 'f3' ? 58 : 42 }); });
+    TTS.pend.set(id, d => { clearTimeout(to); if (d.error) return rej(new Error(d.error)); const r = { pcm: d.pcm, rate: d.rate, emo }; TTS.cache.set(key, r); if (TTS.cache.size > 60) TTS.cache.delete(TTS.cache.keys().next().value); res(r); });
+    const base = lang === 'ar' ? 185 : voice === 'f3' ? 165 : 170, pitch = (voice === 'f3' ? 58 : 42) + E.p + j() * 4; w.postMessage({ id, lang: lang === 'ar' ? 'ar' : 'en-us', text, voice, rate: Math.round(base + E.r + j() * 8), pitch: Math.round(clamp(pitch, 10, 90)), range: E.rg, amp: E.amp }); });
 }
 function ttsWarm() { const w = ttsWorker(); if (w) w.postMessage({ id: ++TTS.id, warm: true }); }
 const VOICE_MODES = ['radio-m', 'radio-f', 'device'], VOICE_LABEL = { 'radio-m': 'Radio male', 'radio-f': 'Radio female', 'device': 'Device voice' };
@@ -565,7 +575,7 @@ function deviceSpeak(text, lang, urgent) {
 function engineer(msg, urgent) {
   const lang = save.lang === 'ar' ? 'ar' : 'en', text = msg[lang], say = msg[lang + 'S'] || text; (window.__engLog || (window.__engLog = [])).push(lang + ': ' + text); radio(text, true);
   if (save.engVoice === false) return; const mode = save.voiceMode || 'radio-m';
-  if (mode !== 'device' && !TTS.dead) { const t0 = performance.now(); ttsSynth(say, lang, mode === 'radio-f' ? 'f3' : 'm3').then(r => { if (performance.now() - t0 > 6000) return; /* a call that arrives late is dropped, never played stale */ if (!audio.radioVoice(r.pcm, r.rate, urgent)) deviceSpeak(say, lang, urgent); }).catch(() => deviceSpeak(say, lang, urgent)); return; }
+  if (mode !== 'device' && !TTS.dead) { const t0 = performance.now(); ttsSynth(say, lang, mode === 'radio-f' ? 'f3' : 'm3', msg.emo || 'calm').then(r => { if (performance.now() - t0 > 6000) return; /* a call that arrives late is dropped, never played stale */ const E = EMO[r.emo] || EMO.calm; if (!audio.radioVoice(r.pcm, r.rate, urgent, E)) deviceSpeak(say, lang, urgent); }).catch(() => deviceSpeak(say, lang, urgent)); return; }
   deviceSpeak(say, lang, urgent);
 }
 function engineerTick(me, dt) {
@@ -600,7 +610,7 @@ function tow(car) {
 // to its OWN numbered box, stops, is serviced, and rejoins. Boxes are never shared: a car whose box is taken uses the nearest free one.
 const PIT_LIMIT = 20;
 function aiNeedsPit(car) {
-  const P = car.parts, left = R.laps - Math.max(0, car.lap), lowFuel = car.fuelK > 0 && car.fuel < Math.max(.07, (car.fpl || .15) * 1.15);
+  const P = car.parts, left = R.laps - Math.max(0, car.lap), lowFuel = car.fuelK > 0 && car.fuel < Math.max(.09, (car.fpl || .15) * 1.4);      // stop while there is still a lap and a bit left to reach the pit lane
   const wrecked = car.health < .55 || P.engine > .35 || P.gearbox > .5 || P.wheels.some(w => w > .45) || car.dmg.front > .6 || car.dmg.rear > .6 || car.dmg.left > .6 || car.dmg.right > .6;      // a crash
   const critical = car.health < .35 || P.engine > .6 || P.gearbox > .75 || P.wheels.some(w => w > .7);
   if (left <= 1 && !critical) return false;                                    // last lap: only stop if the car is truly broken
@@ -777,12 +787,14 @@ function setupExtras() {
     const chev = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x39ff88, transparent: true, opacity: .8, fog: false, depthWrite: false })), edge = new THREE.LineSegments(new THREE.EdgesGeometry(g, 40), new THREE.LineBasicMaterial({ color: 0xeafff3, transparent: true, opacity: .9, fog: false })),
       stem = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, 1.1, 6), new THREE.MeshBasicMaterial({ color: 0x39ff88, transparent: true, opacity: .3, fog: false, depthWrite: false })); stem.position.y = -.8; mk.add(chev, edge, stem); mk.traverse(o => { o.renderOrder = 8; });
     mk.position.y = me.top + 2.3; me.root.add(mk); R.marker = mk; }      // a slim chevron floating well above the roof, translucent, so it never hides the car      // a plain 3D map pin: a ball on a point, standing on the roof
-  R.pro = R.rules !== 'arcade';
+  R.pro = R.rules !== 'arcade'; R.diffLevel = (typeof o !== 'undefined' && o.diff != null) ? o.diff : 1;
   if (R.pro && (R.mode === 'race' || R.mode === 'online')) { const field = R.cars.map(c => c.spec); for (const c of R.cars) { const b = balance(c.spec, field); c.bopP = b.p; c.bopG = b.g; } }   // balance of performance
-  { const lapT = tr.len / 36, lapsPerTank = Math.max(2.6, R.laps * .62), proBurn = R.mode === 'race' && R.laps >= 3 ? clamp(TUNE.fuel.fullThrottleSeconds * .8 / (lapsPerTank * lapT), 1, 6) : 1;
+  { const lapT = tr.len / 46, lapsPerTank = Math.max(2.6, R.laps * .62), proBurn = R.mode === 'race' && R.laps >= 3 ? clamp(TUNE.fuel.fullThrottleSeconds * .8 / (lapsPerTank * lapT), 1, 6) : 1;
     for (const c of R.cars) { c.noNitro = R.pro;
-      if (R.pro) { c.fuelK = R.endu ? proBurn * 1.3 : proBurn; if (R.endu) c.wear *= 1.7; }          // Professional: a tank lasts about 60% of the race, so everyone must stop
-      else { c.fuelK = 0; c.partK = .3; c.dmgScale *= .55; c.wear *= .3; } }                         // Arcade: no fuel, light damage, slow tyre wear
+      // each car has its own thirst: a bigger engine drinks more, four-wheel drive a little more, and every driver has a personal style (lead-foot or economical)
+      const hp = c.spec.hp || c.spec.power || 300, own = c === me || c.isRemote ? 1 : clamp(hp / 320, .7, 1.5) ** .55 * (c.spec.drive === 'awd' ? 1.07 : 1) * (.88 + Math.random() * .24); c.fuelOwn = own;
+      if (R.pro) { c.fuelK = (R.endu ? proBurn * 1.3 : proBurn) * own; if (R.endu) c.wear *= 1.7; }          // Professional: a tank lasts about 60% of the race, so everyone must stop
+      else { c.fuelK = c === me || c.isRemote ? 0 : proBurn * .5 * own; c.partK = .3; c.dmgScale *= .55; c.wear *= .3; } }      // Arcade: you have no fuel, but the AI still drink a little and stop once in a long race                         // Arcade: no fuel, light damage, slow tyre wear
     if (save.dev && save.devGod) { me.dmgScale = 0; me.partK = 0; } }
   // Arcade ruleset only: nitro canisters and coins strung along the racing line
   R.picks = []; R.coins = 0;
@@ -858,7 +870,7 @@ function raceExtras(dt) {
   }
   // --- rain rolls in: less grip, wet shine on the road, darker sky
   if (R.t > R.rainAt && R.wet < 1) { if (R.wet === 0) { flash('Rain', true, 1600); radio('Rain. Brake earlier — box for wet tyres if it gets heavy.', true); } R.wet = Math.min(1, R.wet + dt / 9); tr.wet = R.wet;
-    for (const [m, r0, m0] of R.roadMats) { m.roughness = r0 - (r0 - .28) * R.wet; m.metalness = m0 + (.35 - m0) * R.wet; }
+    for (const [m, r0, m0] of R.roadMats) { m.roughness = r0 - (r0 - .5) * R.wet; m.metalness = m0 + (.14 - m0) * R.wet; }
     scene.fog.density = baseFog * (1 + .5 * R.wet); sun.intensity = baseSun * (1 - .35 * R.wet); hemi.intensity = baseHemi * (1 - .2 * R.wet); }
   R.haze += ((R.ev.cur && R.ev.cur.type === 'haze' ? 1 : 0) - R.haze) * Math.min(1, dt * .8); scene.fog.density = baseFog * (1 + .5 * R.wet) * (1 + 4.5 * R.haze);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
@@ -895,7 +907,8 @@ function updateRace(dt) {
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
     if (car !== me && live) { const left = R.laps - Math.max(0, car.lap), short = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * Math.min(left, 3) * 1.05 && left > 1, ahead = R.cars.some(o => o !== car && !o.out && o.prog > car.prog && (o.prog - car.prog) * tr.spacing < Math.max(18, car.speed * 1.2)); car.pace = short || car.tyre < .35 ? 0 : ahead && car.tyre > .5 ? 2 : 1; }   // AI manages its pace like a driver: saves when fuel or tyres are short, pushes when a car is within reach
-    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; aiDrive(car, tr, ai, R.sc ? R.cars.concat([R.sc.car]) : R.cars, dt);      // the safety car is a car like any other: the field slows behind it
+    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; { const me2 = R.player, gapS = me2 && !car.isRemote && car !== me2 && me2.lap >= 0 ? ((me2.prog || 0) - (car.prog || 0)) * tr.spacing / Math.max(14, me2.speed) : 0, cap = R.diffLevel === 2 ? .06 : R.diffLevel === 1 ? .03 : 0; ai.cu = 1 + clamp((gapS - 1.2) * .012, 0, cap); ai.boost = 1 + (ai.cu - 1) * 3; }      // catch-up: when you pull away, the cars behind find a little more pace (up to about 6% on Hard), so the lead never becomes a walkover
+      aiDrive(car, tr, ai, R.sc ? R.cars.concat([R.sc.car]) : R.cars, dt);      // the safety car is a car like any other: the field slows behind it
     if (car !== me) ai.boost = R.rules === 'arcade' ? ((me.prog - car.prog) * tr.spacing > 50 ? 1.08 : (me.prog - car.prog) * tr.spacing < -70 ? .93 : 1) : 1;   // Arcade keeps the pack together; Professional never touches the cars
     if (car !== me && live) aiPit(car, ai, dt);
     if (car.finished) { ai.inp.throttle *= .5; }
@@ -1000,19 +1013,46 @@ function updateCamera(dt) {
 // Menu showcase: a live AI race filmed by a director that cuts between an orbit, a crane, a low chase and a flyover.
 const tr2Tick = t => { if (!t.tick) return; const a = R.attract ? R.cars[(Math.floor(R.t / 7) * 3) % R.cars.length] : R.player, b = rank()[0]; t.tick(performance.now() / 1000, a.x, a.z, b.x, b.z); };
 let shotId = -1;
+// ---------------- the menu showcase: a real race, filmed ----------------
+// The cars (yours and five rivals) race a real circuit behind the menu. A director picks the car and the shot: low chase, trackside long-lens pan, helicopter orbit, front hero pass,
+// wheel-level, high chase, corner crane, and a side-on view when two cars are fighting. Every camera position is computed from a car or the track, and checked, so it can never aim at nothing.
 function attractCam(dt) {
-  const T = R.t, n = Math.floor(T / 7), k = n % 4, u = (T % 7) / 7, c = R.cars[(n * 3) % R.cars.length], X = c.rx ?? c.x, Z = c.rz ?? c.z, sn = Math.sin(c.th), cs = Math.cos(c.th);
-  let px, py, pz, lx = X, ly = c.y + .8, lz = Z, fov = 40;
-  if (k === 0) { const a = T * .22; px = X + Math.cos(a) * 13; pz = Z + Math.sin(a) * 13; py = c.y + 3.2 + Math.sin(T * .4) * 1.2; }
-  else if (k === 1) { px = X - 22 + u * 8; pz = Z - 20; py = c.y + 40 - u * 16; fov = 34; }
-  else if (k === 2) { px = X - sn * 7.5 + cs * 1.6; pz = Z - cs * 7.5 - sn * 1.6; py = c.y + 2; lx = X + sn * 8; lz = Z + cs * 8; fov = 62; }
-  else { px = X - sn * 6 + Math.cos(T * .3) * 6; pz = Z - cs * 6 + Math.sin(T * .3) * 6; py = c.y + 52 - u * 10; lx = X + sn * 10; lz = Z + cs * 10; fov = 30; }
-  py = Math.max(py, R.track.height(px, pz) + 1.2);
-  if (shotId !== n) { shotId = n; cam.pos.set(px, py, pz); cam.look.set(lx, ly, lz); }
-  const q = 1 - Math.exp(-dt * 4); cam.pos.x += (px - cam.pos.x) * q; cam.pos.y += (py - cam.pos.y) * q; cam.pos.z += (pz - cam.pos.z) * q; cam.look.x += (lx - cam.look.x) * q; cam.look.y += (ly - cam.look.y) * q; cam.look.z += (lz - cam.look.z) * q;
-  camera.position.copy(cam.pos); camera.lookAt(cam.look); if (Math.abs(camera.fov - fov) > .05) { camera.fov = cam.fov = fov; camera.updateProjectionMatrix(); }
+  const tr = R.track, n = tr.n, T = R.t; let S = R.cine; if (!S) S = R.cine = { t0: -99, dur: 0, kind: '', last: '', car: R.player, bat: null, fixed: null, side: 1, cut: true };
+  const spd = c => Math.hypot(c.vx || 0, c.vz || 0), cars = R.cars.filter(c => !c.out && Number.isFinite(c.x + c.z));
+  if (T - S.t0 > S.dur || !S.car || !Number.isFinite(S.car.x)) {
+    const order = rank(), me = R.player, r = Math.random(), car = r < .4 ? me : r < .7 ? order[0] : cars[(Math.random() * cars.length) | 0] || me; let bat = null;
+    for (let i = 0; i < order.length - 1; i++) if (Math.hypot(order[i].x - order[i + 1].x, order[i].z - order[i + 1].z) < 14) { bat = [order[i], order[i + 1]]; break; }
+    const kinds = ['chase', 'trackside', 'heli', 'hero', 'wheel', 'high', 'crane'].concat(bat ? ['battle', 'battle'] : []).filter(k => k !== S.last); S.kind = kinds[(Math.random() * kinds.length) | 0]; S.last = S.kind;
+    S.car = S.kind === 'battle' ? bat[0] : car; S.bat = bat; S.t0 = T; S.side = Math.random() < .5 ? 1 : -1; S.cut = true; S.fixed = null; S.dur = { chase: 6, heli: 7, hero: 5, wheel: 4.5, high: 6, battle: 6 }[S.kind] || 5;
+    if (S.kind === 'trackside' || S.kind === 'crane') { const c = S.car, ahead = Math.round((S.kind === 'crane' ? 62 : 40) + spd(c) * .6 / tr.spacing), q = tr.path[((c.idx || 0) + ahead) % n], off = (tr.def.width * .6 + (S.kind === 'crane' ? 22 : 10)) * S.side;
+      S.fixed = new THREE.Vector3(q.x + q.tz * off, tr.height(q.x, q.z) + (S.kind === 'crane' ? 17 : 1.7), q.z - q.tx * off); S.dur = clamp(ahead * tr.spacing / Math.max(12, spd(c)) + 1.6, 3.5, 8); }
+  }
+  const c = S.car, X = c.rx ?? c.x, Z = c.rz ?? c.z, sn = Math.sin(c.th), cs = Math.cos(c.th), u = clamp((T - S.t0) / Math.max(.1, S.dur), 0, 1), gy = c.y || 0, P = new THREE.Vector3(), Lk = new THREE.Vector3(X, gy + .7, Z); let fov = 40, follow = 6;
+  switch (S.kind) {
+    case 'chase': P.set(X - sn * 8.5 + cs * 1.8 * S.side, gy + 1.9 + Math.sin(T * .8) * .25, Z - cs * 8.5 - sn * 1.8 * S.side); Lk.set(X + sn * 9, gy + .9, Z + cs * 9); fov = 56; break;
+    case 'trackside': P.copy(S.fixed); fov = 22 + u * 4; follow = 0; break;
+    case 'crane': P.copy(S.fixed); fov = 30; follow = 0; break;
+    case 'heli': { const a = T * .35 * S.side + S.t0; P.set(X + Math.cos(a) * 26, gy + 15 + u * 4, Z + Math.sin(a) * 26); fov = 36; follow = 3; break; }
+    case 'hero': P.set(X + sn * (12 - u * 6) + cs * 2.4 * S.side, gy + 1.2, Z + cs * (12 - u * 6) - sn * 2.4 * S.side); fov = 40; follow = 8; break;
+    case 'wheel': P.set(X + cs * 2.7 * S.side - sn * 1.2, gy + .55, Z - sn * 2.7 * S.side - cs * 1.2); Lk.set(X + sn * 7, gy + .7, Z + cs * 7); fov = 50; follow = 10; break;
+    case 'high': P.set(X - sn * 13, gy + 23, Z - cs * 13); fov = 40; follow = 3; break;
+    default: { const b = S.bat || [c, c], mx = (b[0].x + b[1].x) / 2, mz = (b[0].z + b[1].z) / 2; P.set(mx + cs * 14 * S.side, gy + 3.2, mz - sn * 14 * S.side); Lk.set(mx, gy + .7, mz); fov = 34; follow = 4; }
+  }
+  if (![P.x, P.y, P.z, Lk.x, Lk.y, Lk.z].every(Number.isFinite)) { S.t0 = -99; return; }      // (a bad shot is dropped and another is chosen next frame)
+  P.y = Math.max(P.y, tr.height(P.x, P.z) + 1.0);
+  if (S.cut) { S.cut = false; cam.pos.copy(P); cam.look.copy(Lk); }
+  cam.pos.lerp(P, follow ? 1 - Math.exp(-dt * follow) : 1); cam.look.lerp(Lk, 1 - Math.exp(-dt * 7));
+  camera.position.copy(cam.pos); camera.lookAt(cam.look); camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 3)); cam.fov = camera.fov; camera.updateProjectionMatrix();
   if (R.marker) R.marker.visible = false;
 }
+let showBusy = false, showTimer = 0; const SHOW_TRACKS = ['monza', 'marina', 'silverstone', 'imola', 'laguna', 'brands', 'redbull', 'midnight'], showPick = SHOW_TRACKS[(Math.random() * SHOW_TRACKS.length) | 0];
+async function arenaStart() {      // (the name is kept from the old arena: this now starts the cinematic race behind the menu)
+  if (showBusy || (R && R.attract)) return; showBusy = true;
+  try { const night = showPick === 'marina' || showPick === 'midnight'; await startRace({ mode: 'race', track: showPick, laps: 99, diff: 2, weather: night ? 'rain' : 'clear', nRivals: 5, rules: 'arcade', attract: true }); document.body.classList.add('cine'); } catch (e) { console.warn('showcase failed', e); }
+  showBusy = false;
+}
+function arenaStop() { document.body.classList.remove('cine'); if (R && R.attract) { raceToken++; endRace(); } }
+function arenaSwap() { if (!(R && R.attract)) return; clearTimeout(showTimer); showTimer = setTimeout(() => { arenaStop(); arenaStart(); }, 500); }
 // developer telemetry (T): what the tyres are actually doing
 let teleFps = 60;
 function telemetry(me, dt) {
@@ -1169,7 +1209,7 @@ function buildArena() {
     let L = null; if (i < 2) { L = new THREE.SpotLight(col, 2600, 90, .5, .7, 1.5); L.position.set(x, 16.3, z); g.add(L, L.target); }
     arena.spots.push({ beam, L, x, z, ph: i * 1.7 }); });
 }
-function arenaStart() {
+function arenaStartOld() {
   if (arena.on) return; arena.on = true; if (!arena.g) buildArena(); scene.add(arena.g); garage.visible = false; arena.t = 0; arena.acc = 0;
   if (sky) { scene.remove(sky); sky = null; } scene.background = new THREE.Color(0x05070b); scene.fog = new THREE.FogExp2(0x0a0e15, .009); hemi.color.set(0x7f93c8); hemi.groundColor.set(0x1b1f28); hemi.intensity = .55; sun.color.set(0xbfd0ff); sun.intensity = 1.1; scene.environmentIntensity = .45; renderer.toneMappingExposure = 1.1;
   if (post) { post.u.sunVis.value = 0; post.u.speed.value = 0; post.u.wet.value = 0; post.u.hit.value = 0; post.u.tilt.value = .55; }
@@ -1183,7 +1223,7 @@ function arenaStart() {
     if (gfx === 'high') { car.spot = new THREE.SpotLight(0xfff0d2, 190, 46, .46, .85, 1.35); scene.add(car.spot, car.spot.target); }   // real headlight beams on High; the painted throw is used otherwise
     scene.add(car.root); return car; });
 }
-function arenaSwap() {      // the player picked another car: change that one car where it is, the scene carries on
+function arenaSwapOld() {      // the player picked another car: change that one car where it is, the scene carries on
   if (!arena.on) return; const old = arena.cars[0], spec = CARS.find(c => c.id === save.car), car = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id));
   for (const k of ['x', 'z', 'th', 'px', 'pz', 'pth', 'vx', 'vz', 'r', 'R0', 'dir', 'inp', 'ruts']) car[k] = old[k];
   car.assistK = .8; car.tc = false; car.forceDrift = true; car.driftCut = .56; car.fuelK = 0; car.wear = 0; car.setLights(true); car.spot = old.spot; scene.remove(old.root); old.dispose(); scene.add(car.root); arena.cars[0] = car;
@@ -1201,7 +1241,7 @@ function carThumb() {
   for (const o of hid) o.visible = true; if (par) par.add(root); root.rotation.y = ry; root.visible = vis;
   const cv = $('carPic'), k = cv.getContext('2d'), img = k.createImageData(W, Hh); for (let y = 0; y < Hh; y++) img.data.set(thumb.buf.subarray((Hh - 1 - y) * W * 4, (Hh - y) * W * 4), y * W * 4); k.putImageData(img, 0, 0);
 }
-function arenaStop() {
+function arenaStopOld() {
   if (!arena.on) return; arena.on = false; scene.remove(arena.g); for (const c of arena.cars) { scene.remove(c.root); c.dispose(); if (c.spot) { scene.remove(c.spot, c.spot.target); c.spot.dispose(); } } arena.cars = [];
   for (const p of [arena.fx.smoke, arena.fx.glow]) { scene.remove(p.points); p.geo.dispose(); p.mat.dispose(); } scene.remove(arena.fx.skids.mesh); arena.fx.skids.geo.dispose(); arena.fx = null; arena.amb.dispose(); arena.props.dispose(); for (let i = 0; i < 4; i++) LIGHTS.c[i].set(0, 0, 0, 0);
 }
@@ -1575,5 +1615,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { THREE, get tts() { return { synth: ttsSynth, TTS }; }, get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) { rawDt = fdt; updateRace(fdt); } }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get cine() { return R && R.cine; }, THREE, get tts() { return { synth: ttsSynth, TTS }; }, get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) { rawDt = fdt; updateRace(fdt); } }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

@@ -4,10 +4,10 @@ import ESpeak from './espeak-ng.js';
 let M = null, W = null;
 async function init() { M = await ESpeak({ locateFile: f => new URL(f, import.meta.url).href }); W = new M.eSpeakNGWorker(); }
 self.onmessage = async e => {
-  const { id, lang, text, voice, rate, pitch, warm } = e.data;
+  const { id, lang, text, voice, rate, pitch, range, amp, warm } = e.data;
   try {
     if (!W) await init(); if (warm) { self.postMessage({ id, warm: true }); return; }
-    W.set_voice(voice ? lang + '+' + voice : lang, lang, 0, 0, 0); W.set_rate(rate || 165); W.set_pitch(pitch || 45); W.set_range(55);
+    W.set_voice(voice ? lang + '+' + voice : lang, lang, 0, 0, 0); W.set_rate(rate || 165); W.set_pitch(pitch || 45); W.set_range(range || 55); W.set_volume(amp || 100);
     const chunks = []; W.synthesize(text, s => { chunks.push(Int16Array.from(s)); return 0; });
     const n = chunks.reduce((a, c) => a + c.length, 0), pcm = new Float32Array(n); let o = 0; for (const c of chunks) { for (let i = 0; i < c.length; i++) pcm[o + i] = c[i] / 32768; o += c.length; }
     self.postMessage({ id, pcm, rate: W.get_samplerate() }, [pcm.buffer]);

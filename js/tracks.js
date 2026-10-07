@@ -188,6 +188,23 @@ function addStart(track) {
 }
 
 // ---------- procedural tracks ----------
+// Corners and their apexes. A corner is a run of the track that keeps turning one way; its apex is the point on the inside where a driver clips the kerb: about half way round for a
+// medium corner, later for a sharp one (a late apex lets the car straighten up and get on the power early, as in the diagrams of a basic and a late-apex line).
+// `side` is +1 when the inside of the corner is the positive-offset side of the track (x + tz*o, z - tx*o), -1 otherwise.
+function findApexes(path, n) {
+  const sp = Math.hypot(path[1].x - path[0].x, path[1].z - path[0].z) || 2, at = i => path[((i % n) + n) % n];
+  const dot = path.map((p, i) => { const a = at(i - 1), b = at(i + 1); return (b.x - 2 * p.x + a.x) * p.tz - (b.z - 2 * p.z + a.z) * p.tx; });      // + : the centre of the bend is on the positive-offset side
+  const ks = path.map(p => p.k || 0), ksm = ks.map((_, i) => { let s = 0; for (let q = -4; q <= 4; q++) s += Math.abs(ks[((i + q) % n + n) % n]); return s / 9; }), thr = 1 / 160;
+  let start = ksm.findIndex(v => v < thr * .6); if (start < 0) start = 0; const runs = []; let cur = null;
+  for (let q = 1; q <= n; q++) { const v = ksm[(start + q) % n], d = dot[(start + q) % n], sgn = v > thr ? Math.sign(d) || 1 : 0;
+    if (sgn) { if (cur && cur.sgn === sgn) cur.end = q; else { if (cur) runs.push(cur); cur = { sgn, s: q, end: q }; } } else if (cur && q - cur.end > 8) { runs.push(cur); cur = null; } }
+  if (cur) runs.push(cur);
+  const out = [];
+  for (const r of runs) { let ang = 0; for (let q = r.s; q <= r.end; q++) ang += ksm[(start + q) % n] * sp; const len = r.end - r.s + 1; if (ang < .38 || len * sp < 18) continue;      // under about 22 degrees is a bend, not a corner
+    const late = ang > 1.2 ? .62 : ang > .7 ? .55 : .5; let acc = 0, ai = r.s; for (let q = r.s; q <= r.end; q++) { acc += ksm[(start + q) % n] * sp; if (acc >= ang * late) { ai = q; break; } }
+    out.push({ i: (start + ai) % n, side: r.sgn, len, ang, a: (start + r.s) % n, b: (start + r.end) % n }); }
+  return out;
+}
 function ribbon(path, offL, offR, y, vScale, closed = true, mask = null) {
   const pos = [], uv = [], idx = [], n = path.length; let d = 0, vi = 0, prev = false;
   for (let i = 0; i <= n; i++) {
@@ -307,7 +324,9 @@ function buildProc(track) {
   let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
   for (const p of path) { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); minz = Math.min(minz, p.z); maxz = Math.max(maxz, p.z); }
   const cx = (minx + maxx) / 2, cz = (minz + maxz) / 2;
-  const curved = path.map((p, i) => { for (let k = -6; k <= 6; k++) if (Math.abs(path[((i + k) % n + n) % n].k) > 1 / 110) return true; return false; });
+  // kerbs only where a driver uses them: on the inside of each corner, around its apex (never along the outside or down the straights)
+  const apexes = findApexes(path, n), kerbP = new Array(n).fill(false), kerbN = new Array(n).fill(false); track.apexes = apexes;
+  for (const a of apexes) { const before = Math.min(14, Math.max(6, Math.round(a.len * .34))), after = Math.min(11, Math.max(5, Math.round(a.len * .28))), M = a.side > 0 ? kerbP : kerbN; for (let q = -before; q <= after; q++) M[((a.i + q) % n + n) % n] = true; }
 
   // -- physics grid, rasterised with a 2D canvas: R = road, G = inside the barriers, B = kerb band
   const cell = 0.5, pad = Math.max(30, B + 8), x0 = minx - pad, z0 = minz - pad, w = Math.ceil((maxx - minx + pad * 2) / cell), h = Math.ceil((maxz - minz + pad * 2) / cell);
@@ -316,7 +335,8 @@ function buildProc(track) {
   const trace = (mask) => { c.beginPath(); let pen = false; for (let i = 0; i <= n; i++) { const p = path[i % n], X = (p.x - x0) / cell, Z = (p.z - z0) / cell; if (mask && !mask[i % n]) { pen = false; continue; } if (pen) c.lineTo(X, Z); else c.moveTo(X, Z); pen = true; } c.stroke(); };
   c.strokeStyle = '#00ff00'; c.lineWidth = B * 2 / cell; trace();
   c.strokeStyle = '#ff0000'; c.lineWidth = hw * 2 / cell; trace();
-  c.strokeStyle = '#0000ff'; c.lineWidth = (hw + 1.5) * 2 / cell; trace(curved);
+  { const side = (mask, o) => { c.beginPath(); let pen = false; for (let i = 0; i <= n; i++) { const j = i % n; if (!mask[j]) { pen = false; continue; } const p = path[j], X = (p.x + p.tz * o - x0) / cell, Z = (p.z - p.tx * o - z0) / cell; if (pen) c.lineTo(X, Z); else c.moveTo(X, Z); pen = true; } c.stroke(); };
+    c.strokeStyle = '#0000ff'; c.lineWidth = 1.5 / cell; c.lineCap = 'butt'; side(kerbP, hw + .75); side(kerbN, -(hw + .75)); c.lineCap = 'round'; }      // the kerb band in the physics grid, on the inside edge only
   // pit lane: a second strip of tarmac on the left of the start straight, inside its own wall
   const pb = def.pit === null ? null : [Math.max(60, (def.pit || [])[0] || 0), Math.max(90, (def.pit || [])[1] || 0)], nb = pb ? Math.round(pb[0] / 2) : 0, na = pb ? Math.round(pb[1] / 2) : 0;
   const inPit = i => !!pb && (i >= n - nb || i <= na), pitIdx = []; for (let i = n - nb; i <= n + na; i++) pitIdx.push(i % n);
@@ -393,7 +413,7 @@ function buildProc(track) {
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
   const ktex = canvasTex(64, 64, (k) => { k.fillStyle = day ? '#e8475a' : '#e3262e'; k.fillRect(0, 0, 64, 32); k.fillStyle = day ? '#f2c230' : '#f4f4f4'; k.fillRect(0, 32, 64, 32); });
   const kmat = new THREE.MeshStandardMaterial({ map: ktex, roughness: .7 });
-  for (const s of [1, -1]) { const km = new THREE.Mesh(ribbon(path, s > 0 ? hw + 1.5 : -hw, s > 0 ? hw : -hw - 1.5, 0.045, 1 / 4, true, curved), kmat); km.receiveShadow = true; G.add(km); }
+  for (const s of [1, -1]) { const km = new THREE.Mesh(ribbon(path, s > 0 ? hw + 1.5 : -hw, s > 0 ? hw : -hw - 1.5, 0.045, 1 / 4, true, s > 0 ? kerbP : kerbN), kmat); km.receiveShadow = true; G.add(km); }
 
   // -- barriers
   // Barriers: painted steel crash rail with a corrugated profile, bolted to posts every few metres, scuffed, streaked with rust and dirty at the foot. The bump map carries the corrugation.
