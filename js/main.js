@@ -291,7 +291,7 @@ function respawn(car, manual) {
 }
 
 async function startRace(o) {
-  menuBg.stop(); arenaStop(); if (R) endRace(); const token = ++raceToken; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
+  menuBg.stop(); arenaStop(); if (R) endRace(); const token = ++raceToken; window.__noPeople = !!o.attract; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
   if (!o.attract) { audio.init(); show('menu', false); show('results', false); show('pause', false); show('loading', true); }
   const def = TRACKS.find(t => t.id === o.track);
   $('loadName').textContent = def.name; $('loadBar').style.width = '4%'; $('loadTip').textContent = TIPS[Math.random() * TIPS.length | 0];
@@ -304,7 +304,7 @@ async function startRace(o) {
   scene.add(track.group); applyTheme(track.theme);
   R = { ...o, track, cars: [], ais: new Map(), t: 0, state: 'wait', countT: 3.6, drift: 0, D: { combo: 0, time: 0, mult: 1, grace: 0 }, fx: null, sendT: 0, waitT: 0, bestThisRace: null };
   R.rules = o.rules || 'circuit'; R.arc = R.rules === 'arcade' || o.mode === 'drift';
-  ttsWarm(); R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
+  ttsWarm(); R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = o.attract ? { update() {}, dispose() {}, hit() {}, setCars() {} } : new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.driftMode = o.mode === 'drift'; if (me.driftMode) me.assistK = .22;      // drift: a counter-steer aid stays on, so the car holds a big angle instead of spinning me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
   const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
@@ -775,11 +775,11 @@ function setupExtras() {
   }
   R.crews = [];
   if (tr.pitBoxes) { const pal = [0xe3262e, 0x19a7ce, 0xffc21a, 0x2fb457, 0xff7ab0, 0xf3f4f6];
-    tr.pitBoxes.forEach((b, j) => { const owner = j === R.myBox ? me : j === R.rivBox && R.remote ? R.remote : R.cars[j]; R.crews[j] = buildCrew(tr.group, b, owner ? (owner.color ?? pal[j % 6]) : pal[j % 6], owner ? owner.name : '', { mine: j === R.myBox }); });
+    if (!window.__noPeople) tr.pitBoxes.forEach((b, j) => { const owner = j === R.myBox ? me : j === R.rivBox && R.remote ? R.remote : R.cars[j]; R.crews[j] = buildCrew(tr.group, b, owner ? (owner.color ?? pal[j % 6]) : pal[j % 6], owner ? owner.name : '', { mine: j === R.myBox }); });
     for (const cr of R.crews) if (cr) makeStaticCrew(cr);
     for (const cr of R.crews) if (cr) cr.group.traverse(o => { if (o.isMesh) o.castShadow = false; });
     { const saved = []; for (const cr of R.crews) if (cr) { cr.group.traverse(o => { saved.push([o, o.visible]); o.visible = true; }); } try { renderer.compile(scene, camera); } catch (e) {} for (const [o, v] of saved) o.visible = v; for (const cr of R.crews) if (cr) cr.group.visible = false; }      // everything in the crews (jacks, guns, held wheels, hidden until the stop) is revealed for one compile      // the crews' shaders are compiled behind the loading screen, not the first time you drive past
-    R.pit.pad = R.crews[R.myBox].pad; R.pit.th = tr.pitBoxes[R.myBox].th; if (R.remote) { const b2 = tr.pitBoxes[R.rivBox]; R.pit2 = { x: b2.x, z: b2.z, th: b2.th }; } }
+    R.pit.pad = R.crews[R.myBox] ? R.crews[R.myBox].pad : null; R.pit.th = tr.pitBoxes[R.myBox].th; if (R.remote) { const b2 = tr.pitBoxes[R.rivBox]; R.pit2 = { x: b2.x, z: b2.z, th: b2.th }; } }
   const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 4, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x19a7ce).multiplyScalar(2.2) })); beacon.position.set(R.pit.x, tr.height(R.pit.x, R.pit.z) + 5, R.pit.z); G.add(beacon);
   // marker above the player's car
   const mk = new THREE.Group(); { const sh = new THREE.Shape(); sh.moveTo(0, -.52); sh.lineTo(.5, .12); sh.lineTo(.34, .28); sh.lineTo(0, -.14); sh.lineTo(-.34, .28); sh.lineTo(-.5, .12); sh.closePath();

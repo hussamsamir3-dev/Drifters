@@ -191,19 +191,31 @@ function addStart(track) {
 // Corners and their apexes. A corner is a run of the track that keeps turning one way; its apex is the point on the inside where a driver clips the kerb: about half way round for a
 // medium corner, later for a sharp one (a late apex lets the car straighten up and get on the power early, as in the diagrams of a basic and a late-apex line).
 // `side` is +1 when the inside of the corner is the positive-offset side of the track (x + tz*o, z - tx*o), -1 otherwise.
-function findApexes(path, n) {
-  const sp = Math.hypot(path[1].x - path[0].x, path[1].z - path[0].z) || 2, at = i => path[((i % n) + n) % n];
-  const dot = path.map((p, i) => { const a = at(i - 1), b = at(i + 1); return (b.x - 2 * p.x + a.x) * p.tz - (b.z - 2 * p.z + a.z) * p.tx; });      // + : the centre of the bend is on the positive-offset side
-  const ks = path.map(p => p.k || 0), ksm = ks.map((_, i) => { let s = 0; for (let q = -4; q <= 4; q++) s += Math.abs(ks[((i + q) % n + n) % n]); return s / 9; }), thr = 1 / 160;
+function referenceLine(path, hw) {      // the shortest smooth line round the circuit that stays inside the road (a driver's ideal line): found by relaxation
+  const n = path.length, o = new Float64Array(n), qx = new Float64Array(n), qz = new Float64Array(n), lim = hw - 1.0, w = 1.88;
+  for (let i = 0; i < n; i++) { qx[i] = path[i].x; qz[i] = path[i].z; }
+  for (let it = 0; it < 1100; it++) for (let i = 0; i < n; i++) { const a = i ? i - 1 : n - 1, b = i + 1 < n ? i + 1 : 0, p = path[i], mx = (qx[a] + qx[b]) * .5, mz = (qz[a] + qz[b]) * .5, tt = (mx - p.x) * p.tz - (mz - p.z) * p.tx; let v = o[i] + w * (tt - o[i]); v = v > lim ? lim : v < -lim ? -lim : v; o[i] = v; qx[i] = p.x + p.tz * v; qz[i] = p.z - p.tx * v; }
+  return o;
+}
+// Corners and their apexes. A corner is a run of the track that keeps turning one way. Its apex is where the ideal line comes closest to the inside edge; on a sharp corner it is moved
+// later (a late apex lets the car straighten up and get on the power early, as in the diagrams of a basic and a late-apex line). `side` is +1 when the inside of the corner is the
+// positive-offset side of the track (x + tz*o, z - tx*o), -1 otherwise. kb / ka say how far the kerb runs before and after the apex, trimmed to where the line really uses the edge.
+function findApexes(path, n, hw) {
+  const sp = Math.hypot(path[1].x - path[0].x, path[1].z - path[0].z) || 2, at = i => ((i % n) + n) % n, ref = referenceLine(path, hw);
+  const dot = path.map((p, i) => { const a = path[at(i - 1)], b = path[at(i + 1)]; return (b.x - 2 * p.x + a.x) * p.tz - (b.z - 2 * p.z + a.z) * p.tx; });      // + : the centre of the bend is on the positive-offset side
+  const ks = path.map(p => p.k || 0), ksm = ks.map((_, i) => { let s = 0; for (let q = -4; q <= 4; q++) s += Math.abs(ks[at(i + q)]); return s / 9; }), thr = 1 / 160;
   let start = ksm.findIndex(v => v < thr * .6); if (start < 0) start = 0; const runs = []; let cur = null;
   for (let q = 1; q <= n; q++) { const v = ksm[(start + q) % n], d = dot[(start + q) % n], sgn = v > thr ? Math.sign(d) || 1 : 0;
     if (sgn) { if (cur && cur.sgn === sgn) cur.end = q; else { if (cur) runs.push(cur); cur = { sgn, s: q, end: q }; } } else if (cur && q - cur.end > 8) { runs.push(cur); cur = null; } }
   if (cur) runs.push(cur);
   const out = [];
-  for (const r of runs) { let ang = 0; for (let q = r.s; q <= r.end; q++) ang += ksm[(start + q) % n] * sp; const len = r.end - r.s + 1; if (ang < .38 || len * sp < 18) continue;      // under about 22 degrees is a bend, not a corner
-    const late = ang > 1.2 ? .62 : ang > .7 ? .55 : .5; let acc = 0, ai = r.s; for (let q = r.s; q <= r.end; q++) { acc += ksm[(start + q) % n] * sp; if (acc >= ang * late) { ai = q; break; } }
-    out.push({ i: (start + ai) % n, side: r.sgn, len, ang, a: (start + r.s) % n, b: (start + r.end) % n }); }
-  return out;
+  for (const r of runs) { let ang = 0; for (let q = r.s; q <= r.end; q++) ang += ksm[(start + q) % n] * sp; const len = r.end - r.s + 1; if (ang < .45 || len * sp < 20) continue;      // under about 26 degrees is a bend, not a corner
+    let bq = r.s, bv = -1e9; for (let q = r.s - 6; q <= r.end + 6; q++) { const v = r.sgn * ref[at(start + q)]; if (v > bv + 1e-6) { bv = v; bq = q; } }      // closest approach of the ideal line to the inside edge
+    const shift = ang > 1.2 ? .14 : ang > .7 ? .07 : 0, aq = Math.max(r.s + 1, Math.min(r.end - 2, bq + Math.round(shift * len))), ai = at(start + aq);
+    let kb = Math.max(7, Math.min(22, Math.round(len * .3))), ka = Math.max(5, Math.min(14, Math.round(len * .22)));
+    while (kb > 6 && r.sgn * ref[at(ai - kb)] < hw - 3.4) kb--; while (ka > 4 && r.sgn * ref[at(ai + ka)] < hw - 3.4) ka--;      // not where the line is nowhere near the edge
+    out.push({ i: ai, side: r.sgn, len, ang, a: at(start + r.s), b: at(start + r.end), kb, ka }); }
+  out.ref = ref; return out;
 }
 function ribbon(path, offL, offR, y, vScale, closed = true, mask = null) {
   const pos = [], uv = [], idx = [], n = path.length; let d = 0, vi = 0, prev = false;
@@ -309,6 +321,7 @@ function buildProc(track) {
     return mergeGeometries([box(.4, .58, .25, 0, 1.1, 0, 0, 0), box(.27, .3, .27, 0, 1.55, 0, 1, 5), box(.14, .82, .17, .09, .41, 0, 2, 3), box(.14, .82, .17, -.09, .41, 0, 2, 4), box(.1, .5, .11, .26, 1.06, 0, 0, 1), box(.1, .5, .11, -.26, 1.06, 0, 0, 2)]);
   })();
   const people = all => {
+    if (window.__noPeople) return;      // (the menu showcase has cars only)
     const cells = new Map(); for (const q of all) { const k = Math.floor(q.x / 60) + ',' + Math.floor(q.z / 60); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(q); }
     for (const list of cells.values()) {
       const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
@@ -325,8 +338,8 @@ function buildProc(track) {
   for (const p of path) { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); minz = Math.min(minz, p.z); maxz = Math.max(maxz, p.z); }
   const cx = (minx + maxx) / 2, cz = (minz + maxz) / 2;
   // kerbs only where a driver uses them: on the inside of each corner, around its apex (never along the outside or down the straights)
-  const apexes = findApexes(path, n), kerbP = new Array(n).fill(false), kerbN = new Array(n).fill(false); track.apexes = apexes;
-  for (const a of apexes) { const before = Math.min(14, Math.max(6, Math.round(a.len * .34))), after = Math.min(11, Math.max(5, Math.round(a.len * .28))), M = a.side > 0 ? kerbP : kerbN; for (let q = -before; q <= after; q++) M[((a.i + q) % n + n) % n] = true; }
+  const apexes = findApexes(path, n, hw), kerbRuns = []; track.apexes = apexes; track.kerbRuns = kerbRuns; track.refLine = apexes.ref;
+  for (const a of apexes) { const nodes = [], wd = []; for (let q = -a.kb; q <= a.ka; q++) { const u = Math.min(q + a.kb, a.ka - q) / 5, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push(((a.i + q) % n + n) % n); wd.push(1.5 * s); } kerbRuns.push({ side: a.side, nodes, w: wd }); }      // each kerb tapers to nothing at both ends
 
   // -- physics grid, rasterised with a 2D canvas: R = road, G = inside the barriers, B = kerb band
   const cell = 0.5, pad = Math.max(30, B + 8), x0 = minx - pad, z0 = minz - pad, w = Math.ceil((maxx - minx + pad * 2) / cell), h = Math.ceil((maxz - minz + pad * 2) / cell);
@@ -335,8 +348,8 @@ function buildProc(track) {
   const trace = (mask) => { c.beginPath(); let pen = false; for (let i = 0; i <= n; i++) { const p = path[i % n], X = (p.x - x0) / cell, Z = (p.z - z0) / cell; if (mask && !mask[i % n]) { pen = false; continue; } if (pen) c.lineTo(X, Z); else c.moveTo(X, Z); pen = true; } c.stroke(); };
   c.strokeStyle = '#00ff00'; c.lineWidth = B * 2 / cell; trace();
   c.strokeStyle = '#ff0000'; c.lineWidth = hw * 2 / cell; trace();
-  { const side = (mask, o) => { c.beginPath(); let pen = false; for (let i = 0; i <= n; i++) { const j = i % n; if (!mask[j]) { pen = false; continue; } const p = path[j], X = (p.x + p.tz * o - x0) / cell, Z = (p.z - p.tx * o - z0) / cell; if (pen) c.lineTo(X, Z); else c.moveTo(X, Z); pen = true; } c.stroke(); };
-    c.strokeStyle = '#0000ff'; c.lineWidth = 1.5 / cell; c.lineCap = 'butt'; side(kerbP, hw + .75); side(kerbN, -(hw + .75)); c.lineCap = 'round'; }      // the kerb band in the physics grid, on the inside edge only
+  { c.fillStyle = '#0000ff'; for (const kr of kerbRuns) { c.beginPath(); kr.nodes.forEach((j, q) => { const p = path[j], o = kr.side * hw; q ? c.lineTo((p.x + p.tz * o - x0) / cell, (p.z - p.tx * o - z0) / cell) : c.moveTo((p.x + p.tz * o - x0) / cell, (p.z - p.tx * o - z0) / cell); });
+      for (let q = kr.nodes.length - 1; q >= 0; q--) { const p = path[kr.nodes[q]], o = kr.side * (hw + kr.w[q]); c.lineTo((p.x + p.tz * o - x0) / cell, (p.z - p.tx * o - z0) / cell); } c.closePath(); c.fill(); } }      // the kerbs in the physics grid, same shape as the ones drawn
   // pit lane: a second strip of tarmac on the left of the start straight, inside its own wall
   const pb = def.pit === null ? null : [Math.max(60, (def.pit || [])[0] || 0), Math.max(90, (def.pit || [])[1] || 0)], nb = pb ? Math.round(pb[0] / 2) : 0, na = pb ? Math.round(pb[1] / 2) : 0;
   const inPit = i => !!pb && (i >= n - nb || i <= na), pitIdx = []; for (let i = n - nb; i <= n + na; i++) pitIdx.push(i % n);
@@ -413,7 +426,11 @@ function buildProc(track) {
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
   const ktex = canvasTex(64, 64, (k) => { k.fillStyle = day ? '#e8475a' : '#e3262e'; k.fillRect(0, 0, 64, 32); k.fillStyle = day ? '#f2c230' : '#f4f4f4'; k.fillRect(0, 32, 64, 32); });
   const kmat = new THREE.MeshStandardMaterial({ map: ktex, roughness: .7 });
-  for (const s of [1, -1]) { const km = new THREE.Mesh(ribbon(path, s > 0 ? hw + 1.5 : -hw, s > 0 ? hw : -hw - 1.5, 0.045, 1 / 4, true, s > 0 ? kerbP : kerbN), kmat); km.receiveShadow = true; G.add(km); }
+  { const pos = [], uv = [], idx = []; let base = 0;
+    for (const kr of kerbRuns) { let d = 0; kr.nodes.forEach((j, q) => { const p = path[j]; if (q) { const pp = path[kr.nodes[q - 1]]; d += Math.hypot(p.x - pp.x, p.z - pp.z); }
+        const o1 = kr.side * (hw - .03), o2 = kr.side * (hw + kr.w[q]); pos.push(p.x + p.tz * o1, .045, p.z - p.tx * o1, p.x + p.tz * o2, .045, p.z - p.tx * o2); uv.push(0, d / 4, 1, d / 4);
+        if (q) { const a = base + (q - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2, a, a + 2, a + 1, a + 1, a + 2, a + 3); } }); base += kr.nodes.length * 2; }
+    if (pos.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); const km = new THREE.Mesh(g, kmat); km.receiveShadow = true; G.add(km); } }
 
   // -- barriers
   // Barriers: painted steel crash rail with a corrugated profile, bolted to posts every few metres, scuffed, streaked with rust and dirty at the foot. The bump map carries the corrugation.
