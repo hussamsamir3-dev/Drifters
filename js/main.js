@@ -793,8 +793,8 @@ function setupExtras() {
     for (const c of R.cars) { c.noNitro = R.pro;
       // each car has its own thirst: a bigger engine drinks more, four-wheel drive a little more, and every driver has a personal style (lead-foot or economical)
       const hp = c.spec.hp || c.spec.power || 300, own = c === me || c.isRemote ? 1 : clamp(hp / 320, .7, 1.5) ** .55 * (c.spec.drive === 'awd' ? 1.07 : 1) * (.88 + Math.random() * .24); c.fuelOwn = own;
-      if (R.pro) { c.fuelK = (R.endu ? proBurn * 1.3 : proBurn) * own; if (R.endu) c.wear *= 1.7; }          // Professional: a tank lasts about 60% of the race, so everyone must stop
-      else { c.fuelK = c === me || c.isRemote ? 0 : proBurn * .5 * own; c.partK = .3; c.dmgScale *= .55; c.wear *= .3; } }      // Arcade: you have no fuel, but the AI still drink a little and stop once in a long race                         // Arcade: no fuel, light damage, slow tyre wear
+      if (R.pro) { c.fuelK = (R.endu ? proBurn * 1.3 : proBurn) * own * 1.5; if (R.endu) c.wear *= 1.7; }          // Professional: a tank lasts about 60% of the race, so everyone must stop
+      else { c.fuelK = c === me || c.isRemote ? 0 : proBurn * .5 * own * 1.5; c.partK = .3; c.dmgScale *= .55; c.wear *= .3; } }      // Arcade: you have no fuel, but the AI still drink a little and stop once in a long race                         // Arcade: no fuel, light damage, slow tyre wear
     if (save.dev && save.devGod) { me.dmgScale = 0; me.partK = 0; } }
   // Arcade ruleset only: nitro canisters and coins strung along the racing line
   R.picks = []; R.coins = 0;
