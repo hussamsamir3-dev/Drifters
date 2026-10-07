@@ -100,6 +100,19 @@ export class GameAudio {
       const s = c.createBufferSource(); s.buffer = this._nb; s.loop = true; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1700; bp.Q.value = .6; const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.022, t + .08); s.connect(hp); hp.connect(bp); bp.connect(g); g.connect(out); s.start(t); this._rb = { s, g }; }
     else if (this._rb) { const r = this._rb; this._rb = null; r.g.gain.cancelScheduledValues(t); r.g.gain.setValueAtTime(r.g.gain.value, t); r.g.gain.linearRampToValueAtTime(0, t + .07); r.s.stop(t + .1); burst(.08, 2000, .9, .08); blip(1180, .045, .03); }
   }
+  // The engineer's synthesised voice, played through an intercom: band-limited to the telephone range, a mid boost, a little saturation, hard compression and a short hollow echo, with the
+  // squelch and hiss of radio() around it. `urgent` cuts off a line that is still playing; otherwise an overlapping line is dropped.
+  radioVoice(pcm, rate, urgent) {
+    if (!this.ctx || this.ctx.state !== 'running' || !pcm || !pcm.length) return false; const c = this.ctx, out = this.sfx || this.master;
+    if (this._rv) { if (!urgent) return true; try { this._rv.stop(); } catch (e) {} this._rv = null; }
+    const buf = c.createBuffer(1, pcm.length, rate); buf.copyToChannel(pcm, 0); const src = c.createBufferSource(); src.buffer = buf;
+    const bq = (type, f, q, g) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q || .7; if (g) n.gain.value = g; return n; };
+    const hp = bq('highpass', 420, .8), hp2 = bq('highpass', 420, .8), lp = bq('lowpass', 3000, .8), lp2 = bq('lowpass', 3000, .8), pk = bq('peaking', 1700, 1.1, 8), sh = c.createWaveShaper(), cmp = c.createDynamicsCompressor(), gain = c.createGain(), dl = c.createDelay(.05), fb = c.createGain();
+    const k = 2.6, curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); } sh.curve = curve; sh.oversample = '2x';
+    cmp.threshold.value = -34; cmp.knee.value = 6; cmp.ratio.value = 14; cmp.attack.value = .002; cmp.release.value = .09; gain.gain.value = 1.15; dl.delayTime.value = .006; fb.gain.value = .22; dl.connect(fb); fb.connect(dl);
+    src.connect(hp); hp.connect(hp2); hp2.connect(lp); lp.connect(lp2); lp2.connect(pk); pk.connect(sh); sh.connect(cmp); cmp.connect(gain); cmp.connect(dl); dl.connect(gain); gain.connect(out);
+    this.radio('open'); this._rv = src; src.onended = () => { if (this._rv === src) this._rv = null; this.radio('close'); }; src.start(c.currentTime + .1); return true;
+  }
   ui(kind) {      // soft, warm interface sounds: sine and triangle tones with slow attacks through a gentle low-pass, quiet by design
     if (!this.ctx || this.state !== 'ready' || this.ctx.state !== 'running') return; const c = this.ctx, t = c.currentTime, now = performance.now(); if (now - (this._uiT || 0) < (kind === 'hover' ? 70 : 30)) return; this._uiT = now;
     const S = { hover: [[880, 0, .05, .014]], click: [[392, 0, .11, .05], [587, .015, .09, .025]], tab: [[523, 0, .12, .04], [659, .05, .14, .03]], confirm: [[523, 0, .16, .05], [659, .08, .16, .045], [784, .16, .3, .04]], back: [[494, 0, .13, .04], [370, .07, .18, .035]] }[kind] || [[440, 0, .1, .03]];

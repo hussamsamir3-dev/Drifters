@@ -68,7 +68,7 @@ function texMaterial(src, info, paintHex, recolor) {
   m.customProgramCacheKey = () => 'texrc2'; return m;
 }
 export const LIVC = [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457];
-const ROOFP = {}, FITS = {};      // centre-line roof heights per car model, measured once with rays
+const ROOFP = {}, FITS = {}, WFIT = {};      // centre-line roof heights per car model, measured once with rays
 function livery(m) {
   const U = m.userData.liv = { uH: { value: 1 }, uL: { value: new THREE.Color(0xf2f2ee) }, uRoof: { value: 0 }, uStripe: { value: 0 }, uDoor: { value: 0 }, uFlash: { value: 0 }, uNose: { value: 0 }, uL2: { value: new THREE.Color(0x1c57c8) }, uZ: { value: 2 }, uDy: { value: .8 }, uDz: { value: -.1 }, uAsp: { value: 1 } };
   m.onBeforeCompile = sh => { Object.assign(sh.uniforms, U);
@@ -163,7 +163,7 @@ export class Car {
     { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
     this.door = proto.userData.door ? proto.userData.door.slice() : null;
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
-    this.I = spec.mass * this.a * this.b * spec.yawK; this.Ic = spec.mass * ((this.a + this.b) * .31) ** 2; this.h = .4;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
+    this.I = spec.mass * this.a * this.b * spec.yawK; this.Ic = spec.mass * ((this.a + this.b) * .31) ** 2; this.h = .34;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
     this.reset(0, 0, 0);
   }
@@ -272,7 +272,7 @@ export class Car {
       // the axle's longitudinal force is shared between its wheels: braking by load; drive equally through an open diff, towards the more loaded wheel as the diff locks
       const share = ax2 * (fr ? 1 : 1) < 0 ? lw[i] / pair : .5 + clamp(TN.diff, 0, 1) * .9 * (lw[i] / pair - .5), Fxi = clamp(ax2 * share, -cap, cap);
       const vlw = vl + this.r * fi, vfw = vf - this.r * li, d = fr ? stA(i) : 0; let Fyi;
-      if (hand && !fr) { const vm = Math.hypot(vfw, vlw) || 1, fk = cap * .7; FxB += -fk * vfw / vm; FyB += -fk * vlw / vm; Mz += fi * (-fk * vlw / vm) - li * (-fk * vfw / vm); this.locked = true; this.slipR = 1; uR += 1; continue; }
+      if (hand && !fr) { const vm = Math.hypot(vfw, vlw) || 1, fk = cap * .7; FxB += -fk * vfw / vm; FyB += -fk * vlw / vm; Mz += fi * (-fk * vlw / vm) - li * (-fk * vfw / vm); this.locked = true; this.slipR = 1; continue; }
       const aRaw = Math.atan2(vlw, vden) - d * sg; SU.alpha[i] += (aRaw - SU.alpha[i]) * relax; const al = SU.alpha[i];
       if (fr) Fyi = -Math.sqrt(Math.max(cap * cap - (Fxi > 0 ? Fxi * TY.driveShare : Fxi * (this.abs ? TY.brakeShare : 1.12)) ** 2, cap * cap * .15)) * Math.sin(TY.frontC * Math.atan(TY.frontB * al));
       else Fyi = -Math.sqrt(Math.max(cap * cap - Fxi * Fxi * s.loose * TUNE.powerSlide * (this.tc ? .45 : 1), cap * cap * .12)) * Math.sin(TY.rearC * Math.atan(TY.rearB * al));
@@ -394,6 +394,21 @@ export class Car {
         const R = (bT.max.y - bT.min.y) / 2, W = bT.max.x - bT.min.x; q.dims = { R, W, rr: bR.isEmpty() ? R * .66 : clamp((bR.max.y - bR.min.y) / 2, R * .6, R * .74) }; }
       const { R, W, rr } = q.dims; for (const ch of [...q.mesh.children]) q.mesh.remove(ch); if (q.still) q.pivot.remove(q.still);
       const w = buildWheel(R, W, rr, style, seg, this.m, q.pivot.position.x >= 0); q.mesh.add(w.spin); q.still = w.still; w.still.scale.setScalar(T.wheel); q.pivot.add(w.still); q.spin = w.spin; }
+    this.fitWheels();
+  }
+  // Wheels are fitted to each model's own arches: the ray test measures how far a tyre sticks out past the fender and how far its top rises into the body above the arch, then the wheel is
+  // tucked in until it is flush and made just small enough to clear the arch (and lowered by the same amount, so the tyre still touches the road).
+  fitWheels() {
+    const key = this.spec.model || this.spec.id; let F = WFIT[key]; if (!F && !this._wf) return; const T = this.T, rc = new THREE.Raycaster(), wp = new THREE.Vector3();      // (measured once the car is fully built)
+    for (const k in this.wheels) { const q = this.wheels[k]; if (!q.base) q.base = { x: q.pivot.position.x, y: q.pivot.position.y, ms: q.mesh.scale.clone() }; q.pivot.position.set(q.base.x, q.base.y, q.pivot.position.z); q.mesh.scale.copy(q.base.ms); }
+    if (!F) { const sv = [this.root.position.clone(), this.root.rotation.clone(), this.root.scale.clone()]; this.root.position.set(0, 0, 0); this.root.rotation.set(0, 0, 0); this.root.scale.set(1, 1, 1); this.root.updateMatrixWorld(true); const body = this.bodyMeshes.filter(m => m.userData.kind !== 'window'); F = { dR: 0, dx: {}, hits: 0 };
+      for (const k in this.wheels) { const q = this.wheels[k], d = q.dims || { R: .32, W: .2 }, Rw = d.R * T.wheel, Ww = d.W * T.wheel; q.pivot.getWorldPosition(wp); const side = Math.sign(wp.x) || 1;
+        rc.set(new THREE.Vector3(wp.x + side * 2, wp.y + Rw * .85, wp.z), new THREE.Vector3(-side, 0, 0)); let h = rc.intersectObjects(body, false)[0]; const out = h ? Math.abs(wp.x) + Ww / 2 - Math.abs(h.point.x) : 0;
+        rc.set(new THREE.Vector3(wp.x, wp.y, wp.z), new THREE.Vector3(0, 1, 0)); h = rc.intersectObjects(body, false)[0]; const top = h ? (wp.y + Rw) - h.point.y : -1; F.dx[k] = 0; /* only the arch-ceiling test is trusted */ if (h) F.hits++; if (top > -.02) F.dR = Math.max(F.dR, Math.min(.1, (top + .02) / 2)); F.Rw = Rw; }
+      if (F.hits >= 3) WFIT[key] = F;      // (only remembered once the body was really there to measure)
+      this.root.position.copy(sv[0]); this.root.rotation.copy(sv[1]); this.root.scale.copy(sv[2]); this.root.updateMatrixWorld(true); }
+    this.lastFit = F; const sc = 1 - F.dR / (F.Rw || .32);
+    for (const k in this.wheels) { const q = this.wheels[k], side = Math.sign(q.base.x) || 1; q.pivot.position.x = q.base.x - side * (F.dx[k] || 0) / (T.w || 1); q.pivot.position.y = q.base.y - F.dR / (T.h || 1); q.mesh.scale.copy(q.base.ms).multiplyScalar(sc); if (q.still) q.still.scale.setScalar(T.wheel * sc); }
   }
   addTyreText() {      // (the old flat lettering ring: now part of buildWheels / sidewallDecals)
     for (const k in this.wheels) { const q = this.wheels[k], bb = new THREE.Box3(); q.mesh.traverse(o => { if (o.isMesh && o.geometry && !o.userData.decal) { o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox); } });
@@ -486,10 +501,10 @@ export class Car {
     part = 'num';
     if (L.num && !this.texCar) { const key = 'n' + L.num; if (!LAMP[key]) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const k = cv.getContext('2d'); k.fillStyle = '#111'; k.font = '900 ' + (L.num > 9 ? 78 : 96) + 'px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(String(L.num), 64, 70); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; LAMP[key] = new THREE.MeshBasicMaterial({ map: t, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }); }
       const hTop = top(minZ, maxZ, 9), dy = this.door ? this.door[0] : hTop * .5, dz = this.door ? this.door[1] : -.1, xs = side(dz - .12, dz + .12, dy - .12, dy + .12); for (const sx of [-1, 1]) { const p = put(new THREE.PlaneGeometry(.46, .46), LAMP[key], sx * (xs + .012), dy, dz); p.rotation.y = sx * Math.PI / 2; p.castShadow = false; } }
-    // ---- upgrades you can see: tyres = wider rubber (nothing is added to the body)
+    // ---- upgrades add nothing to the body or the wheels
     part = 'up'; { const U = this.up || {}, by = z => top(z - .15, z + .15, maxX * .5);
       // (upgrades no longer add any objects to the body: no bonnet vents, intake, armour plates or nitro bottles. Only the tyre upgrade shows, as wider wheels.)
-      for (const k in this.wheels) this.wheels[k].mesh.scale.x = this.T.wheel * (1 + .09 * (U.tyre || 0)); }
+      for (const k in this.wheels) this.wheels[k].mesh.scale.x = this.T.wheel; }      // wheels keep their measured width: a wider tyre pushed through the arch
     part = 'glow';
     if (L.glow) {        // Underglow: an LED strip under each sill and across the nose and tail, and the light they throw onto the road: brightest right
       // beside the car and fading away smoothly, drawn from the car's own footprint so it has no edges. A real light under the floor
@@ -609,6 +624,7 @@ export class Car {
 
   // ---- visuals: ride height from the track, body roll, wheel spin + steer
   render(dt, track, al = 1) {
+    if (!this._wf) { this._wf = 1; this.fitWheels(); }
     this.m.disc.emissiveIntensity = Math.pow(this.bT || 0, 1.4) * 2.6; if (this.fitDirty) { this.fitDirty = false; this.hang(); this.fitLamps(); }      // hot brake discs glow orange
     if (this.tex) for (const k in this.tex) { const U = this.tex[k].userData.rc; U.uDirt.value = this.dirt; U.uMud.value = this.mud; for (let q = 0; q < 6; q++) { const s = this.scr[q]; U.uScr.value[q].set(s ? s.x : 0, s ? s.y : 0, s ? s.z : 0, s ? s.r : 0); } }
     const X = this.rx = this.px + (this.x - this.px) * al, Z = this.rz = this.pz + (this.z - this.pz) * al, TH = this.pth + wrap(this.th - this.pth) * al;
@@ -830,7 +846,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 9.6 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * .78 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
   for (let i = 0; i < 70; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
