@@ -486,15 +486,9 @@ export class Car {
     part = 'num';
     if (L.num && !this.texCar) { const key = 'n' + L.num; if (!LAMP[key]) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const k = cv.getContext('2d'); k.fillStyle = '#111'; k.font = '900 ' + (L.num > 9 ? 78 : 96) + 'px Arial Black, Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(String(L.num), 64, 70); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; LAMP[key] = new THREE.MeshBasicMaterial({ map: t, transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }); }
       const hTop = top(minZ, maxZ, 9), dy = this.door ? this.door[0] : hTop * .5, dz = this.door ? this.door[1] : -.1, xs = side(dz - .12, dz + .12, dy - .12, dy + .12); for (const sx of [-1, 1]) { const p = put(new THREE.PlaneGeometry(.46, .46), LAMP[key], sx * (xs + .012), dy, dz); p.rotation.y = sx * Math.PI / 2; p.castShadow = false; } }
-    // ---- upgrades you can see: engine = bonnet vents (and an intake at level 3), tyres = wider rubber, armour = nose bar, nitro = blue bottles on the tail
+    // ---- upgrades you can see: tyres = wider rubber (nothing is added to the body)
     part = 'up'; { const U = this.up || {}, by = z => top(z - .15, z + .15, maxX * .5);
-      if (U.eng) for (const sx of [-1, 1]) for (let q = 0; q < U.eng; q++) put(new THREE.BoxGeometry(.2, .012, .035), dark, sx * .27, by(maxZ * .5 - q * .09) + .008, maxZ * .5 - q * .09);
-      if (U.eng >= 3) put(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(.15, .06, .26), this.m.paint, 0, by(maxZ * .42) - .005, maxZ * .42);
-      if (U.armor) { const y = low(maxZ - .3, maxZ), plate = new THREE.MeshStandardMaterial({ color: 0x15161a, metalness: .55, roughness: .45 }), bolt = new THREE.MeshStandardMaterial({ color: 0xb9bdc4, metalness: .9, roughness: .3 });
-        put(new THREE.BoxGeometry(W * .9, .035, .55), plate, 0, y + .02, maxZ - .22);          // skid plate under the nose
-        if (U.armor > 1) { put(new THREE.BoxGeometry(W * .94, .13, .05), plate, 0, y + .15, maxZ + .02); for (const sx of [-1, 1]) for (const q of [.3, .7]) put(new THREE.CylinderGeometry(.018, .018, .02, 8).rotateX(Math.PI / 2), bolt, sx * W * q * .5, y + .15, maxZ + .05); }          // bash plate across the bumper
-        if (U.armor > 2) for (const sx of [-1, 1]) put(new THREE.BoxGeometry(.3, .1, .05), plate, sx * W * .3, y + .4, maxZ - .03); }
-      if (U.nitro) { const blue = new THREE.MeshStandardMaterial({ color: 0x1c6fe0, metalness: .6, roughness: .3 }), y = low(minZ, minZ + .3) + .16; for (let q = 0; q < U.nitro; q++) put(new THREE.CylinderGeometry(.035, .035, .16, 12).rotateX(Math.PI / 2), blue, (q - (U.nitro - 1) / 2) * .1, y + .1, minZ - .02); }
+      // (upgrades no longer add any objects to the body: no bonnet vents, intake, armour plates or nitro bottles. Only the tyre upgrade shows, as wider wheels.)
       for (const k in this.wheels) this.wheels[k].mesh.scale.x = this.T.wheel * (1 + .09 * (U.tyre || 0)); }
     part = 'glow';
     if (L.glow) {        // Underglow: an LED strip under each sill and across the nose and tail, and the light they throw onto the road: brightest right
