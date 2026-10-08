@@ -947,6 +947,12 @@ export function aiDrive(car, track, ai, cars, dt) {
       if (f > 1.2 && Math.abs(l) < 3.6 * pk) brakeFor = Math.max(brakeFor, .32);                                  // door to door: the car whose nose is behind lifts and drops back, so nobody fights for the same space
     }
   }
+  /* build 62: the dive. Closing on a car into a braking zone, a driver who means to win takes the inside line and brakes a little later than the car he is passing, then holds that line through the apex. It is attempted at most once every few seconds and only when there is room, so it stays a clean move and never turns into a shove. */
+  if (ai.dive > 0) ai.dive -= dt; if (ai.diveCd > 0) ai.diveCd -= dt;
+  if ((ai.diff ?? 1) >= 1 && cd && !(ai.dive > 0) && !(ai.diveCd > 0) && !(ai.passT > 0) && !(ai.contactT > 0) && !car.held && Math.abs(setup) > .25 && sp > 25) {
+    for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * sn0 + (o.z - car.z) * cs0, l = (o.x - car.x) * cs0 - (o.z - car.z) * sn0;
+      if (f > 3 && f < 24 && Math.abs(l) < 4.2 && l * cd < 1.2 && car.vf > (o.vx * sn0 + o.vz * cs0) - 1 && Math.abs(want + cd * 3.4) <= ai.max + .6) { ai.dive = 2.6; ai.diveCd = 7 + Math.random() * 4; ai.diveO = o; break; } } }
+  if (ai.dive > 0) { const o = ai.diveO, f = o ? (o.x - car.x) * sn0 + (o.z - car.z) * cs0 : -99; if (!o || o.out || f < -9 || ai.contactT > 0) ai.dive = 0; else { want += cd * 3.4; if (f > 0 && f < 6) brakeFor = Math.max(brakeFor, .15); } }
   if (ai.merge > 0) { ai.merge -= dt; v0cap = Math.min(v0cap, 30); }      // just out of the pit lane: slow, and drift onto the line instead of cutting across
   { const d = ai.dbg || (ai.dbg = {}); d.line = RL.o[rix]; d.w0 = want; d.def = ai.defend > 0 ? 1 : 0; d.pass = ai.passT > 0 ? 1 : 0; }      /* (kept for the behaviour tests) */
   if (ai.passT > 0) { ai.passT -= dt; const po = ai.passO; if (po) { const pf = (po.x - car.x) * sn0 + (po.z - car.z) * cs0; if (po.out || pf < -8 || pf > 55) { ai.passT = 0; ai.passO = null; } } if (ai.passT > 0) want += ai.passSide * 3.4; }
@@ -967,6 +973,7 @@ export function aiDrive(car, track, ai, cars, dt) {
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16); 
+  if (ai.dive > 0 && (ai.diff ?? 1) === 2) v *= 1.035;      /* the late brake of the dive */
   v = Math.min(v, vFollow, v0cap); const rsc = clamp((18 - (ai.rt ?? 99)) / 10, 0, 1); if (rsc > 0 && Math.abs(tgt.k) > .003) v *= 1 - .1 * rsc;      /* the opening seconds: a little less speed into corners while the pack is bunched (the launch itself is full throttle) */
   if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
   const inp = ai.inp; const dErr = B.pe == null || dt <= 0 ? 0 : clamp(wrap(err - B.pe) / dt, -3, 3); B.pe = err; inp.steer = clamp((ef + .09 * dErr) * 2.4 / (1 + sp * .008), -1, 1);      /* steer for where the car is going, not only where it is: a little damping on the error and a gain that falls with speed, so the car settles on the line instead of hunting about it */

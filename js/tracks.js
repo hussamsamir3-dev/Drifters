@@ -8,9 +8,9 @@ import { buildCity } from './city.js';
 export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4;
 
 export const THEMES = {
-  day:    { skyTop: 0x3f86d8, skyBot: 0xcfe6f5, fog: 0xd8e4dc, fogD: 0.0012, sun: 0xffe6c0, sunI: 2.9, hemiS: 0xbfd9ff, hemiG: 0x6b7a4a, hemiI: 1.1, sunDir: [-0.6, 0.6, 0.4], ground: 0x4f8a3c, exposure: 1.0 },
-  desert: { skyTop: 0x2f7fd0, skyBot: 0xf3ddb0, fog: 0xecd9b0, fogD: 0.0019, sun: 0xffe9c4, sunI: 3.0, hemiS: 0xffe8c0, hemiG: 0xb58a4c, hemiI: 1.0, sunDir: [0.6, 0.55, 0.3], ground: 0xd9b36c, exposure: 1.0 },
-  coast:  { skyTop: 0xf28a5b, skyBot: 0xffd9a0, fog: 0xf7c9a0, fogD: 0.0017, sun: 0xffc48a, sunI: 2.5, hemiS: 0xffc9a8, hemiG: 0x5b6f52, hemiI: 1.0, sunDir: [-0.2, 0.24, -0.85], ground: 0x5d9148, exposure: 1.0 },
+  day:    { skyTop: 0x3f86d8, skyBot: 0xcfe6f5, fog: 0xd8e4dc, fogD: 0.0012, sun: 0xffe6c0, sunI: 3.2, hemiS: 0xb4d2ff, hemiG: 0x7a7448, hemiI: .95, sunDir: [-0.62, 0.46, 0.4], ground: 0x4f8a3c, exposure: 1.0 },
+  desert: { skyTop: 0x2f7fd0, skyBot: 0xf3ddb0, fog: 0xecd9b0, fogD: 0.0019, sun: 0xffe9c4, sunI: 3.3, hemiS: 0xffe2b8, hemiG: 0xb58a4c, hemiI: .9, sunDir: [0.6, 0.45, 0.3], ground: 0xd9b36c, exposure: 1.0 },
+  coast:  { skyTop: 0xf28a5b, skyBot: 0xffd9a0, fog: 0xf7c9a0, fogD: 0.0017, sun: 0xffc48a, sunI: 2.8, hemiS: 0xffc9a8, hemiG: 0x5b6f52, hemiI: .9, sunDir: [-0.2, 0.24, -0.85], ground: 0x5d9148, exposure: 1.0 },
   night:  { skyTop: 0x05060f, skyBot: 0x2a1a4a, fog: 0x1a1330, fogD: 0.0035, sun: 0x8fa6ff, sunI: 0.7, hemiS: 0x4a4a90, hemiG: 0x20202c, hemiI: 1.0, sunDir: [0.3, 1, 0.2], ground: 0x23262b, exposure: 1.15, night: true },
 };
 
@@ -287,6 +287,7 @@ function buildProc(track) {
       tag(new THREE.SphereGeometry(.15, 10, 5, 0, 6.2832, 0, 1.5).translate(0, 1.565, -.014), 3, 5), tag(new THREE.BoxGeometry(.2, .022, .15).translate(0, 1.6, .16), 5, 5)];
     for (const [sx, la, ll] of [[1, 1, 3], [-1, 2, 4]]) parts.push(cap(.074, .58, sx * .09, .43, 0, 2, ll), tag(new THREE.BoxGeometry(.1, .07, .23).translate(sx * .09, .035, .04), 4, ll), cap(.056, .2, sx * .25, 1.2, 0, 0, la), cap(.046, .24, sx * .25, .94, 0, 1, la));
     parts.push(tag(new THREE.BoxGeometry(.3, .2, .012).translate(-.25, .63, .1), 6, 2), tag(new THREE.BoxGeometry(.014, .34, .014).translate(-.25, .7, 0), 3, 2));
+    parts.push(tag(new THREE.BoxGeometry(.25, .05, .05).translate(0, 1.565, .118), 7, 5), tag(new THREE.BoxGeometry(.3, .36, .13).translate(0, 1.12, -.15), 8, 0));      /* build 62: sunglasses and backpacks on some of them */
     return mergeGeometries(parts);
   })();
   const personMat = new THREE.MeshStandardMaterial({ roughness: .85 });
@@ -294,12 +295,15 @@ function buildProc(track) {
     sh.vertexShader = 'uniform float uTime; uniform vec3 uCar, uCar2; uniform vec4 uHit; attribute float aPart, aLimb, aBeh, aPh, aWalk; attribute vec3 aSkin;\n' + sh.vertexShader
       .replace('#include <color_vertex>', `#include <color_vertex>
         #ifdef USE_INSTANCING_COLOR
-          float capW = step(.7, fract(aPh * 13.));
-          vColor.rgb = aPart < .5 ? instanceColor.rgb : aPart < 1.5 ? aSkin : aPart < 2.5 ? vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14) : aPart < 3.5 ? mix(vec3(.07, .05, .04) + fract(aPh * 3.) * .32, instanceColor.rgb * .8, capW) : aPart < 4.5 ? vec3(.06) + fract(aPh * 5.) * .5 : aPart < 5.5 ? instanceColor.rgb * .8 : mix(vec3(.9, .1, .12), vec3(1., .78, .1), step(.5, fract(aPh * 29.)));
+          float capW = step(.7, fract(aPh * 13.)), tone = .82 + .36 * fract(aPh * 41.), sleeve = step(.5, fract(aPh * 11.)), shorts = step(.82, fract(aPh * 19.)), grey = step(.93, fract(aPh * 3.));
+          vColor.rgb = aPart < .5 ? instanceColor.rgb * tone : aPart < 1.5 ? (aLimb > .5 && aLimb < 2.5 && sleeve > .5 ? instanceColor.rgb * tone * .92 : aSkin) : aPart < 2.5 ? (shorts > .5 && position.y < .45 ? aSkin : vec3(.10, .12, .2) + fract(aPh * 7.) * vec3(.22, .2, .14)) : aPart < 3.5 ? mix(mix(vec3(.07, .05, .04) + fract(aPh * 3.) * .32, vec3(.72, .7, .66), grey), instanceColor.rgb * .8, capW) : aPart < 4.5 ? vec3(.06) + fract(aPh * 5.) * .5 : aPart < 5.5 ? instanceColor.rgb * .8 : aPart < 6.5 ? mix(vec3(.9, .1, .12), vec3(1., .78, .1), step(.5, fract(aPh * 29.))) : aPart < 7.5 ? vec3(.02) : instanceColor.rgb * .55;
+          vColor.rgb *= mix(.6, 1., smoothstep(0., .75, position.y));      /* shadowed lower body, so they sit in the stand instead of floating */
         #endif`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         if (aPart > 4.5 && aPart < 5.5) transformed = mix(vec3(0., 1.6, 0.), transformed, step(.7, fract(aPh * 13.)));
-        if (aPart > 5.5) transformed = mix(vec3(-.25, .8, 0.), transformed, step(.62, fract(aPh * 17.)) * step(.5, aBeh) * step(aBeh, 1.5));   // some fans hold a small flag   // only cap wearers get a brim
+        if (aPart > 5.5 && aPart < 6.5) transformed = mix(vec3(-.25, .8, 0.), transformed, step(.62, fract(aPh * 17.)) * step(.5, aBeh) * step(aBeh, 1.5));
+        if (aPart > 6.5 && aPart < 7.5) transformed = mix(vec3(0., 1.6, 0.), transformed, step(.45, fract(aPh * 23.)));
+        if (aPart > 7.5) transformed = mix(vec3(0., 1.1, 0.), transformed, step(.72, fract(aPh * 31.)));   // some fans hold a small flag   // only cap wearers get a brim
         vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
         float near = max(smoothstep(46., 10., distance(ip, uCar.xz)), smoothstep(46., 10., distance(ip, uCar2.xz)));
         float ph = aPh * 6.2832, T = uTime, walk = aBeh > 1.5 ? 1. : 0.;
@@ -544,7 +548,7 @@ function buildProc(track) {
   if (!def.dev) {
     const ppl = [], shirt = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c)), skin = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
     for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 5; r++) { if (rnd() > .82 * CK) continue;
-      const p = path[i], off = s * (B + 1.7 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .92 + rnd() * .2, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0], i, sd: s, row: r }); } } }
+      const p = path[i], off = s * (B + 2.3 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .92 + rnd() * .2, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0], i, sd: s, row: r }); } } }
     const body = new THREE.CapsuleGeometry(.28, .7, 3, 8); body.translate(0, .63, 0); const head = new THREE.SphereGeometry(.24, 8, 6); head.translate(0, 1.42, 0);
     // marshals in orange at every corner, flags along the fences
     const marsh = [], flags = [], fcol = [0xe3262e, 0xffc21a, 0xf3f4f6, 0x19a7ce, 0x2fb457, 0x111214].map(c => new THREE.Color(c));
@@ -576,6 +580,68 @@ function buildProc(track) {
   }
   if (def.dev) { const cones = []; for (let q = 0; q < 12; q++) cones.push({ x: 20 + q * 18, z: 24 }); for (let a = 0; a < 24; a++) cones.push({ x: 110 + Math.cos(a / 24 * 6.283) * 30, z: 65 + Math.sin(a / 24 * 6.283) * 30 });
     const cg = new THREE.ConeGeometry(.35, .9, 8); cg.translate(0, .45, 0); G.add(instanced(cg, new THREE.MeshStandardMaterial({ color: 0xff6a13, roughness: .7 }), cones)); }
+  /* ---- build 62: the circuit's surroundings. Everything below is instanced and static, so it costs a few draw calls. ---- */
+  if (!def.dev) {
+    const std = (c, r = .8, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+    const colV = (g, c) => { const k = g.attributes.position.count, v = new Float32Array(k * 3); for (let q = 0; q < k; q++) { v[q * 3] = c[0]; v[q * 3 + 1] = c[1]; v[q * 3 + 2] = c[2]; } g.setAttribute('color', new THREE.BufferAttribute(v, 3)); return g; };
+    const mg2 = gs => mergeGeometries(gs.map(g => g.index ? g.toNonIndexed() : g), false);
+    const outsideOf = i => (path[i].k > 0 ? -1 : 1);
+    /* 1. advertising hoardings along the fence, four brands, lit from inside at night */
+    const AD = [['TAFHEET', '#e3262e', '#fff'], ['NILE COLA', '#1c4ea8', '#fff'], ['SCARAB OIL', '#ffc21a', '#17181c'], ['HORUS TYRES', '#17181c', '#ffc21a'], ['EGYSeal', '#f3f4f6', '#1c4ea8'], ['RA ROSSO', '#c4161c', '#fff']];
+    const adGeo = new THREE.PlaneGeometry(6, 1.15); adGeo.translate(0, .95, 0);
+    const adMats = AD.map(([t, bg, fg]) => { const tex = canvasTex(512, 98, k => { k.fillStyle = bg; k.fillRect(0, 0, 512, 98); k.fillStyle = fg; k.fillRect(0, 0, 512, 7); k.fillRect(0, 91, 512, 7); k.font = 'italic 900 62px Rubik, Arial Black, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(t, 256, 52); });
+      return night ? new THREE.MeshBasicMaterial({ map: tex, color: 0xcccccc, side: THREE.DoubleSide }) : new THREE.MeshStandardMaterial({ map: tex, roughness: .55, side: THREE.DoubleSide }); });
+    const adL = AD.map(() => []); let adN = 0;
+    for (let i = 0; i < n; i += 3) { for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; if ((i / 3 + (s > 0 ? 1 : 0)) % 2) continue; const p = path[i], off = s * (B + 1.15), x = p.x + p.tz * off, z = p.z - p.tx * off; if (!isFree(x, z, .45)) continue; adL[adN++ % AD.length].push({ x, z, r: Math.atan2(-s * p.tz, s * p.tx) + Math.PI * 0, sx: 1, sy: 1 }); } }
+    adL.forEach((l, q) => { if (l.length) G.add(instanced(adGeo, adMats[q], l, false)); });
+    const adPost = new THREE.BoxGeometry(.08, .55, .08); adPost.translate(0, .27, 0);
+    /* 2. catch fences on the outside of fast corners: tall posts and net */
+    const posts = [], nets = [], netTex = canvasTex(64, 64, k => { k.clearRect(0, 0, 64, 64); k.strokeStyle = '#d8d8d8'; k.lineWidth = 2; for (let q = 0; q <= 64; q += 8) { k.beginPath(); k.moveTo(q, 0); k.lineTo(q, 64); k.stroke(); k.beginPath(); k.moveTo(0, q); k.lineTo(64, q); k.stroke(); } }, 2, 1);
+    for (let i = 0; i < n; i += 3) { const p = path[i]; if (Math.abs(p.k) < 1 / 110) continue; const s = outsideOf(i); if (s > 0 && inPit(i)) continue; const off = s * (B + 2.6), x = p.x + p.tz * off, z = p.z - p.tx * off; if (!isFree(x, z, 1)) continue;
+      posts.push({ x, z, r: 0 }); if (i % 6 === 0) nets.push({ x: x + p.tx * 3, z: z + p.tz * 3, r: Math.atan2(p.tx, p.tz) + Math.PI / 2 }); }
+    if (posts.length) { const pg = new THREE.CylinderGeometry(.06, .08, 6.5, 6); pg.translate(0, 3.25, 0); G.add(instanced(pg, std(0x6d7076, .5, .6), posts, false)); }
+    if (nets.length) { const ng = new THREE.PlaneGeometry(6, 5.6); ng.translate(0, 3.4, 0); G.add(instanced(ng, new THREE.MeshStandardMaterial({ map: netTex, transparent: true, alphaTest: .3, side: THREE.DoubleSide, roughness: .9 }), nets, false)); }
+    /* 3. camera and commentary towers: scaffold legs, deck, rail, a box of glass */
+    const tw = [], lg = [], metal = [.55, .57, .6];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const g = new THREE.CylinderGeometry(.06, .09, 9.4, 5); g.translate(sx * 1.1, 4.7, sz * 1.1); lg.push(colV(g, metal)); }
+    for (let h = 1.5; h < 9; h += 2.6) for (const [w, d] of [[2.2, .05], [.05, 2.2]]) { const g = new THREE.BoxGeometry(w + .1, .07, d + .1); g.translate(0, h, 0); lg.push(colV(g, metal)); }
+    { const dk = new THREE.BoxGeometry(3.4, .18, 3.4); dk.translate(0, 9.5, 0); lg.push(colV(dk, [.3, .31, .34]));
+      const bx = new THREE.BoxGeometry(2.4, 1.3, 2.2); bx.translate(0, 10.25, 0); lg.push(colV(bx, [.82, .84, .88])); const gl = new THREE.BoxGeometry(2.5, .6, 2.3); gl.translate(0, 10.35, 0); lg.push(colV(gl, [.12, .2, .28]));
+      const ra = new THREE.BoxGeometry(3.4, .08, 3.4); ra.translate(0, 10.05, 0); lg.push(colV(ra, [.5, .5, .52])); const an = new THREE.CylinderGeometry(.03, .03, 2, 4); an.translate(.8, 11.9, .6); lg.push(colV(an, [.2, .2, .2])); }
+    const apx = (track.apexes || []).slice(); const step = Math.max(1, Math.floor(apx.length / 5));
+    for (let q = 0; q < apx.length && tw.length < 6; q += step) { const ap = apx[q], idx = ap.i != null ? ap.i : ap.idx; if (idx == null) continue; const p = path[idx % n], s = outsideOf(idx % n), off = s * (B + 16), x = p.x + p.tz * off, z = p.z - p.tx * off; if (isFree(x, z, 4)) tw.push({ x, z, r: Math.atan2(p.tx, p.tz) }); }
+    if (tw.length) G.add(instanced(mg2(lg), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .4 }), tw));
+    /* 4. a hospitality and fan village behind the start grandstand: coloured umbrellas, food trucks, portable toilets */
+    const vp = path[Math.min(n - 1, 40)], vx = vp.x + vp.tz * -(B + 40), vz = vp.z - vp.tx * -(B + 40);
+    const sideV = (path[0].k > 0 ? 1 : -1);      /* keep to the far side of the stand */
+    const cluster = (cnt, spread, fn) => { for (let q = 0; q < cnt; q++) { const ox = vx + (rnd() - .5) * spread * 2, oz = vz + (rnd() - .5) * spread; if (isFree(ox, oz, 4)) fn(ox, oz, q); } };
+    const tc = [0xf4f4f2, 0xdcdcd8, 0xc9ced4, 0xe6dcc0].map(c => new THREE.Color(c)), umb = [], trucks = [], loos = [], ucol = [0xe3262e, 0xffc21a, 0x19a7ce, 0xf3f4f6, 0x2fb457, 0xff7a1a].map(c => new THREE.Color(c));
+    cluster(26, 34, (x, z, q) => { umb.push({ x, z, c: ucol[q % 6], s: .9 + rnd() * .3 }); });
+    cluster(9, 34, (x, z, q) => { trucks.push({ x, z, r: rnd() * 6.28, c: ucol[(q + 2) % 6] }); });
+    cluster(10, 34, (x, z) => { loos.push({ x, z, r: rnd() * 6.28 }); });
+    if (umb.length) { const u = mg2([colV(new THREE.ConeGeometry(1.5, .5, 8).translate(0, 2.35, 0), [1, 1, 1]), colV(new THREE.CylinderGeometry(.04, .04, 2.3, 5).translate(0, 1.15, 0), [.6, .6, .6]), colV(new THREE.CylinderGeometry(.5, .5, .06, 10).translate(0, .75, 0), [.9, .9, .88]), colV(new THREE.CylinderGeometry(.06, .06, .75, 5).translate(0, .37, 0), [.5, .5, .5])]); G.add(instanced(u, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .8 }), umb, true)); }
+    if (trucks.length) { const wh = (x, z) => colV(new THREE.CylinderGeometry(.42, .42, .3, 10).rotateZ(Math.PI / 2).translate(x, .42, z), [.05, .05, .06]);
+      const t = mg2([colV(new THREE.BoxGeometry(2.2, 2.2, 3.6).translate(0, 1.75, -.7), [1, 1, 1]), colV(new THREE.BoxGeometry(2.1, 1.5, 1.4).translate(0, 1.35, 1.8), [.92, .92, .94]), colV(new THREE.BoxGeometry(1.9, .7, .06).translate(0, 1.75, 2.52), [.1, .16, .22]),
+        colV(new THREE.BoxGeometry(1.8, .9, .06).translate(1.12, 1.9, -.7), [.08, .08, .1]), colV(new THREE.BoxGeometry(2.0, .1, 1.1).translate(1.55, 2.5, -.7).rotateZ(-.1), [.86, .14, .14]), colV(new THREE.BoxGeometry(2.3, .3, 5.2).translate(0, .6, .2), [.12, .12, .14]),
+        wh(1.0, 1.9), wh(-1.0, 1.9), wh(1.0, -1.6), wh(-1.0, -1.6)]); G.add(instanced(t, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55 }), trucks.map(q => ({ ...q, c: tc[(q.r * 7 | 0) % 4] })), true)); }
+    if (loos.length) { const t = mg2([colV(new THREE.BoxGeometry(1.1, 2.3, 1.1).translate(0, 1.15, 0), [.2, .55, .78]), colV(new THREE.BoxGeometry(1.12, .2, 1.12).translate(0, 2.25, 0), [.9, .9, .9])]); G.add(instanced(t, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7 }), loos, true)); }
+    /* 5. a car park of ordinary cars, in rows, in a field a little way off */
+    { const pp = path[Math.floor(n * .5)], s0 = outsideOf(Math.floor(n * .5)), ox = pp.x + pp.tz * s0 * (B + 70), oz = pp.z - pp.tx * s0 * (B + 70), cars = [], cc = [0xe9e9e9, 0x1b1d22, 0xa9adb3, 0x9c1d1d, 0x1d3f7a, 0xdad6c8, 0x2b5a3a].map(c => new THREE.Color(c));
+      if (isFree(ox, oz, 26)) for (let rr = 0; rr < 4; rr++) for (let cc2 = 0; cc2 < 10; cc2++) if (rnd() < .82) cars.push({ x: ox + (cc2 - 5) * 3.2, z: oz + (rr - 1.5) * 7.5, r: Math.PI / 2 * 0 + (rnd() - .5) * .06, c: cc[rnd() * 7 | 0] });
+      if (cars.length) { const body = mg2([colV(new THREE.BoxGeometry(1.8, .62, 4.2).translate(0, .62, 0), [1, 1, 1]), colV(new THREE.BoxGeometry(1.6, .5, 2.2).translate(0, 1.1, -.2), [.55, .62, .7]), colV(new THREE.BoxGeometry(1.9, .22, 4.3).translate(0, .24, 0), [.06, .06, .07])]); G.add(instanced(body, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .35, metalness: .5 }), cars, false)); } }
+    /* 6. distant hills (or dunes) all the way round, hazed by the fog; the sea side stays open on coastal tracks */
+    if (!night) {
+      let R0 = 0; for (const p of path) R0 = Math.max(R0, Math.hypot(p.x - cx, p.z - cz)); R0 += 650;
+      const SEG = 120, pos = [], col = [], idx = [], hillC = desert ? [[.62, .5, .3], [.8, .66, .4]] : [[.12, .22, .1], [.34, .42, .26]];
+      for (let q = 0; q <= SEG; q++) { const th = q / SEG * Math.PI * 2, e = desert ? 22 : 55, h = (.55 + .45 * Math.sin(th * 3 + 1.3) * Math.sin(th * 5.1) + .25 * Math.sin(th * 11)) * e + (desert ? 10 : 28), x = cx + Math.cos(th) * R0, z = cz + Math.sin(th) * R0, open = def.theme === 'coast' && Math.sin(th) < -.55 ? 0 : 1;
+        pos.push(x, -4, z, x + Math.cos(th) * 120, Math.max(1, h * open), z + Math.sin(th) * 120); col.push(...hillC[0], ...hillC[1]); if (q < SEG) { const b = q * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); } }
+      const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); hg.setIndex(idx); hg.computeVertexNormals();
+      const hm = new THREE.Mesh(hg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide })); hm.receiveShadow = false; G.add(hm);
+    }
+    /* 7. marshal posts at the flag stations */
+    { const mp = []; for (let i = 6; i < n; i += 9) { const p = path[i], side = p.k > 0 ? -1 : 1; if (side > 0 && inPit(i)) continue; const off = side * (B + 3.3), x = p.x + p.tz * off, z = p.z - p.tx * off; if (isFree(x, z, 1.5)) mp.push({ x, z, r: Math.atan2(p.tx, p.tz) }); }
+      if (mp.length) { const m = mg2([colV(new THREE.BoxGeometry(2.4, 2.2, 1.6).translate(0, 1.1, 0), [.92, .92, .9]), colV(new THREE.BoxGeometry(2.5, .25, 1.7).translate(0, 2.3, 0), [.9, .4, .1]), colV(new THREE.BoxGeometry(1.4, .7, .06).translate(0, 1.4, .82), [.12, .18, .24])]); G.add(instanced(m, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7 }), mp, true)); } }
+  }
   // -- loose objects: braking boards before each corner, a tyre stack and cones at the apex, hay bales at the exit
   track.propSpots = [];
   if (!def.dev) { let inC = false, e = 0, best = 0, bi = 0, stack = 0;

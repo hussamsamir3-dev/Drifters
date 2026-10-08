@@ -118,3 +118,9 @@ mesh), so it cannot just be dropped in. Send the model and it can be baked the s
 ## Credits
 - Cars: This work is based on "1965-2002 Rally Cars" (https://sketchfab.com/3d-models/1965-2002-rally-cars-2146acc1e3de409baf46d03a070d0526) by supercarmodels (https://sketchfab.com/supercarmodels), licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). The models were split into bodies and wheels and given paint recolouring for this game.
 - Tracks: all circuits are generated in code. Monza Park, Spa Ardennes, Silverstone Airfield, Interlagos Hills and Marina Bay Night are original layouts inspired by the shapes of the real circuits; they are not surveyed copies.
+
+## Build 62 notes
+- Phones and tablets: the game asks for full screen on the first touch and locks landscape; browser zoom, double-tap zoom and pinch are disabled; several fingers work at once (steer and brake together). On iPhone Safari, full screen only works from "Add to Home Screen" (the included web manifest makes it open full screen).
+- Audio: menu music is stopped hard when a race starts (iOS ignores element volume), and the audio engine resumes itself after interruptions.
+- Sound is positional: other cars, crashes, whooshes and the grandstand come from where they are, with Doppler on passing cars.
+- The safety car and yellow flag only come out for hard crashes.

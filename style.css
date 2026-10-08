@@ -617,3 +617,7 @@ body.touch .tt i{width:26px;height:18px}body.touch .tt i b{font-size:10px}
 #pitHud .ph span b.full{background:#22b866}
 #pitHud .ph em{font-style:normal;width:36px;text-align:right;font-variant-numeric:tabular-nums}
 #pitHud .ph.done em{color:#22b866}
+
+/* build 62: the page is the screen: no browser pan, zoom, pull-to-refresh or text selection, and it fills the whole display including the notch area */
+html,body{position:fixed;inset:0;width:100%;height:100%;height:100dvh;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body.touch #gl,body.touch #menuBg{touch-action:none}
