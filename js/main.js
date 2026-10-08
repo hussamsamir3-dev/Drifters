@@ -75,7 +75,10 @@ function perfGuard(dt) {      // if frames stay slow, the quality steps down by 
   else if (perf.lvl === 3) { pixelRatio = Math.min(pixelRatio, .75); resize(); sun.castShadow = false; toast('Performance mode: shadows off'); }
 }
 let rawDt = .016, frameN = 0;      // rawDt: the real frame time, so the pit stop runs in real seconds even when the game slows down
-function draw(dt) { perfGuard(dt); frameN++; if (gfx !== 'high') { renderer.shadowMap.autoUpdate = false; if (frameN & 1) renderer.shadowMap.needsUpdate = true; } else renderer.shadowMap.autoUpdate = true;   // Medium refreshes shadows every other frame
+function draw(dt) { perfGuard(dt); frameN++;
+  /* build 58: behind the menu the showcase is drawn at 30 fps, slightly lower resolution, with shadows refreshed every 4th frame: about a third of the GPU work, and nobody can drive it */
+  if (R && R.attract) { if (frameN & 1) return; renderer.shadowMap.autoUpdate = false; if ((frameN >> 1) % 3 === 0) renderer.shadowMap.needsUpdate = true; updateMotes(dt * 2); if (gfx === 'high' && post) post.render(dt * 2); else renderer.render(scene, camera); return; }
+  if (gfx !== 'high') { renderer.shadowMap.autoUpdate = false; if (frameN & 1) renderer.shadowMap.needsUpdate = true; } else renderer.shadowMap.autoUpdate = true;   // Medium refreshes shadows every other frame
   updateMotes(dt); if (gfx === 'high' && post) post.render(dt); else renderer.render(scene, camera); }
 addEventListener('resize', resize); setGfx(gfx);
 
@@ -293,7 +296,7 @@ function respawn(car, manual) {
 }
 
 async function startRace(o) {
-  menuBg.stop(); arenaStop(); if (R) endRace(); const token = ++raceToken; window.__noPeople = !!o.attract; window.__crowdK = gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22;
+  menuBg.stop(); arenaStop(); if (R) endRace(); const token = ++raceToken; window.__noPeople = !!o.attract; window.__crowdK = (gfx === 'high' ? .6 : gfx === 'medium' ? .4 : .22) * (o.attract ? .45 : 1);
   if (!o.attract) { audio.init(); show('menu', false); show('results', false); show('pause', false); show('loading', true); }
   const def = TRACKS.find(t => t.id === o.track);
   $('loadName').textContent = def.name; $('loadBar').style.width = '4%'; $('loadTip').textContent = TIPS[Math.random() * TIPS.length | 0];
@@ -335,6 +338,7 @@ async function startRace(o) {
   if ($('paceBars')) { $('paceBars').innerHTML = ''; $('paceBars').hidden = true; } $('hBest').textContent = save.best[def.id] ? fmt(save.best[def.id]) : '—'; $('hSec').textContent = ''; $('hSec').className = ''; $('hDelta').textContent = '';
   const solo = R.cars.length < 2; $('order').hidden = solo; $('hPosBox').style.visibility = solo ? 'hidden' : 'visible';
   show('hPingRow', o.mode === 'online'); show('hArc', R.arc); document.querySelector('#touch .n').hidden = R.rules !== 'arcade'; for (const k in hudCache) delete hudCache[k];
+  { const cap0 = gfx === 'low' ? 1 : Math.min(devicePixelRatio || 1, 1.5) * (o.attract ? .8 : 1); pixelRatio = perf.lvl >= 1 ? Math.min(pixelRatio, cap0) : cap0; resize(); }      /* the showcase renders a little below native resolution; a real race starts at full */
   show('loading', false); show('hud', !o.attract); paused = false; acc = 0; last = performance.now(); audio.quiet = !!o.attract; audio.setCar(spec);
   if (o.attract) { R.attract = true; R.demo = true; R.state = 'go'; return; }
   if (o.mode === 'online') { room.send({ k: 'loaded' }); flash('Waiting for rival…', false, 0); if (!peer) beginCountdown(); else checkGo(); }
@@ -616,7 +620,7 @@ const ENG = {
 };
 /* every other radio line is bilingual and spoken too: (English, Arabic subtitle, vowelled Arabic for the voice) */
 const SAY_SKIP = /^(You are in the tow|Radio check|Nitro rush|Speed trap|Bounty|.* rolling in)/;
-const sayB = (en, ar, arS, emo = 'calm', urgent = false) => { if (!R || R.attract) return; if (SAY_SKIP.test(en)) return; if (!urgent && R.t - radioLast < 20) return;      /* build 58: the engineer only speaks about what matters */ engineer({ emo, en, ar, enS: en, arS: arS || ar }, urgent); };
+const sayB = (en, ar, arS, emo = 'calm', urgent = false) => { if (!R || R.attract) return; if (SAY_SKIP.test(en)) return; if (!urgent && R.t - radioLast < 45) return;      /* build 58: the engineer only speaks about what matters */ engineer({ emo, en, ar, enS: en, arS: arS || ar }, urgent); };
 const COMP_AR = { soft: ['ناعمة', 'نَاعِمَة'], medium: ['متوسطة', 'مُتَوَسِّطَة'], hard: ['صلبة', 'صُلْبَة'], rain: ['المطر', 'المَطَر'], gravel: ['الطرق الترابية', 'الطُّرُقِ التُّرَابِيَّة'] };
 const WHY_AR = { 'a crash': ['حادث', 'حَادِث'], 'a recovery': ['عملية إنقاذ', 'عَمَلِيَّةِ إِنْقَاذ'] };
 // how each feeling is voiced: speed and pitch offsets, how much the pitch moves (range), loudness, and how hard the radio chain is driven (k) and boosted (g)
@@ -660,7 +664,7 @@ function engineerTick(me, dt) {
   const E = R.eng || (R.eng = { cd: 6, last: {}, pos: null, hot: 0, cold: 0 }); E.cd -= dt; if (R.state !== 'go') return;
   { const tr0 = R.track, p0 = me.prog || 0, vv = Math.max(12, me.speed); if (R.t - (E.sT ?? -9) > 1) { E.sT = R.t; const oth = R.cars.filter(c => c !== me), a0 = oth.filter(c => (c.prog || 0) > p0).sort((a, b) => a.prog - b.prog)[0], b0 = oth.filter(c => (c.prog || 0) <= p0).sort((a, b) => b.prog - a.prog)[0], ga = a0 ? (a0.prog - p0) * tr0.spacing / vv : null, gb = b0 ? (p0 - b0.prog) * tr0.spacing / vv : null; (E.hA || (E.hA = [])).push([R.t, ga]); (E.hB || (E.hB = [])).push([R.t, gb]); if (E.hA.length > 8) { E.hA.shift(); E.hB.shift(); } }
     if (E.lapMark == null) E.lapMark = { lap: me.lap, fuel: me.fuel }; else if (me.lap !== E.lapMark.lap) { const u = E.lapMark.fuel - me.fuel; if (u > .004) E.use = E.use ? E.use * .5 + u * .5 : u; E.lapMark = { lap: me.lap, fuel: me.fuel }; } }
-  if (E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 25; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
+  if (E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 45; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
   const tr = R.track, pr = me.prog || 0, others = R.cars.filter(c => c !== me), ahead = others.filter(c => (c.prog || 0) > pr).sort((a, b) => a.prog - b.prog)[0], behind = others.filter(c => (c.prog || 0) <= pr).sort((a, b) => b.prog - a.prog)[0], v = Math.max(12, me.speed);
   const order = [...R.cars].sort((a, b) => (b.prog || 0) - (a.prog || 0)), pos = order.indexOf(me) + 1;
   if (me.eT > .9 && ok('eng', 60)) { engineer(ENG.engineHot(), true); said('eng'); return; }
@@ -669,7 +673,7 @@ function engineerTick(me, dt) {
   if (me.tyre < .3 && ok('worn', 120)) { engineer(ENG.tyreWorn()); said('worn'); return; }
   const lim = me.tn.tOpt + me.tn.tSpan + 8, fT = (me.tTw[0] + me.tTw[1]) / 2, rT = (me.tTw[2] + me.tTw[3]) / 2, hotAx = fT > lim && rT > lim ? 'b' : fT > lim ? 'f' : 'r';
   E.hot = fT > lim || rT > lim ? E.hot + dt : 0; E.cold = me.tT < me.tn.tOpt - me.tn.tSpan - 10 && me.speed > 15 && R.t > 15 ? E.cold + dt : 0;
-  if (E.hot > 6 && ok('hot', 100)) { engineer(ENG.tyreHot(hotAx)); said('hot'); return; } if (E.cold > 10 && ok('cold', 120)) { engineer(ENG.tyreCold()); said('cold'); return; }
+  if (E.hot > 12 && ok('hot', 150)) { engineer(ENG.tyreHot(hotAx)); said('hot'); return; }
   if (E.pos == null) E.pos = pos;      /* build 57: the engineer gives briefs only, so no running commentary on places or gaps */
   if (me.lap === R.laps - 1 && ok('final', 999)) { engineer(ENG.final(), true); said('final'); return; }
 }
@@ -979,7 +983,7 @@ function raceExtras(dt) {
   if (sunDisc) { sunDisc.position.set(camera.position.x + d[0] / l * 3400, camera.position.y + d[1] / l * 3400, camera.position.z + d[2] / l * 3400); sunDisc.lookAt(camera.position); sunDisc.visible = R.wet < .5; }
   if (!R.lit && R.wet > .3) { R.lit = true; for (const c of R.cars) c.setLights(true); }      // lights come on in the rain
   updateLights(dt);
-  if (tr.cullables.length && frameN % 3 === 0) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 4225 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
+  if (tr.cullables.length && frameN % 3 === 0) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160) * (R.attract ? .75 : 1), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 4225 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
     const u = post.u; u.tilt.value = R.attract ? .7 : 0;      /* build 57: no miniature-model blur in a race */ u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
@@ -1149,7 +1153,7 @@ function attractCam(dt) {
 let showBusy = false, showTimer = 0; const SHOW_TRACKS = ['monza', 'marina', 'silverstone', 'imola', 'laguna', 'brands', 'redbull', 'midnight'], showPick = SHOW_TRACKS[(Math.random() * SHOW_TRACKS.length) | 0];
 async function arenaStart() {      // (the name is kept from the old arena: this now starts the cinematic race behind the menu)
   if (showBusy || (R && R.attract)) return; showBusy = true;
-  try { const night = showPick === 'marina' || showPick === 'midnight'; await startRace({ mode: 'race', track: showPick, laps: 99, diff: 2, weather: night ? 'rain' : 'clear', nRivals: 5, rules: 'arcade', attract: true }); document.body.classList.add('cine'); } catch (e) { console.warn('showcase failed', e); }
+  try { const night = showPick === 'marina' || showPick === 'midnight'; await startRace({ mode: 'race', track: showPick, laps: 99, diff: 2, weather: night && gfx === 'high' ? 'rain' : 'clear', nRivals: 4, rules: 'arcade', attract: true }); document.body.classList.add('cine'); } catch (e) { console.warn('showcase failed', e); }
   showBusy = false;
 }
 function arenaStop() { document.body.classList.remove('cine'); if (R && R.attract) { raceToken++; endRace(); } }
@@ -1707,7 +1711,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   // dynamic resolution: if frames are taking too long the picture is rendered slightly smaller, and it sharpens again when there is headroom
   { const raw = Math.min(.1, Math.max(0, (now - last) / 1000)); ftAvg += (raw - ftAvg) * .04; drsT += raw;
-    if (drsT > 1.2 && gfx !== 'low') { drsT = 0; const cap = Math.min(devicePixelRatio || 1, 1.5), lo = Math.max(.6, cap * .55); if (ftAvg > 1 / 50 && pixelRatio > lo) { pixelRatio = Math.max(lo, pixelRatio - .12); resize(); } else if (ftAvg < 1 / 58 && pixelRatio < cap) { pixelRatio = Math.min(cap, pixelRatio + .06); resize(); } } }
+    if (drsT > 1.2 && gfx !== 'low') { drsT = 0; const cap = Math.min(devicePixelRatio || 1, 1.5) * (R && R.attract ? .8 : 1), lo = Math.max(.6, cap * .55); if (ftAvg > 1 / 50 && pixelRatio > lo) { pixelRatio = Math.max(lo, pixelRatio - .12); resize(); } else if (ftAvg < 1 / 58 && pixelRatio < cap) { pixelRatio = Math.min(cap, pixelRatio + .06); resize(); } } }
   rawDt = Math.max(0, Math.min(.25, (now - last) / 1000)); const dt = Math.max(0, Math.min(.05, (now - last) / 1000)) * (save.dev ? save.devScale || 1 : 1); last = now;
   if (auOn && !racing()) auTick();
   if (R) { if (!paused) { try { updateRace(dt); } catch (e) { if (!window.__errOnce) { window.__errOnce = 1; console.error('RACE ERROR ' + e.message + ' cars=' + R.cars.length + ' t=' + R.t + ' state=' + R.state + ' mode=' + R.mode + ' attract=' + R.attract + ' keys=' + Object.keys(R).slice(0, 12)); } } } }
