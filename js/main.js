@@ -51,12 +51,12 @@ if (isTouch) document.body.classList.add('touch');
 let gfx = save.gfx === 'auto' ? (isTouch ? 'medium' : 'high') : save.gfx; window.__wheelSeg = gfx === 'high' ? 72 : gfx === 'medium' ? 52 : 36;      // wheel detail follows the graphics setting
 let pixelRatio = gfx === 'low' ? 1 : Math.min(devicePixelRatio || 1, 1.5);
 renderer.setPixelRatio(pixelRatio); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(55, 1, .3, 9000);
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture; setCarEnv(scene.environment);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1), sun = new THREE.DirectionalLight(0xffffff, 2.5);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; sun.shadow.normalBias = .04;
-function fitShadow() { const h = 30 * (save.zoom || 1.5) + 18, c = sun.shadow.camera; Object.assign(c, { left: -h, right: h, top: h, bottom: -h, near: 1, far: 360 }); c.updateProjectionMatrix(); const sz = gfx === 'high' ? 4096 : 2048; if (sun.shadow.mapSize.x !== sz) { sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } }   // shadows cover what the camera shows, no more
+function fitShadow() { const h = 30 * (save.zoom || 1.5) + 18, c = sun.shadow.camera; Object.assign(c, { left: -h, right: h, top: h, bottom: -h, near: 1, far: 360 }); c.updateProjectionMatrix(); const sz = 2048; if (sun.shadow.mapSize.x !== sz) { sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } }   // shadows cover what the camera shows, no more
 fitShadow();
 scene.add(hemi, sun, sun.target);
 let post = null;
@@ -631,16 +631,18 @@ function ttsSynth(text, lang, voice, emo = 'calm') {
     const base = lang === 'ar' ? 205 : voice === 'f3' ? 165 : 170, pitch = (voice === 'f3' ? 58 : 42) + E.p + j() * 4; w.postMessage({ id, lang: lang === 'ar' ? 'ar' : 'en-us', text, voice, rate: Math.round(base + E.r + j() * 8), pitch: Math.round(clamp(pitch, 10, 90)), range: E.rg, amp: E.amp }); });
 }
 function ttsWarm() { const w = ttsWorker(); if (w) w.postMessage({ id: ++TTS.id, warm: true }); }
-const VOICE_MODES = ['radio-m', 'radio-f', 'device'], VOICE_LABEL = { 'radio-m': 'Radio male', 'radio-f': 'Radio female', 'device': 'Device voice' };
+const VOICE_MODES = ['auto', 'radio-m', 'radio-f', 'device'], VOICE_LABEL = { 'auto': 'Natural voice', 'radio-m': 'Radio male', 'radio-f': 'Radio female', 'device': 'Device voice' };
 const voiceScore = v => { const n = v.name.toLowerCase(); let s = 0; if (/natural|neural|online/.test(n)) s += 50; if (/google/.test(n)) s += 20; if (/ryan|guy|davis|thomas|daniel|james|alex|oliver|arthur|hamed|naayf|maged|shakir|tarik|salma/.test(n)) s += 15; if (/en-gb|en_gb/.test(v.lang.toLowerCase()) || /ar-eg/.test(v.lang.toLowerCase())) s += 8; if (/compact|espeak|robot/.test(n)) s -= 40; if (!v.localService) s += 5; return s; };
 function deviceSpeak(text, lang, urgent) {
   const timed = () => { audio.radio('open'); setTimeout(() => audio.radio('close'), 600 + text.length * 62); }; if (!window.speechSynthesis) { timed(); return; }
-  try { const u = new SpeechSynthesisUtterance(text.replace(/\. /g, '. , ')), vs = voicesFor(), v = vs.find(x => x.name === save.engVoiceName) || vs[0]; u.lang = lang === 'ar' ? 'ar-EG' : 'en-GB'; if (v) { u.voice = v; u.lang = v.lang; } u.rate = lang === 'ar' ? .98 : 1.02; u.pitch = .9; u.volume = .9;
+  try { const u = new SpeechSynthesisUtterance(lang === 'ar' ? text.replace(/[\u064B-\u0652\u0670]/g, '') : text), vs = voicesFor(), v = vs.find(x => x.name === save.engVoiceName) || vs[0]; u.lang = lang === 'ar' ? 'ar-EG' : 'en-GB'; if (v) { u.voice = v; u.lang = v.lang; } u.rate = lang === 'ar' ? .94 : 1.0; u.pitch = lang === 'ar' ? 1 : .95; u.volume = 1;
     u.onstart = () => audio.radio('open'); u.onend = u.onerror = () => audio.radio('close'); if (urgent) speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { timed(); }
 }
 function engineer(msg, urgent) {
   const lang = save.lang === 'ar' ? 'ar' : 'en', text = msg[lang], say = msg[lang + 'S'] || text; (window.__engLog || (window.__engLog = [])).push(lang + ': ' + text); radio(text, true);
-  if (save.engVoice === false) return; const mode = save.voiceMode || 'radio-m';
+  if (save.engVoice === false) return; let mode = save.voiceMode || 'auto';
+  /* build 58: 'auto' uses the best natural voice the device has (Arabic and English), because a synthetic voice cannot match it; the built-in radio voices are only used when the device has none */
+  if (mode === 'auto') { const vs = voicesFor(), best = vs[0]; mode = best && (lang === 'ar' || voiceScore(best) >= 15) ? 'device' : 'radio-m'; }
   if (mode !== 'device' && !TTS.dead) { const t0 = performance.now(); ttsSynth(say, lang, mode === 'radio-f' ? 'f3' : 'm3', msg.emo || 'calm').then(r => { if (performance.now() - t0 > 6000) return; /* a call that arrives late is dropped, never played stale */ const E = EMO[r.emo] || EMO.calm; if (!audio.radioVoice(r.pcm, r.rate, urgent, E)) deviceSpeak(say, lang, urgent); }).catch(() => deviceSpeak(say, lang, urgent)); return; }
   deviceSpeak(say, lang, urgent);
 }
@@ -904,6 +906,18 @@ function setupExtras() {
   R.lit = !!tr.theme.night || def.theme === 'coast'; for (const c of R.cars) c.setLights(R.lit);
   { const was = R.lit; if (R.ambient) R.ambient.rain.visible = true; for (const c of R.cars) c.setLights(true); try { renderer.compile(scene, camera); } catch (e) {} if (R.ambient) R.ambient.rain.visible = false; for (const c of R.cars) c.setLights(was); }      // warm-up behind the loading screen: the rain and headlight shaders are compiled now
 }
+/* build 58: while the crew works, three gauges float above your car: body, tyres and fuel climb from what they were to full as each job is done */
+const pitHud = { el: null, v: new THREE.Vector3() };
+function pitHudUpdate(show, me) {
+  if (!pitHud.el) { if (!show) return; const d = document.createElement('div'); d.id = 'pitHud'; d.innerHTML = [['body', '🔧'], ['tyre', '◎'], ['fuel', '⛽']].map(([k, ic]) => '<div class="ph" data-k="' + k + '"><i>' + ic + '</i><span><b></b></span><em></em></div>').join(''); document.body.appendChild(d); pitHud.el = d; pitHud.rows = [...d.children]; }
+  const el = pitHud.el; if (!el) return; if (!show) { if (pitHud.on) { pitHud.on = false; el.style.display = 'none'; } return; }
+  const P = R.pit, jobs = P.jobs || []; if (!P.h0) P.h0 = { body: me.health, tyre: me.tyre, fuel: me.fuel };
+  let acc = 0, pg = { body: 0, tyre: 0, fuel: 0 }, wt = { body: 0, tyre: 0, fuel: 0 }; for (const j of jobs) { const k = j[0] === 'Tyres' ? 'tyre' : j[0] === 'Fuel' ? 'fuel' : 'body', p = clamp((P.t - acc) / Math.max(.01, j[1]), 0, 1); pg[k] += p * j[1]; wt[k] += j[1]; acc += j[1]; }
+  for (const k in pg) pg[k] = wt[k] ? pg[k] / wt[k] : 1;
+  if (!pitHud.on) { pitHud.on = true; el.style.display = 'flex'; }
+  pitHud.rows.forEach(r => { const k = r.dataset.k, v0 = P.h0[k], v = v0 + (1 - v0) * pg[k], pc = Math.round(clamp(v, 0, 1) * 100); r.children[1].firstChild.style.width = pc + '%'; r.children[1].firstChild.className = pg[k] >= 1 ? 'full' : ''; r.children[2].textContent = pc + '%'; r.classList.toggle('done', pg[k] >= 1); });
+  pitHud.v.set(me.x, me.y + 3.2, me.z).project(camera); const x = (pitHud.v.x * .5 + .5) * innerWidth, y = (-pitHud.v.y * .5 + .5) * innerHeight; el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px) translate(-50%,-100%)';
+}
 function raceExtras(dt) {
   const tr = R.track, me = R.player, pit = R.pit;
   liveEvents(dt);
@@ -911,6 +925,7 @@ function raceExtras(dt) {
   if (R.state === 'go') {
     const d2 = (me.x - pit.x) ** 2 + (me.z - pit.z) ** 2, jobs = pitJobs(me), est = jobs.reduce((a, j) => a + j[1], 0);
     me.pitZone = !!pit.zone && d2 < 300;
+    if (!pit.busy && pitHud.on) pitHudUpdate(false, me);
     if (me.inPit && !R.wasPit && !pit.busy) { const JA = { Tyres: ['الإطارات', 'الإِطَارَات'], Fuel: ['الوقود', 'الوَقُود'], Engine: ['المحرك', 'المُحَرِّك'], Gearbox: ['ناقل الحركة', 'نَاقِلُ الحَرَكَة'], Bodywork: ['الهيكل', 'الهَيْكَل'] }, ja = jobs.map(j => JA[j[0]] || [j[0], j[0]]); if (est > .3) sayB('Limiter on. Stop in your box, about ' + est.toFixed(1) + ' seconds for ' + jobs.map(j => j[0].toLowerCase()).join(', ') + '.', 'المحدد يعمل. توقف في صندوقك، نحو ' + est.toFixed(1) + ' ثانية لـ' + ja.map(j => j[0]).join(' و'), 'المُحَدِّدُ يَعْمَل. تَوَقَّفْ فِي صُنْدُوقِك، نَحْوَ ' + gapT(est, 'ar') + ' لِـ' + ja.map(j => j[1]).join(' وَ'), 'calm', true); else sayB('Limiter on. Nothing to do, drive through.', 'المحدد يعمل. لا شيء لفعله، أكمل الطريق.', 'المُحَدِّدُ يَعْمَل. لَا شَيْءَ لِفِعْلِه، أَكْمِلِ الطَّرِيق.', 'calm', true); }
     R.wasPit = me.inPit;
     if (pit.busy || (d2 < 10 && me.speed < 2 && est > .3)) {
@@ -918,7 +933,8 @@ function raceExtras(dt) {
       pit.t += Math.max(dt, rawDt); pit.tick -= dt; if (pit.tick <= 0) { pit.tick = .55; audio.wrench(); }
       let acc2 = 0, cur = pit.jobs[0][0]; for (const j of pit.jobs) { if (pit.t >= acc2) cur = j[0]; acc2 += j[1]; }
       pit.fl = (pit.fl || 0) - dt; if (pit.fl <= 0) { pit.fl = .2; flash(cur + '  ' + Math.max(0, pit.total - pit.t).toFixed(1) + 's', false, 320); }
-      if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); sayB((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', (me.wetTyres ? 'إطارات المطر جاهزة' : 'إطارات جديدة') + '، خزان ممتلئ. انتبه للمحدد حتى مخرج الحظيرة.', (me.wetTyres ? 'إِطَارَاتُ المَطَرِ جَاهِزَة' : 'إِطَارَاتٌ جَدِيدَة') + '، خَزَّانٌ مُمْتَلِئ. اِنْتَبِهْ لِلمُحَدِّدِ حَتَّى مَخْرَجِ الحَظِيرَة.', 'happy', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
+      pitHudUpdate(true, me);
+      if (pit.t >= pit.total) { pit.h0 = null; pitHudUpdate(false, me); me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); sayB((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', (me.wetTyres ? 'إطارات المطر جاهزة' : 'إطارات جديدة') + '، خزان ممتلئ. انتبه للمحدد حتى مخرج الحظيرة.', (me.wetTyres ? 'إِطَارَاتُ المَطَرِ جَاهِزَة' : 'إِطَارَاتٌ جَدِيدَة') + '، خَزَّانٌ مُمْتَلِئ. اِنْتَبِهْ لِلمُحَدِّدِ حَتَّى مَخْرَجِ الحَظِيرَة.', 'happy', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
     }
   }
   if (R.sc) safetyTick(dt);
@@ -963,7 +979,7 @@ function raceExtras(dt) {
   if (sunDisc) { sunDisc.position.set(camera.position.x + d[0] / l * 3400, camera.position.y + d[1] / l * 3400, camera.position.z + d[2] / l * 3400); sunDisc.lookAt(camera.position); sunDisc.visible = R.wet < .5; }
   if (!R.lit && R.wet > .3) { R.lit = true; for (const c of R.cars) c.setLights(true); }      // lights come on in the rain
   updateLights(dt);
-  if (tr.cullables.length && frameN % 3 === 0) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 8100 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
+  if (tr.cullables.length && frameN % 3 === 0) { const D = (gfx === 'high' ? 280 : gfx === 'medium' ? 210 : 160), cx = R.attract ? camera.position.x : cam.look.x, cz = R.attract ? camera.position.z : cam.look.z; for (const c of tr.cullables) { const d2 = (c.x - cx) ** 2 + (c.z - cz) ** 2, m = c.m; m.visible = d2 < D * D; const lod = m.userData.lod; if (lod && m.visible) { const w = d2 < 4225 ? 0 : 1; if (m.userData.cur !== w) { m.userData.cur = w; m.geometry = lod[w]; } } } }   // draw distance, and simpler figures beyond 90 m
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
     const u = post.u; u.tilt.value = R.attract ? .7 : 0;      /* build 57: no miniature-model blur in a race */ u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
@@ -1593,8 +1609,8 @@ $('touchEditBtn').onclick = enterTouchEdit; $('todSeg').onclick = e => { const b
 const markDmg = () => { for (const b of document.querySelectorAll('#dmgSeg button')) b.classList.toggle('on', b.dataset.k === (save.dmg || 'medium')); }; markDmg();
 $('dmgSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; save.dmg = b.dataset.k; persist(); applyDmg(); markDmg(); };
 const voicesFor = () => { const L = save.lang === 'ar' ? 'ar' : 'en', vs = (window.speechSynthesis ? speechSynthesis.getVoices() : []).filter(v => v.lang.toLowerCase().startsWith(L)); return vs.sort((a, b) => voiceScore(b) - voiceScore(a)); };
-const labelVoice = () => { const md = save.voiceMode || 'radio-m'; $('voiceBtn').textContent = tx('Voice') + ': ' + tx(VOICE_LABEL[md]); };
-$('voiceBtn').onclick = () => { const i = VOICE_MODES.indexOf(save.voiceMode || 'radio-m'); save.voiceMode = VOICE_MODES[(i + 1) % VOICE_MODES.length]; persist(); labelVoice(); engineer(ENG.start(), true); }; if (window.speechSynthesis) speechSynthesis.addEventListener('voiceschanged', labelVoice); labelVoice();
+const labelVoice = () => { const md = save.voiceMode || 'auto'; $('voiceBtn').textContent = tx('Voice') + ': ' + tx(VOICE_LABEL[md]); };
+$('voiceBtn').onclick = () => { const i = VOICE_MODES.indexOf(save.voiceMode || 'auto'); save.voiceMode = VOICE_MODES[(i + 1) % VOICE_MODES.length]; persist(); labelVoice(); engineer(ENG.start(), true); }; if (window.speechSynthesis) speechSynthesis.addEventListener('voiceschanged', labelVoice); labelVoice();
 $('radioBtn').onclick = () => { save.engVoice = save.engVoice === false; persist(); $('radioBtn').textContent = tx('Race engineer voice') + ': ' + tx(save.engVoice === false ? 'Off' : 'On'); if (save.engVoice !== false) engineer(ENG.start(), true); }; $('radioBtn').textContent = tx('Race engineer voice') + ': ' + tx(save.engVoice === false ? 'Off' : 'On');
 $('hapBtn').onclick = () => { save.haptics = save.haptics === false; persist(); $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); if (save.haptics !== false) rumble(40, .5, .5); }; $('hapBtn').textContent = tx('Haptics') + ': ' + tx(save.haptics === false ? 'Off' : 'On'); $('teDone').onclick = exitTouchEdit;
 $('teSize').oninput = e => { tUI().scale = +e.target.value / 100; applyTouchUI(); persist(); };

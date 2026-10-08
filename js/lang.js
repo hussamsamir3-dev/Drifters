@@ -69,6 +69,7 @@ export const AR = {
   'Low': 'منخفض',
   'High': 'عالٍ',
   'Voice': 'الصوت',
+  'Natural voice': 'صوت طبيعي',
   'Radio male': 'راديو - رجل',
   'Radio female': 'راديو - امرأة',
   'Device voice': 'صوت الجهاز',

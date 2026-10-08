@@ -905,6 +905,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   const n = track.n, sp = car.speed, p = track.path;
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
   // drift the racing line towards the inside of the coming corner, and around slower cars
+  if (ai.passCd > 0) ai.passCd -= dt;
   if (ai.contactT > 0) ai.contactT -= dt; if (ai.defend > 0) { ai.defend -= dt; if (ai.defend <= 0) ai.defT = (ai.diff ?? 1) === 2 ? 1.4 : 3; } if (ai.defT > 0) ai.defT -= dt;      /* one defensive move, then a rest of 3 s */      // after any touch: lift, give the other car room, and rejoin the line gently
   const ap = p[(car.idx + look + Math.round(34 / track.spacing)) % n], inside = clamp(tgt.k * 300, -1, 1), setup = clamp(ap.k * 300, -1, 1);
   // Apex rules, taken from the track's own corners: brake in a straight line, swing out wide on the approach, turn in LATE, clip the apex after the
@@ -935,7 +936,9 @@ export function aiDrive(car, track, ai, cars, dt) {
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
     if (f > 0 && f < 70 && Math.abs(l) < 2.6 + Math.abs(ovl) * .35) { const gap = Math.max(.3, f - 4.5), cl = car.vf - ovf; if (cl > 1) { const need = cl * cl / (2 * gap); if (need > 4.5) brakeFor = Math.max(brakeFor, clamp(need / 9, .3, 1)); } }      /* the physics of not hitting anyone: the braking needed to match the speed of a car in my path inside the gap that is left (v^2 / 2d); if it is more than a comfortable 4.5 m/s^2, brake now */
-    if (f > 0 && f < 34 && Math.abs(l) < 3.1 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 9 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6);      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
+    if (f > 0 && f < 34 && Math.abs(l) < 3.1 && o.speed > 3 && !o.isRemote) { const vfo = o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 9 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6;
+      if ((ai.diff ?? 1) >= 1 && Math.abs(setup) < .35 && f < 30 && !(ai.passT > 0) && !(ai.passCd > 0) && !car.held) { ai.passT = 2.6; ai.passCd = 4; let s = l !== 0 ? -Math.sign(l) : (ai.passSide || 1); if (Math.abs(want + s * 3.4) > ai.max) s = -s; ai.passSide = s; }      /* build 58: stuck behind a slower car on a straight, a driver does not wait: pick the free side, pull out and go by */
+      if (!(ai.passT > 0)) vFollow = Math.min(vFollow, vfo); }      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
     else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
@@ -945,13 +948,14 @@ export function aiDrive(car, track, ai, cars, dt) {
     }
   }
   if (ai.merge > 0) { ai.merge -= dt; v0cap = Math.min(v0cap, 30); }      // just out of the pit lane: slow, and drift onto the line instead of cutting across
+  if (ai.passT > 0) { ai.passT -= dt; want += ai.passSide * 3.4; }
   { const kk = Math.min(1, dt * (ai.merge > 0 ? .75 : 2.7)), dOff = (clamp(want, -ai.max, ai.max) - ai.off) * kk, lim = (ai.merge > 0 ? 1.3 : (ai.rt ?? 99) < 10 ? .9 + (ai.rt ?? 0) * .25 : 99) * dt; ai.off += clamp(dOff, -lim, lim); }      // the first ten seconds: the line is joined gradually
   if (ai.st0 == null) { ai.st0 = 1; const p0 = p[car.idx % n]; ai.off = (car.x - p0.x) * p0.tz - (car.z - p0.z) * p0.tx; }      /* build 57: start on the line the car is standing on and join the racing line gradually, never snap to it */
   const tx = tgt.x + tgt.tz * ai.off, tz = tgt.z - tgt.tx * ai.off;
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
-  const B = ai.brain || (ai.brain = { react: .09 + Math.random() * .1, consist: [.955, .974, .99][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
+  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .045 : .09) + Math.random() * (ai.diff === 2 ? .045 : .1), consist: [.955, .974, .99][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
   const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);

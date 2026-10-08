@@ -34,7 +34,7 @@ const FX = {
 export class Post {
   constructor(renderer, scene, camera) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: matchMedia('(pointer: coarse)').matches ? 2 : 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
     this.bloom = { strength: 0 };   // bloom removed: lights stay crisp

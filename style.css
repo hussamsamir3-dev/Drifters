@@ -607,3 +607,13 @@ body:not(.touch) #hud .hx{zoom:1.25}
 @media (max-width:760px){#hud #mini{width:150px;height:150px}.tt i{width:26px;height:18px}.tt i b{font-size:10px}}
 body.touch #hud #mini{width:180px;height:180px}
 body.touch .tt i{width:26px;height:18px}body.touch .tt i b{font-size:10px}
+
+/* build 58: pit-stop gauges above the car */
+#pitHud{position:fixed;left:0;top:0;z-index:30;display:none;flex-direction:column;gap:5px;padding:8px 10px;border-radius:12px;background:rgba(14,16,20,.72);backdrop-filter:blur(4px);pointer-events:none;min-width:150px;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+#pitHud .ph{display:flex;align-items:center;gap:7px;font:700 12px/1 Rubik,system-ui,sans-serif;color:#fff}
+#pitHud .ph i{font-style:normal;width:16px;text-align:center;font-size:13px}
+#pitHud .ph span{flex:1;height:8px;border-radius:5px;background:rgba(255,255,255,.18);overflow:hidden}
+#pitHud .ph span b{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#f4c20d,#22b866);transition:width .12s linear}
+#pitHud .ph span b.full{background:#22b866}
+#pitHud .ph em{font-style:normal;width:36px;text-align:right;font-variant-numeric:tabular-nums}
+#pitHud .ph.done em{color:#22b866}
