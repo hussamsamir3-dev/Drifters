@@ -19,7 +19,9 @@ import { CHAPTERS, EVENTS, goalText, starsFor, levelOf, xpFor, dailyFor } from '
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const wrap = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
-const fmt = ms => { if (ms == null || !isFinite(ms)) return '—'; const s = ms / 1000, m = Math.floor(s / 60); return m + ':' + (s - m * 60).toFixed(2).padStart(5, '0'); };
+/* times: under a minute plain seconds (58.432), from a minute m:ss.mmm (1:23.456), always to the millisecond, rounded once as whole milliseconds so 59.9996 never prints as 60.000 */
+const fmt = ms => { if (ms == null || !isFinite(ms)) return '—'; const t = Math.max(0, Math.round(ms)), m = Math.floor(t / 60000), s = (t - m * 60000) / 1000; return m ? m + ':' + s.toFixed(3).padStart(6, '0') : s.toFixed(3); };
+const fdl = s => (s < 0 ? '−' : '+') + Math.abs(s).toFixed(3);      /* a time difference in seconds, to the millisecond */
 const hex = c => '#' + c.toString(16).padStart(6, '0');
 const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -178,9 +180,9 @@ addEventListener('pointerup', () => { if (gDrag.on) { gDrag.on = false; gDrag.ho
 // for the stock set-up and for the current one, so every click shows what it buys and what it costs.
 const COMP_LETTER = { soft: 'S', medium: 'M', hard: 'H', rain: 'W', gravel: 'G' }, COMP_ORDER = ['auto', 'soft', 'medium', 'hard', 'rain', 'gravel'];
 // Fit a compound: new tyres come off the blankets already warm. 'rain' makes the car a wet-tyre car.
-function fitTyres(car, comp) { car.tn = tuneOf(car.spec, Object.assign({}, car.tuneBase, { tyre: comp })); car.wear = car.tn.wear; car.wetTyres = comp === 'rain'; car.tT = 58; }
+function fitTyres(car, comp) { car.tn = tuneOf(car.spec, Object.assign({}, car.tuneBase, { tyre: comp })); car.wear = car.tn.wear; car.wetTyres = comp === 'rain'; car.tT = car.tn.tOpt - 3; car.tTw = [car.tT, car.tT, car.tT, car.tT]; }    /* tyres come off the warming blankets just inside their working window */
 function nextCompFor(car) { const w = R.wet > .4 || R.rainAt - R.t < 20; if (R.nextComp && R.nextComp !== 'auto') return R.nextComp; return w ? 'rain' : car.tn.comp === 'rain' ? 'medium' : car.tn.comp; }
-function cycleComp() { if (!R || !R.player || R.attract) return; R.nextComp = COMP_ORDER[(COMP_ORDER.indexOf(R.nextComp || 'auto') + 1) % COMP_ORDER.length]; radio(R.nextComp === 'auto' ? 'Tyres for the next stop: the crew will choose for the weather.' : 'Next stop: ' + R.nextComp + ' tyres.'); }
+function cycleComp() { if (!R || !R.player || R.attract) return; R.nextComp = COMP_ORDER[(COMP_ORDER.indexOf(R.nextComp || 'auto') + 1) % COMP_ORDER.length]; { const n = R.nextComp, ca = COMP_AR[n]; if (n === 'auto') sayB('Tyres for the next stop: the crew will choose for the weather.', 'إطارات التوقف القادم: الطاقم سيختار حسب الطقس.', 'إِطَارَاتُ التَّوَقُّفِ القَادِم: الطَّاقِمُ سَيَخْتَارُ حَسَبَ الطَّقْس.', 'calm', true); else sayB('Next stop: ' + n + ' tyres.', 'التوقف القادم: إطارات ' + (ca ? ca[0] : n) + '.', 'التَّوَقُّفُ القَادِم: إِطَارَاتٌ ' + (ca ? ca[1] : n) + '.', 'calm', true); } }
 let _dbk = null; function debrisKit() { return _dbk || (_dbk = [
   { g: new THREE.BoxGeometry(.16, .02, .12), m: new THREE.MeshStandardMaterial({ color: 0xa6d6ff, roughness: .1, metalness: .3, transparent: true, opacity: .8 }) },        // glass
   { g: new THREE.BoxGeometry(.26, .09, .18), m: new THREE.MeshStandardMaterial({ color: 0x141416, roughness: .9 }) },                                                         // rubber
@@ -304,7 +306,7 @@ async function startRace(o) {
   scene.add(track.group); applyTheme(track.theme);
   R = { ...o, track, cars: [], ais: new Map(), t: 0, state: 'wait', countT: 3.6, drift: 0, D: { combo: 0, time: 0, mult: 1, grace: 0 }, fx: null, sendT: 0, waitT: 0, bestThisRace: null };
   R.rules = o.rules || 'circuit'; R.arc = R.rules === 'arcade' || o.mode === 'drift';
-  ttsWarm(); R.fx = { smoke: new Particles(scene, 2600), glow: new Particles(scene, 900, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = o.attract ? { update() {}, dispose() {}, hit() {}, setCars() {} } : new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
+  ttsWarm(); R.fx = { smoke: new Particles(scene, 4200), glow: new Particles(scene, 1200, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = o.attract ? { update() {}, dispose() {}, hit() {}, setCars() {} } : new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.driftMode = o.mode === 'drift'; if (me.driftMode) me.assistK = .22;      // drift: a counter-steer aid stays on, so the car holds a big angle instead of spinning me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
   const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
@@ -359,21 +361,23 @@ function progress(car) {
   if (car.out) return;
   const tr = R.track, n = tr.n, ni = tr.nearest(car.x, car.z, car.idx); let d = ni - car.idx; if (d > n / 2) d -= n; if (d < -n / 2) d += n;
   car.idx = ni; car.prog += d;
+  const pn = tr.path[ni], pc = car.prog + clamp(((car.x - pn.x) * pn.tx + (car.z - pn.z) * pn.tz) / tr.spacing, -.5, .5), pp = car.pcPrev ?? pc; car.pcPrev = pc;      /* continuous progress, to cross the line to the millisecond instead of to the frame */
   if (car === R.player && R.state === 'go' && car.lap >= 0) {          // live gap to your best lap, sampled at 40 points round the circuit
     const b = Math.min(39, Math.floor((((car.prog % n) + n) % n) / n * 40)), lt = R.t - car.lapStart, ref = save.trace[tr.def.id]; if (!car.trace) car.trace = [];
-    if (b !== car.tb) { car.tb = b; car.trace[b] = lt; if (ref && ref[b] != null) { const dlt = lt - ref[b], el = $('hDelta'); el.textContent = (dlt < 0 ? '−' : '+') + Math.abs(dlt).toFixed(2); el.className = dlt < 0 ? 'good' : 'slow'; } }
+    if (b !== car.tb) { car.tb = b; car.trace[b] = lt; if (ref && ref[b] != null) { const dlt = lt - ref[b], el = $('hDelta'); el.textContent = fdl(dlt); el.className = dlt < 0 ? 'good' : 'slow'; } }
   }
   if (car === R.player && R.state === 'go' && car.lap >= 0) {          // three timed sectors per lap
     const sec = Math.min(2, Math.floor((((car.prog % n) + n) % n) / (n / 3)));
     if (sec !== car.sec) { if (car.sec != null && d > 0 && sec === (car.sec + 1) % 3) sectorDone(car, car.sec); car.sec = sec; car.secStart = R.t; }
   }
-  const done = Math.floor(car.prog / n);
+  const done = Math.floor(pc / n);      /* the lap turns over exactly at the line, not half a path node before it */
   if (done > car.lap && R.state !== 'count' && R.state !== 'wait') {
     const first = car.lap < 0; car.lap = done;
-    if (!first) { const lt = (R.t - car.lapStart) * 1000; car.laps.push(lt); if (car === R.player) onPlayerLap(lt); if (R.elim && R.state === 'go' && rank().filter(c => !c.out)[0] === car) knockout(); }
+    const fr = pc > pp ? clamp((done * n - pp) / (pc - pp), 0, 1) : 1, tX = R.t - (R.lastDt || 0) * (1 - fr);      /* the moment the car crossed the line, inside the frame */
+    if (!first) { const lt = (tX - car.lapStart) * 1000; car.laps.push(lt); if (car === R.player) onPlayerLap(lt); if (R.elim && R.state === 'go' && rank().filter(c => !c.out)[0] === car) knockout(); }
     if (car.fuelLap != null && car.fuelLap > car.fuel) car.fpl = car.fuelLap - car.fuel; car.fuelLap = car.fuel;      // fuel used per lap, for strategy
-    car.lapStart = R.t;
-    if (car.lap >= R.laps && !car.finished) { car.finished = true; car.finishTime = R.t * 1000; if (car === R.player) finishPlayer(); }
+    car.lapStart = tX;
+    if (car.lap >= R.laps && !car.finished) { car.finished = true; car.finishTime = tX * 1000; if (car === R.player) finishPlayer(); }
   }
 }
 // Safety car (Professional races). A heavy crash or a car being towed brings it out: it joins ahead of the leader, everyone is held
@@ -384,7 +388,7 @@ function safetyCar(why) {
   const car = new Car(CARS.find(c => c.id === 'E30'), 0xf3f4f6, 'Safety car', undefined, { wing: 0 }); car.reset(p.x, p.z, th); car.vx = Math.sin(th) * 18; car.vz = Math.cos(th) * 18; car.idx = i; car.fuelK = 0; car.wear = 0; car.dmgScale = 0; car.partK = 0; car.setLights(true); scene.add(car.root);
   const bar = new THREE.Mesh(new THREE.BoxGeometry(1.5, .12, .3), new THREE.MeshBasicMaterial({ color: 0xffa200 })); bar.position.y = car.top + .1; car.root.add(bar);
   const ai = Object.assign({}, R.ais.values().next().value, { brain: null, pitT: 0, lane: 0, off: 0, skill: .8, care: 1.5, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false } });
-  R.sc = { car, ai, bar, t: 0, dur: 24 }; R.scN = (R.scN || 0) + 1; for (const c of R.cars) c.capV = 21; flash('Safety car', true, 2600); radio('Safety car is out' + (why ? ' for ' + why : '') + '. Hold position, no overtaking.', true); audio.beep(440, .5);
+  R.sc = { car, ai, bar, t: 0, dur: 24 }; R.scN = (R.scN || 0) + 1; for (const c of R.cars) c.capV = 21; flash('Safety car', true, 2600); { const w = WHY_AR[why]; sayB('Safety car is out' + (why ? ' for ' + why : '') + '. Hold position, no overtaking.', 'سيارة الأمان في المضمار' + (w ? ' بسبب ' + w[0] : '') + '. حافظ على موقعك ولا تتجاوز.', 'سَيَّارَةُ الأَمَانِ فِي المِضْمَار' + (w ? ' بِسَبَبِ ' + w[1] : '') + '. حَافِظْ عَلَى مَوْقِعِكَ وَلَا تَتَجَاوَز.', 'urgent', true); } audio.beep(440, .5);
 }
 function safetyTick(dt) {
   const S = R.sc, tr = R.track, me = R.player, c = S.car; S.t += dt; c.idx = tr.nearest(c.x, c.z, c.idx); aiDrive(c, tr, S.ai, R.cars, dt);
@@ -392,7 +396,7 @@ function safetyTick(dt) {
   c.render(dt, tr, 1); c.effects(dt, R.fx, tr, 1); S.bar.material.color.setHex(Math.floor(S.t * 5) % 2 ? 0xffa200 : 0x553300);
   const gap = ((c.idx - me.idx + tr.n) % tr.n) * tr.spacing; me.capV = going ? (gap > tr.len / 2 ? 9 : 21) : 0;                      // if you pass it you are held back until it is ahead again
   if (going) setTxt('hEvent', tx('Safety car') + ' · ' + tx('no overtaking'));
-  else if (!S.green) { S.green = true; setFlag('green', 3); for (const o of R.cars) o.capV = 0; flash('Green flag', false, 1800); radio('Safety car in this lap. Green, green, green!'); setTxt('hEvent', ''); audio.beep(880, .5); }
+  else if (!S.green) { S.green = true; setFlag('green', 3); for (const o of R.cars) o.capV = 0; flash('Green flag', false, 1800); sayB('Safety car in this lap. Green, green, green!', 'سيارة الأمان تدخل هذه اللفة. أخضر، أخضر، أخضر!', 'سَيَّارَةُ الأَمَانِ تَدْخُلُ هَذِهِ اللَّفَّة. أَخْضَر، أَخْضَر، أَخْضَر!', 'excited', true); setTxt('hEvent', ''); audio.beep(880, .5); }
   if (S.t > S.dur + 5) { scene.remove(c.root); c.dispose(); R.sc = null; R.scT = R.t; }
 }
 // ---------------- race rules (Professional) ----------------
@@ -401,8 +405,10 @@ function safetyTick(dt) {
 // the leaders through. Penalties are added to race time, so they can cost places at the flag.
 { const _bump = Car.prototype.bump; Car.prototype.bump = function (o, kin) { const v = _bump.call(this, o, kin); if (v > 0) { this.bumpV = v; this.bumpO = o; o.bumpV = v; o.bumpO = this; } return v; }; }
 function setFlag(kind, sec = 3) { R.flag = kind; R.flagT = sec; }
-function penalise(car, sec, why) { car.pen = (car.pen || 0) + sec; if (car === R.player) { flash('+' + sec + 's ' + tx('penalty'), true, 1900); radio(why + ' ' + sec + '-second penalty.', true); setFlag('pen', 4); audio.beep(300, .5); } }
-function warnCar(car, why) { if (car === R.player) { radio(why, true); setFlag('warn', 4); audio.beep(520, .25); } }
+const WHY_TXT = { 'Causing a collision.': ['التسبب بحادث.', 'التَّسَبُّبُ بِحَادِث.'], 'Track limits again.': ['تجاوز حدود المضمار مجددا.', 'تَجَاوُزُ حُدُودِ المِضْمَارِ مُجَدَّدًا.'], 'Overtaking under the safety car.': ['التجاوز تحت سيارة الأمان.', 'التَّجَاوُزُ تَحْتَ سَيَّارَةِ الأَمَان.'] };
+function penalise(car, sec, why) { car.pen = (car.pen || 0) + sec; if (car === R.player) { flash('+' + sec + 's ' + tx('penalty'), true, 1900); { const w = WHY_TXT[why]; sayB(why + ' ' + sec + '-second penalty.', 'عقوبة ' + sec + ' ثوان: ' + (w ? w[0] : why), 'عُقُوبَةُ ' + arN(sec) + ' ثَوَانٍ: ' + (w ? w[1] : why), 'tense', true); } setFlag('pen', 4); audio.beep(300, .5); } }
+const WARN_TXT = { 'Contact with the car ahead. Next one is a penalty.': ['احتكاك بالسيارة التي أمامك. المرة القادمة عقوبة.', 'اِحْتِكَاكٌ بِالسَّيَّارَةِ الَّتِي أَمَامَك. المَرَّةُ القَادِمَةُ عُقُوبَة.'] };
+function warnCar(car, why) { if (car === R.player) { { const w = WARN_TXT[why], m = /^Track limits, warning (\d) of 2/.exec(why); if (w) sayB(why, w[0], w[1], 'tense', true); else if (m) sayB(why, 'حدود المضمار، تحذير ' + m[1] + ' من 2. أبقِ عجلة على المضمار.', 'حُدُودُ المِضْمَار، تَحْذِيرٌ ' + arN(+m[1]) + ' مِنِ اثْنَيْن. أَبْقِ عَجَلَةً عَلَى المِضْمَار.', 'tense', true); else sayB(why, why, why, 'tense', true); } setFlag('warn', 4); audio.beep(520, .25); } }
 function rulesTick(dt) {
   const me = R.player, tr = R.track;
   for (const c of R.cars) { if (c.out || c.isRemote || c.finished) continue;
@@ -411,23 +417,23 @@ function rulesTick(dt) {
     if (c.bumpV > 9 && c.bumpO && !c.bumpO.isPace && R.t - (c.ctT || -9) > 4) { const o = c.bumpO, f = (o.x - c.x) * Math.sin(c.th) + (o.z - c.z) * Math.cos(c.th); if (f > 2 && c.speed > o.speed) { c.ctT = R.t; c.ct = (c.ct || 0) + 1; if (c.ct >= 2) penalise(c, 5, 'Causing a collision.'); else warnCar(c, 'Contact with the car ahead. Next one is a penalty.'); } } c.bumpV = 0;
     c.blue = false; for (const o of R.cars) if (o !== c && !o.out && o.prog - c.prog > tr.n * .9) { const d = ((o.idx - c.idx + tr.n) % tr.n); if (d > tr.n - 22) { c.blue = true; break; } }        // a car a lap ahead is right behind
     if (c.blue && c !== me) { const ai = R.ais.get(c); if (ai) ai.inp.throttle = Math.min(ai.inp.throttle, .55); } }
-  if (me.blue && !(R.flagT > 0)) { setFlag('blue', 1); if (R.t - (R.blueT || -99) > 12) { R.blueT = R.t; radio('Blue flag. Let the leader through.', true); } }
+  if (me.blue && !(R.flagT > 0)) { setFlag('blue', 1); if (R.t - (R.blueT || -99) > 30) { R.blueT = R.t; sayB('Blue flag. Let the leader through.', 'علم أزرق. دع المتصدر يمر.', 'عَلَمٌ أَزْرَق. دَعِ المُتَصَدِّرَ يَمُرّ.', 'tense', true); } }
   if (R.sc && !R.sc.green) setFlag('yellow', .5);
   R.flagT = Math.max(0, (R.flagT || 0) - dt); const k = R.flagT > 0 ? R.flag : '', el = $('hFlag'); if (hudCache.flag !== k + (me.pen || 0)) { hudCache.flag = k + (me.pen || 0); el.className = k; el.textContent = me.pen ? '+' + me.pen + 's' : ''; }
 }
 function setPace(p) { if (!R) return; const me = R.player; me.pace = p; const P = TUNE.pace[p]; flash(tx('Pace') + ': ' + tx(P.name), false, 900); hudCache.pace = -1; }
 function sectorDone(car, i) {
   const id = R.track.def.id, t = (R.t - car.secStart) * 1000, pb = (save.sectors[id] || (save.sectors[id] = []))[i], el = $('hSec');
-  el.textContent = 'S' + (i + 1) + '  ' + (t / 1000).toFixed(2) + (pb ? '  ' + (t < pb ? '−' : '+') + (Math.abs(t - pb) / 1000).toFixed(2) : ''); el.className = !pb || t < pb ? 'good' : 'slow';
+  el.textContent = 'S' + (i + 1) + '  ' + fmt(t) + (pb ? '  ' + fdl((t - pb) / 1000) : ''); el.className = !pb || t < pb ? 'good' : 'slow';
   if (!pb || t < pb) { save.sectors[id][i] = Math.round(t); persist(); }
 }
 function paceBars(lt) {      // each lap against the one before: green and to the right when you were quicker, red and to the left when you were slower
   const H = R.lapHist || (R.lapHist = []), prev = H.length ? H[H.length - 1] : null; H.push(lt); const el = $('paceBars'); if (!el) return; if (prev == null) return;
-  const d = lt - prev, w = Math.min(100, Math.abs(d) / 3 * 100), row = '<div class="pb"><span>L' + H.length + '</span><div class="bar"><i class="' + (d <= 0 ? 'g' : 'r') + '" style="width:' + w.toFixed(0) + '%"></i></div><b class="' + (d <= 0 ? 'good' : 'slow') + '">' + (d <= 0 ? '−' : '+') + Math.abs(d).toFixed(2) + '</b></div>';
+  const d = (lt - prev) / 1000, w = Math.min(100, Math.abs(d) / 3 * 100), row = '<div class="pb"><span>L' + H.length + '</span><div class="bar"><i class="' + (d <= 0 ? 'g' : 'r') + '" style="width:' + w.toFixed(0) + '%"></i></div><b class="' + (d <= 0 ? 'good' : 'slow') + '">' + fdl(d) + '</b></div>';
   el.insertAdjacentHTML('beforeend', row); while (el.children.length > 6) el.removeChild(el.firstChild); el.hidden = false;
 }
 function onPlayerLap(lt) {
-  paceBars(lt); { const H = R.lapHist || []; if (H.length >= 2 && R.state === 'go') { const d = lt - H[H.length - 2]; engineer(d <= 0 ? ENG.lapFast(fmt(lt), Math.abs(d).toFixed(2), lt) : ENG.lapSlow(fmt(lt), d.toFixed(2), lt), true); } }
+  paceBars(lt); { const H = R.lapHist || []; if (H.length >= 2 && R.state === 'go') { const d = (lt - H[H.length - 2]) / 1000; engineer(d <= 0 ? ENG.lapFast(fmt(lt), Math.abs(d).toFixed(3), lt) : ENG.lapSlow(fmt(lt), d.toFixed(3), lt), true); } }
   const id = R.track.def.id, pb = save.best[id];
   if (R.bestThisRace == null || lt < R.bestThisRace) R.bestThisRace = lt;
   if ((!pb || lt < pb) && R.player.trace && R.player.trace.length > 30) save.trace[id] = R.player.trace.map(v => +v.toFixed(2)); R.player.trace = []; R.player.tb = -1;
@@ -470,6 +476,11 @@ function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyre
   if (me.wsurf.includes(1) && me.speed > 8) { rumble(16, .25, .6); F.t = .11; } else if (me.locked || me.lockF) { rumble(14, .5, .3); F.t = .09; } else if (me.grass > .5) { rumble(14, .2, .7); F.t = .08; }
   else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; } }
 const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .12, medium: .3, high: .7 })[save.dmg || 'medium']; };
+function flipFX(c) {      /* a rolling car slams into the ground: damage, sparks, noise; a car left on its roof is righted by the marshals */
+  if (c.flipEvt) { c.flipEvt = 0; const p = c.flipPow || 8; c.hitX = c.x + (Math.random() - .5) * 1.4; c.hitZ = c.z + (Math.random() - .5) * 1.4; c.hitL = [(Math.random() - .5) * 2 * c.hw, (Math.random() - .5) * c.zf]; c.hitN = [Math.random() - .5, Math.random() - .5]; c.scrapeT = .5; impact(c, p * 1.1, true); }
+  if (c.roof && c === R.player && c.roofT > .9 && !c._roofSaid) { c._roofSaid = 1; engineer(ENG.roof(), true); }
+  if (c.roof && c.roofT > 3.4) { c.roof = false; c._roofSaid = 0; respawn(c); c.holdT = R.t + 2; if (c === R.player) { flash('Marshals flipped the car back', true, 1800); engineer(ENG.righted(), true); } }
+}
 function impact(car, power, wall) {
   if (R && car === R.player && power > 5 && R.eng && R.t - (R.eng.last.dmg ?? -999) > 12) { R.eng.last.dmg = R.t; engineer(ENG.damage(), true); }
   { const ai0 = R && R.ais && R.ais.get(car); if (ai0 && power > 1.2) ai0.contactT = 1.2 + Math.min(1.2, power * .05); }      // a driver who has touched something yields
@@ -500,9 +511,9 @@ function physics(h, live) {
   const hold = (R.pit && R.pit.busy) || R.t < (me.holdT || 0);
   let pin = auto ? R.ais.get(me).inp : hold ? PIT_INP : readInput();
   if (R.demo === 'keys') { const a = R.ais.get(me).inp; pin = { steer: Math.abs(a.steer) > .15 ? Math.sign(a.steer) : 0, throttle: a.throttle > .3 ? 1 : 0, brake: a.brake > .2 ? 1 : 0, hand: false, nitro: false }; }   // test driver limited to on/off keyboard inputs
-  impact(me, me.step(h, pin, tr, live), true);
+  impact(me, me.step(h, pin, tr, live), true); flipFX(me);
   if (hold) { me.vx = me.vz = me.r = 0; }
-  for (const c of R.cars) if (c !== me && !c.isRemote && !c.out) { const ai = R.ais.get(c); impact(c, c.step(h, R.t < (c.holdT || 0) ? PIT_INP : ai.inp, tr, live, ai.boost || 1), true); }
+  for (const c of R.cars) if (c !== me && !c.isRemote && !c.out) { const ai = R.ais.get(c); impact(c, c.step(h, R.t < (c.holdT || 0) ? PIT_INP : ai.inp, tr, live, ai.boost || 1), true); flipFX(c); }
   for (const c of R.cars) if (c.landEvt > 0) { const v = c.landEvt; c.landEvt = 0; if (c === me && v > 2.5) { audio.crash(Math.min(16, v * 1.5)); rumble(Math.min(180, 30 + v * 14), .8, .6); shake = Math.min(1.2, shake + v / 18); } if (v > 5.5) c.damage(v * .8, false); }      // landing after a jump
   for (let i = 0; i < R.cars.length; i++) for (let j = i + 1; j < R.cars.length; j++) {
     const a = R.cars[i], b = R.cars[j];
@@ -535,24 +546,69 @@ const TROPHIES = [
 function checkTrophies() { let n = 0; for (const t of TROPHIES) if (!save.trophies[t.id] && t.get() >= t.need) { save.trophies[t.id] = 1; save.credits += 300; n++; toast('Trophy: ' + t.name + ' — +300 credits'); } if (n) { persist(); if (!R || R.state === 'over') $('credits').textContent = save.credits.toLocaleString(); } }
 let radioT = 0, radioLast = -9;
 // ---------------- the race engineer: live calls in English and Arabic, shown as subtitles and spoken by the device's voice ----------------
-const spokenT = (lt, lang) => { const mm = Math.floor(lt / 60), s = Math.floor(lt % 60), h = Math.round((lt % 1) * 10); return lang === 'ar' ? (mm ? mm + ' دقيقة و ' : '') + s + (h ? ' فاصلة ' + h : '') + ' ثانية' : (mm ? mm + ' minute ' : '') + s + (h ? ' point ' + h : '') + ' seconds'; };
+/* ---- numbers as the engineer would say them. Arabic is spoken fully vowelled (tashkeel) with every number written out as words, because the eSpeak Arabic voice reads only what it is given ---- */
+const AU = ['صِفْر', 'وَاحِد', 'اِثْنَان', 'ثَلَاثَة', 'أَرْبَعَة', 'خَمْسَة', 'سِتَّة', 'سَبْعَة', 'ثَمَانِيَة', 'تِسْعَة', 'عَشَرَة', 'أَحَدَ عَشَر', 'اِثْنَا عَشَر', 'ثَلَاثَةَ عَشَر', 'أَرْبَعَةَ عَشَر', 'خَمْسَةَ عَشَر', 'سِتَّةَ عَشَر', 'سَبْعَةَ عَشَر', 'ثَمَانِيَةَ عَشَر', 'تِسْعَةَ عَشَر'];
+const AT = ['', '', 'عِشْرُون', 'ثَلَاثُون', 'أَرْبَعُون', 'خَمْسُون', 'سِتُّون', 'سَبْعُون', 'ثَمَانُون', 'تِسْعُون'];
+const AO = ['', 'الأَوَّل', 'الثَّانِي', 'الثَّالِث', 'الرَّابِع', 'الخَامِس', 'السَّادِس', 'السَّابِع', 'الثَّامِن', 'التَّاسِع', 'العَاشِر'];
+const arN = n => { n = Math.max(0, Math.round(n)); if (n < 20) return AU[n]; if (n < 100) { const u = n % 10, t = AT[Math.floor(n / 10)]; return u ? AU[u] + ' وَ' + t : t; } return String(n); };
+const arPosS = p => p <= 10 ? 'فِي المَرْكَزِ ' + AO[p] : 'فِي المَرْكَزِ رَقْمِ ' + arN(p);
+const arLapsS = n => n === 1 ? 'لَفَّةً وَاحِدَة' : n === 2 ? 'لَفَّتَيْن' : n <= 10 ? arN(n) + ' لَفَّات' : arN(n) + ' لَفَّة';
+const pickV = a => a[Math.floor(Math.random() * a.length)];
+/* a time in seconds, as it is said on the radio: "1 minute 23.4 seconds" */
+const spokenT = (sec, lang) => { const tt = Math.round(sec * 10), mm = Math.floor(tt / 600), r = (tt % 600) / 10, w = Math.floor(r), f = tt % 10;
+  if (lang !== 'ar') return (mm ? mm + (mm > 1 ? ' minutes ' : ' minute ') : '') + r.toFixed(1) + ' seconds';
+  return (mm ? (mm === 1 ? 'دَقِيقَة' : mm === 2 ? 'دَقِيقَتَان' : arN(mm) + ' دَقَائِق') + ' وَ' : '') + arN(w) + (f ? ' فَاصِلَة ' + arN(f) : '') + ' ثَانِيَة'; };
+/* a gap or a delta in seconds: under a second it is said in tenths, above it in seconds and tenths */
+const gapT = (g, lang) => { const t = Math.round(g * 10); if (lang !== 'ar') return t <= 0 ? 'less than a tenth' : t < 10 ? t + (t === 1 ? ' tenth' : ' tenths') : (t / 10).toFixed(1) + ' seconds';
+  if (t <= 0) return 'أَقَلُّ مِنْ عُشْرِ ثَانِيَة'; if (t < 10) return t === 1 ? 'عُشْرُ ثَانِيَة' : t === 2 ? 'عُشْرَانِ' : arN(t) + ' أَعْشَار'; return arN(Math.floor(t / 10)) + (t % 10 ? ' فَاصِلَة ' + arN(t % 10) : '') + ' ثَانِيَة'; };
+const gapShow = g => Number(g).toFixed(1);
 const ENG = {
-  lapFast: (t, d, lt) => ({ emo: 'happy', en: `Lap ${t}. ${d} seconds quicker than the last one. Keep it up.`, ar: `لفة ${t}. أسرع من اللفة السابقة بـ ${d} ثانية. استمر.`, enS: `Yes! ${spokenT(lt, 'en')}. ${Number(d).toFixed(1)} seconds quicker. Brilliant!`, arS: `ممتاز! ${spokenT(lt, 'ar')}. أسرع بـ ${Number(d).toFixed(1)} ثانية. رائع!` }),
-  lapSlow: (t, d, lt) => ({ emo: 'concerned', en: `Lap ${t}. ${d} slower than last lap. Find the time in the corners.`, ar: `لفة ${t}. أبطأ من اللفة السابقة بـ ${d} ثانية. ابحث عن الوقت في المنعطفات.`, enS: `${spokenT(lt, 'en')}. ${Number(d).toFixed(1)} seconds slower. Come on, find it in the corners.`, arS: `${spokenT(lt, 'ar')}. أبطأ بـ ${Number(d).toFixed(1)} ثانية. هيا، ابحث عنه في المنعطفات.` }),
-  gapAhead: g => ({ emo: 'calm', en: `Car ahead is ${g} seconds up the road.`, ar: `السيارة التي أمامك تبعد ${g} ثانية.`, enS: `Car ahead, ${g} seconds. You can catch them.`, arS: `السيارة التي أمامك، ${g} ثانية. تستطيع اللحاق بها.` }),
-  gapBehind: g => ({ emo: 'tense', en: `Car behind is ${g} seconds back. Keep your line.`, ar: `السيارة التي خلفك تبعد ${g} ثانية. حافظ على خطك.`, enS: `Car behind, ${g} seconds. Stay sharp, keep your line.`, arS: `السيارة التي خلفك، ${g} ثانية. ابق متيقظا وحافظ على خطك.` }),
-  tyreCold: () => ({ emo: 'calm', en: 'Tyres are cold. Build the temperature gently.', ar: 'الإطارات باردة. سخنها بهدوء.' }),
-  tyreHot: () => ({ emo: 'concerned', en: 'Tyres are overheating. Ease the slides.', ar: 'الإطارات ساخنة جدا. خفف الانزلاق.', enS: 'Careful, the tyres are overheating. Ease the slides.', arS: 'انتبه، الإطارات ساخنة جدا. خفف الانزلاق.' }),
-  tyreWorn: () => ({ emo: 'concerned', en: 'Tyres are nearly gone. Box this lap if you can.', ar: 'الإطارات شارفت على النهاية. ادخل إلى الحظيرة هذه اللفة إن استطعت.', enS: 'The tyres are nearly gone. Box, box this lap if you can.', arS: 'الإطارات شارفت على النهاية. ادخل الحظيرة هذه اللفة إن استطعت.' }),
-  fuel: () => ({ emo: 'concerned', en: 'Fuel is low. Plan a stop.', ar: 'الوقود قليل. خطط للتوقف.', enS: 'Fuel is getting low. Start thinking about a stop.', arS: 'الوقود يقل. ابدأ التفكير في التوقف.' }),
-  engineHot: () => ({ emo: 'urgent', en: 'Engine temperature critical. Lift off and let it cool.', ar: 'حرارة المحرك حرجة. ارفع قدمك ودعه يبرد.', enS: 'Warning! Engine temperature critical. Lift off now, let it cool!', arS: 'تحذير! حرارة المحرك حرجة. ارفع قدمك الآن ودعه يبرد!' }),
-  damage: () => ({ emo: 'urgent', en: 'Contact! Checking the damage.', ar: 'اصطدام! نفحص الأضرار.', enS: 'Contact! Are you okay? Checking the damage.', arS: 'اصطدام! هل أنت بخير؟ نفحص الأضرار.' }),
-  hurt: () => ({ emo: 'sad', en: 'The car is hurt. Bring it home carefully.', ar: 'السيارة متضررة. أعدها بحذر.', enS: 'The car is hurt. Look after it, bring it home safe.', arS: 'السيارة متضررة. اعتن بها وأعدها بسلام.' }),
-  posUp: p => ({ emo: 'excited', en: `Good move. P${p}.`, ar: `حركة ممتازة. المركز ${p}.`, enS: `Yes! Great move! Position ${p}!`, arS: `رائع! حركة ممتازة! المركز ${p}!` }),
-  posDown: p => ({ emo: 'sad', en: `You lost a place. P${p}. Get it back.`, ar: `خسرت مركزا. أنت الآن في المركز ${p}. استعده.`, enS: `Ah, we lost a place. Position ${p}. Let's get it back.`, arS: `آه، خسرنا مركزا. المركز ${p}. لنستعده.` }),
-  final: () => ({ emo: 'excited', en: 'Final lap. Everything you have got.', ar: 'اللفة الأخيرة. أعطها كل ما لديك.', enS: 'Final lap! Everything you have got! Go, go, go!', arS: 'اللفة الأخيرة! أعطها كل ما لديك! هيا، هيا!' }),
-  start: () => ({ emo: 'calm', en: 'Radio check. Clean start, we are with you.', ar: 'اختبار الراديو. انطلاقة نظيفة، نحن معك.' }),
+  lapFast: (t, d, lt) => { const n = Number(d), v = pickV([0, 1]); return { emo: 'happy',
+    en: ['Lap time ' + t + '. ' + d + ' up on the last lap. Good job.', t + '. That is ' + d + ' quicker. Keep that rhythm.'][v],
+    ar: ['زمن اللفة ' + t + '. أسرع من السابقة بـ ' + d + ' ثانية. عمل ممتاز.', t + '. أسرع بـ ' + d + ' ثانية. حافظ على هذا الإيقاع.'][v],
+    enS: ['Lap time ' + spokenT(lt / 1000, 'en') + '. ' + gapT(n, 'en') + ' up on the last lap. Good job.', spokenT(lt / 1000, 'en') + '. That is ' + gapT(n, 'en') + ' quicker. Keep that rhythm.'][v],
+    arS: ['زَمَنُ اللَّفَّةِ ' + spokenT(lt / 1000, 'ar') + '. أَسْرَعُ مِنَ السَّابِقَةِ بِفَارِقِ ' + gapT(n, 'ar') + '. عَمَلٌ مُمْتَاز.', spokenT(lt / 1000, 'ar') + '. أَسْرَعُ بِفَارِقِ ' + gapT(n, 'ar') + '. بِإِيقَاعٍ ثَابِت.'][v] }; },
+  lapSlow: (t, d, lt) => { const n = Number(d), v = pickV([0, 1]); return { emo: 'concerned',
+    en: ['Lap time ' + t + '. ' + d + ' down. Tidy up the corner exits.', t + '. ' + d + ' off the last lap. Focus on the braking points.'][v],
+    ar: ['زمن اللفة ' + t + '. أبطأ بـ ' + d + ' ثانية. حسّن الخروج من المنعطفات.', t + '. أبطأ بـ ' + d + ' ثانية من السابقة. ركّز على نقاط الفرملة.'][v],
+    enS: ['Lap time ' + spokenT(lt / 1000, 'en') + '. ' + gapT(n, 'en') + ' down. Tidy up the corner exits.', spokenT(lt / 1000, 'en') + '. ' + gapT(n, 'en') + ' off the last lap. Focus on the braking points.'][v],
+    arS: ['زَمَنُ اللَّفَّةِ ' + spokenT(lt / 1000, 'ar') + '. أَبْطَأُ بِفَارِقِ ' + gapT(n, 'ar') + '. حَسِّنِ الخُرُوجَ مِنَ المُنْعَطَفَات.', spokenT(lt / 1000, 'ar') + '. أَبْطَأُ بِفَارِقِ ' + gapT(n, 'ar') + ' مِنَ السَّابِقَة. رَكِّزْ عَلَى نِقَاطِ الفَرْمَلَة.'][v] }; },
+  gapAhead: (g, trend) => { const n = Number(g), cl = trend < -.15, pl = trend > .15; return { emo: 'calm',
+    en: 'Gap to the car ahead, ' + gapShow(g) + (cl ? ', and you are closing.' : pl ? ', he is pulling away.' : '. Holding.'),
+    ar: 'الفارق مع السيارة التي أمامك ' + gapShow(g) + ' ثانية' + (cl ? '، وأنت تقترب.' : pl ? '، وهو يبتعد.' : '. ثابت.'),
+    enS: 'Gap to the car ahead, ' + gapT(n, 'en') + (cl ? ', and you are closing.' : pl ? ', he is pulling away.' : '. Holding.'),
+    arS: 'الفَارِقُ مَعَ السَّيَّارَةِ الَّتِي أَمَامَكَ ' + gapT(n, 'ar') + (cl ? '، وَأَنْتَ تَقْتَرِب.' : pl ? '، وَهُوَ يَبْتَعِد.' : '. ثَابِت.') }; },
+  gapBehind: (g, trend) => { const n = Number(g), cl = trend < -.15; return { emo: 'tense',
+    en: 'Car behind, ' + gapShow(g) + (cl ? ' and closing. Defend the inside.' : '. Keep your line.'),
+    ar: 'سيارة خلفك على بعد ' + gapShow(g) + ' ثانية' + (cl ? ' وهي تقترب. دافع عن الداخل.' : '. حافظ على خطك.'),
+    enS: 'Car behind, ' + gapT(n, 'en') + (cl ? ' and closing. Defend the inside.' : '. Keep your line.'),
+    arS: 'سَيَّارَةٌ خَلْفَكَ عَلَى بُعْدِ ' + gapT(n, 'ar') + (cl ? ' وَهِيَ تَقْتَرِب. دَافِعْ عَنِ الدَّاخِل.' : '. حَافِظْ عَلَى خَطِّك.') }; },
+  tyreCold: () => ({ emo: 'calm', en: 'Tyre temperatures are below the window. Weave and brake a bit harder to bring the heat in.', ar: 'حرارة الإطارات دون النطاق المناسب. تمايل وافرمل أقوى قليلا لرفع الحرارة.', enS: 'Tyre temperatures are below the window. Weave and brake a bit harder to bring the heat in.', arS: 'حَرَارَةُ الإِطَارَاتِ دُونَ النِّطَاقِ المُنَاسِب. تَمَايَلْ وَافْرْمِلْ أَقْوَى قَلِيلًا لِرَفْعِ الحَرَارَة.' }),
+  tyreHot: ax => { const f = ax === 'f', both = ax === 'b'; return { emo: 'concerned',
+    en: (both ? 'All four tyres are over the window.' : f ? 'Front tyres are overheating.' : 'Rear tyres are overheating.') + ' Smooth inputs, ease the slides.',
+    ar: (both ? 'الإطارات الأربعة فوق النطاق المناسب.' : f ? 'الإطارات الأمامية ترتفع حرارتها.' : 'الإطارات الخلفية ترتفع حرارتها.') + ' نعّم القيادة وخفف الانزلاق.',
+    enS: (both ? 'All four tyres are over the window.' : f ? 'Front tyres are overheating.' : 'Rear tyres are overheating.') + ' Smooth inputs, ease the slides.',
+    arS: (both ? 'الإِطَارَاتُ الأَرْبَعَةُ فَوْقَ النِّطَاقِ المُنَاسِب.' : f ? 'الإِطَارَاتُ الأَمَامِيَّةُ تَرْتَفِعُ حَرَارَتُهَا.' : 'الإِطَارَاتُ الخَلْفِيَّةُ تَرْتَفِعُ حَرَارَتُهَا.') + ' نَعِّمِ القِيَادَةَ وَخَفِّفِ الانْزِلَاق.' }; },
+  tyreWorn: () => ({ emo: 'urgent', en: 'Tyres are finished. Box, box, box.', ar: 'الإطارات انتهت. ادخل إلى الحظيرة الآن.', enS: 'Tyres are finished. Box, box, box.', arS: 'الإِطَارَاتُ اِنْتَهَت. اُدْخُلِ الحَظِيرَةَ الآن.' }),
+  fuel: laps => { const L = Math.max(1, Math.floor(laps)); return { emo: 'concerned',
+    en: 'Fuel is for about ' + L + (L === 1 ? ' lap' : ' laps') + '. Box this lap or next.',
+    ar: 'الوقود يكفي لنحو ' + (L === 1 ? 'لفة واحدة' : L === 2 ? 'لفتين' : L + ' لفات') + '. ادخل الحظيرة في هذه اللفة أو التي بعدها.',
+    enS: 'Fuel is for about ' + L + (L === 1 ? ' lap' : ' laps') + '. Box this lap or next.',
+    arS: 'الوَقُودُ يَكْفِي تَقْرِيبًا ' + arLapsS(L) + '. اُدْخُلِ الحَظِيرَةَ فِي هَذِهِ اللَّفَّةِ أَوِ الَّتِي بَعْدَهَا.' }; },
+  engineHot: () => ({ emo: 'urgent', en: 'Engine temperature critical. Lift and coast, let it cool.', ar: 'حرارة المحرك حرجة. ارفع قدمك ودعه يبرد.', enS: 'Engine temperature critical. Lift and coast, let it cool.', arS: 'حَرَارَةُ المُحَرِّكِ حَرِجَة. اِرْفَعْ قَدَمَكَ وَدَعْهُ يَبْرُد.' }),
+  damage: () => ({ emo: 'urgent', en: 'Contact! Are you okay? Checking the car.', ar: 'اصطدام! هل أنت بخير؟ نفحص السيارة.', enS: 'Contact! Are you okay? Checking the car.', arS: 'اِصْطِدَام! هَلْ أَنْتَ بِخَيْر؟ نَفْحَصُ السَّيَّارَة.' }),
+  hurt: () => ({ emo: 'concerned', en: 'The car has taken a lot of damage. Bring it home, no risks.', ar: 'السيارة تضررت كثيرا. أوصلها بلا مخاطرة.', enS: 'The car has taken a lot of damage. Bring it home, no risks.', arS: 'السَّيَّارَةُ تَضَرَّرَتْ كَثِيرًا. أَوْصِلْهَا بِلَا مُخَاطَرَة.' }),
+  roof: () => ({ emo: 'urgent', en: 'The car is on its roof! Marshals are on the way. Stay calm, stay put.', ar: 'السيارة انقلبت على سقفها! المشرفون في الطريق. ابق هادئا ولا تتحرك.', enS: 'The car is on its roof! Marshals are on the way. Stay calm, stay put.', arS: 'السَّيَّارَةُ اِنْقَلَبَتْ عَلَى سَقْفِهَا! المُشْرِفُونَ فِي الطَّرِيق. اِبْقَ هَادِئًا وَلَا تَتَحَرَّك.' }),
+  posUp: p => ({ emo: 'excited', en: pickV(['Good move, you are P' + p + '.', 'Nice pass. P' + p + '.']), ar: 'حركة جيدة، أنت في المركز ' + p + '.', enS: 'Good move, you are in position ' + p + '.', arS: 'حَرَكَةٌ جَيِّدَة، أَنْتَ ' + arPosS(p) + '.' }),
+  posDown: p => ({ emo: 'tense', en: 'We lost a place, P' + p + '. Reset and go again.', ar: 'خسرنا مركزا، أنت الآن في المركز ' + p + '. اهدأ وحاول مجددا.', enS: 'We lost a place, position ' + p + '. Reset and go again.', arS: 'خَسِرْنَا مَرْكَزًا، أَنْتَ الآنَ ' + arPosS(p) + '. اِهْدَأْ وَحَاوِلْ مُجَدَّدًا.' }),
+  final: () => ({ emo: 'excited', en: 'Final lap. Everything you have got.', ar: 'اللفة الأخيرة. أعطها كل ما لديك.', enS: 'Final lap. Everything you have got.', arS: 'اللَّفَّةُ الأَخِيرَة. أَعْطِهَا كُلَّ مَا لَدَيْك.' }),
+  righted: () => ({ emo: 'calm', en: 'Marshals have righted you. Take it easy and check the car.', ar: 'أعادك المشرفون إلى الوضع الصحيح. تمهّل وافحص السيارة.', enS: 'Marshals have righted you. Take it easy and check the car.', arS: 'أَعَادَكَ المُشْرِفُونَ إِلَى الوَضْعِ الصَّحِيح. تَمَهَّلْ وَافْحَصِ السَّيَّارَة.' }),
+  start: () => ({ emo: 'calm', en: 'Radio check. Loud and clear. Clean start, we are with you.', ar: 'اختبار الراديو. الصوت واضح. انطلاقة نظيفة، نحن معك.', enS: 'Radio check. Loud and clear. Clean start, we are with you.', arS: 'اِخْتِبَارُ الرَّادْيُو. الصَّوْتُ وَاضِح. اِنْطِلَاقَةٌ نَظِيفَة، نَحْنُ مَعَك.' }),
 };
+/* every other radio line is bilingual and spoken too: (English, Arabic subtitle, vowelled Arabic for the voice) */
+const sayB = (en, ar, arS, emo = 'calm', urgent = false) => { if (!R || R.attract) return; if (!urgent && R.t - radioLast < 6) return; engineer({ emo, en, ar, enS: en, arS: arS || ar }, urgent); };
+const COMP_AR = { soft: ['ناعمة', 'نَاعِمَة'], medium: ['متوسطة', 'مُتَوَسِّطَة'], hard: ['صلبة', 'صُلْبَة'], rain: ['المطر', 'المَطَر'], gravel: ['الطرق الترابية', 'الطُّرُقِ التُّرَابِيَّة'] };
+const WHY_AR = { 'a crash': ['حادث', 'حَادِث'], 'a recovery': ['عملية إنقاذ', 'عَمَلِيَّةِ إِنْقَاذ'] };
 // how each feeling is voiced: speed and pitch offsets, how much the pitch moves (range), loudness, and how hard the radio chain is driven (k) and boosted (g)
 const EMO = { calm: { r: 0, p: 0, rg: 50, amp: 100, k: 2.6, g: 1.15 }, happy: { r: 10, p: 7, rg: 80, amp: 112, k: 2.8, g: 1.2 }, excited: { r: 20, p: 11, rg: 92, amp: 122, k: 3.4, g: 1.28 }, urgent: { r: 28, p: 6, rg: 70, amp: 128, k: 4.2, g: 1.35 }, tense: { r: 12, p: 4, rg: 60, amp: 108, k: 3, g: 1.2 }, concerned: { r: -10, p: -4, rg: 45, amp: 100, k: 2.4, g: 1.1 }, sad: { r: -20, p: -8, rg: 32, amp: 92, k: 2.2, g: 1.0 } };
 // ---- the voice: eSpeak NG in a worker (see voice/), played through the radio filter in audio.js. 'device' uses the phone's or computer's own speech voices instead (natural, but it cannot be filtered).
@@ -562,7 +618,7 @@ function ttsSynth(text, lang, voice, emo = 'calm') {
   const key = lang + '|' + voice + '|' + emo + '|' + text; if (TTS.cache.has(key)) return Promise.resolve(TTS.cache.get(key)); const E = EMO[emo] || EMO.calm, j = () => (Math.random() - .5);      // (a little random variation, so the same line is never said the same way twice)
   return new Promise((res, rej) => { const w = ttsWorker(); if (!w) return rej(new Error('no worker')); const id = ++TTS.id, to = setTimeout(() => { TTS.pend.delete(id); rej(new Error('timeout')); }, 15000);
     TTS.pend.set(id, d => { clearTimeout(to); if (d.error) return rej(new Error(d.error)); const r = { pcm: d.pcm, rate: d.rate, emo }; TTS.cache.set(key, r); if (TTS.cache.size > 60) TTS.cache.delete(TTS.cache.keys().next().value); res(r); });
-    const base = lang === 'ar' ? 185 : voice === 'f3' ? 165 : 170, pitch = (voice === 'f3' ? 58 : 42) + E.p + j() * 4; w.postMessage({ id, lang: lang === 'ar' ? 'ar' : 'en-us', text, voice, rate: Math.round(base + E.r + j() * 8), pitch: Math.round(clamp(pitch, 10, 90)), range: E.rg, amp: E.amp }); });
+    const base = lang === 'ar' ? 205 : voice === 'f3' ? 165 : 170, pitch = (voice === 'f3' ? 58 : 42) + E.p + j() * 4; w.postMessage({ id, lang: lang === 'ar' ? 'ar' : 'en-us', text, voice, rate: Math.round(base + E.r + j() * 8), pitch: Math.round(clamp(pitch, 10, 90)), range: E.rg, amp: E.amp }); });
 }
 function ttsWarm() { const w = ttsWorker(); if (w) w.postMessage({ id: ++TTS.id, warm: true }); }
 const VOICE_MODES = ['radio-m', 'radio-f', 'device'], VOICE_LABEL = { 'radio-m': 'Radio male', 'radio-f': 'Radio female', 'device': 'Device voice' };
@@ -579,19 +635,23 @@ function engineer(msg, urgent) {
   deviceSpeak(say, lang, urgent);
 }
 function engineerTick(me, dt) {
-  const E = R.eng || (R.eng = { cd: 6, last: {}, pos: null, hot: 0, cold: 0 }); E.cd -= dt; if (R.state !== 'go' || E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 7; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
+  const E = R.eng || (R.eng = { cd: 6, last: {}, pos: null, hot: 0, cold: 0 }); E.cd -= dt; if (R.state !== 'go') return;
+  { const tr0 = R.track, p0 = me.prog || 0, vv = Math.max(12, me.speed); if (R.t - (E.sT ?? -9) > 1) { E.sT = R.t; const oth = R.cars.filter(c => c !== me), a0 = oth.filter(c => (c.prog || 0) > p0).sort((a, b) => a.prog - b.prog)[0], b0 = oth.filter(c => (c.prog || 0) <= p0).sort((a, b) => b.prog - a.prog)[0], ga = a0 ? (a0.prog - p0) * tr0.spacing / vv : null, gb = b0 ? (p0 - b0.prog) * tr0.spacing / vv : null; (E.hA || (E.hA = [])).push([R.t, ga]); (E.hB || (E.hB = [])).push([R.t, gb]); if (E.hA.length > 8) { E.hA.shift(); E.hB.shift(); } }
+    if (E.lapMark == null) E.lapMark = { lap: me.lap, fuel: me.fuel }; else if (me.lap !== E.lapMark.lap) { const u = E.lapMark.fuel - me.fuel; if (u > .004) E.use = E.use ? E.use * .5 + u * .5 : u; E.lapMark = { lap: me.lap, fuel: me.fuel }; } }
+  if (E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 7; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
   const tr = R.track, pr = me.prog || 0, others = R.cars.filter(c => c !== me), ahead = others.filter(c => (c.prog || 0) > pr).sort((a, b) => a.prog - b.prog)[0], behind = others.filter(c => (c.prog || 0) <= pr).sort((a, b) => b.prog - a.prog)[0], v = Math.max(12, me.speed);
   const order = [...R.cars].sort((a, b) => (b.prog || 0) - (a.prog || 0)), pos = order.indexOf(me) + 1;
   if (me.eT > .9 && ok('eng', 25)) { engineer(ENG.engineHot(), true); said('eng'); return; }
   if (me.health < .55 && ok('hurt', 45)) { engineer(ENG.hurt()); said('hurt'); return; }
-  if (me.fuel < .18 && ok('fuel', 70)) { engineer(ENG.fuel()); said('fuel'); return; }
+  { const use = E.use || .11, left = me.fuel / use; if (me.fuelK > 0 && left < 2.4 && left < R.laps - me.lap - 0 && ok('fuel', 80)) { engineer(ENG.fuel(left)); said('fuel'); return; } }
   if (me.tyre < .3 && ok('worn', 60)) { engineer(ENG.tyreWorn()); said('worn'); return; }
-  E.hot = me.tT > me.tn.tOpt + me.tn.tSpan + 8 ? E.hot + dt : 0; E.cold = me.tT < me.tn.tOpt - me.tn.tSpan - 10 && me.speed > 15 && R.t > 15 ? E.cold + dt : 0;
-  if (E.hot > 6 && ok('hot', 50)) { engineer(ENG.tyreHot()); said('hot'); return; } if (E.cold > 10 && ok('cold', 60)) { engineer(ENG.tyreCold()); said('cold'); return; }
+  const lim = me.tn.tOpt + me.tn.tSpan + 8, fT = (me.tTw[0] + me.tTw[1]) / 2, rT = (me.tTw[2] + me.tTw[3]) / 2, hotAx = fT > lim && rT > lim ? 'b' : fT > lim ? 'f' : 'r';
+  E.hot = fT > lim || rT > lim ? E.hot + dt : 0; E.cold = me.tT < me.tn.tOpt - me.tn.tSpan - 10 && me.speed > 15 && R.t > 15 ? E.cold + dt : 0;
+  if (E.hot > 6 && ok('hot', 50)) { engineer(ENG.tyreHot(hotAx)); said('hot'); return; } if (E.cold > 10 && ok('cold', 60)) { engineer(ENG.tyreCold()); said('cold'); return; }
   if (E.pos != null && pos !== E.pos && ok('pos', 10)) { engineer(pos < E.pos ? ENG.posUp(pos) : ENG.posDown(pos)); E.pos = pos; said('pos'); return; } if (E.pos == null) E.pos = pos;
   if (me.lap === R.laps - 1 && ok('final', 999)) { engineer(ENG.final(), true); said('final'); return; }
-  if (ahead && ok('gapA', 40)) { const g = (ahead.prog - pr) * tr.spacing / v; if (g < 4) { engineer(ENG.gapAhead(g.toFixed(1))); said('gapA'); return; } }
-  if (behind && ok('gapB', 45)) { const g = (pr - behind.prog) * tr.spacing / v; if (g < 2.5) { engineer(ENG.gapBehind(g.toFixed(1))); said('gapB'); return; } }
+  if (ahead && ok('gapA', 40)) { const g = (ahead.prog - pr) * tr.spacing / v; if (g < 4) { const h = E.hA, old = h.length > 4 ? h[h.length - 5][1] : null; engineer(ENG.gapAhead(g.toFixed(1), old == null ? 0 : g - old)); said('gapA'); return; } }
+  if (behind && ok('gapB', 45)) { const g = (pr - behind.prog) * tr.spacing / v; if (g < 2.5) { const h = E.hB, old = h.length > 4 ? h[h.length - 5][1] : null; engineer(ENG.gapBehind(g.toFixed(1), old == null ? 0 : g - old)); said('gapB'); return; } }
 }
 function radio(text, force) {
   if (!R || R.attract || (!force && R.t - radioLast < 6)) return; radioLast = R.t;
@@ -604,7 +664,7 @@ function tow(car) {
   safetyCar('a recovery');
   const ai = R.ais.get(car), b = (car === R.player ? R.pit : ai && ai.box) || R.pit, th = b.th ?? Math.atan2(R.track.path[0].tx, R.track.path[0].tz);
   car.reset(b.x, b.z, th); car.repair(); car.fuel = 1; car.idx = R.track.nearest(b.x, b.z); car.holdT = R.t + TUNE.parts.towSeconds; if (ai) ai.pitT = 0;
-  if (car === R.player) { cam.yaw = car.th; flash('Towed to the pits  +' + TUNE.parts.towSeconds + 's', true, 2500); radio('Recovery truck has you. Rebuild will cost about ' + TUNE.parts.towSeconds + ' seconds.', true); } else flash(car.name + ' ' + tx('is towed in'), false, 1200);
+  if (car === R.player) { cam.yaw = car.th; flash('Towed to the pits  +' + TUNE.parts.towSeconds + 's', true, 2500); sayB('Recovery truck has you. Rebuild will cost about ' + TUNE.parts.towSeconds + ' seconds.', 'شاحنة الإنقاذ تسحبك. الإصلاح سيكلف نحو ' + TUNE.parts.towSeconds + ' ثانية.', 'شَاحِنَةُ الإِنْقَاذِ تَسْحَبُك. الإِصْلَاحُ سَيُكَلِّفُ نَحْوَ ' + arN(TUNE.parts.towSeconds) + ' ثَانِيَة.', 'concerned', true); } else flash(car.name + ' ' + tx('is towed in'), false, 1200);
 }
 // The AI's pit stop. A car that has crashed, worn its tyres out or run low on fuel brakes for the pit entry, drives the lane at the limiter
 // to its OWN numbered box, stops, is serviced, and rejoins. Boxes are never shared: a car whose box is taken uses the nearest free one.
@@ -652,17 +712,19 @@ function aiPit(car, ai, dt) {
     else { if (dIn < 320) cap(Math.sqrt(PIT_LIMIT * PIT_LIMIT + 2 * 10.5 * Math.max(0, dIn - 6))); if (dIn < 50) { const u = Math.max(0, Math.min(1, 1 - dIn / 50)), L = Math.round((7 + sp * .3) / tr.spacing), q = p[(pi + L) % n], o2 = u * u * (3 - 2 * u) * laneOff; steerTo(q.x + q.tz * o2, q.z - q.tx * o2); } else { const L = Math.round((9 + sp * .3) / tr.spacing), q = p[(pi + L) % n]; if (ai.pitOff == null) ai.pitOff = lat(pi); steerTo(q.x + q.tz * ai.pitOff * 0, q.z - q.tx * 0); } return; }      // slow down early enough to arrive at the lane at the limit, then ease in over 50 m instead of swerving
   }
   if (ai.pitState === 'lane') {
-    const dBox = idxAhead(pi, b.idx) * tr.spacing; if (dBox > n * tr.spacing * .5 || dBox < 3) { ai.pitState = 'park'; }
-    else { laneDrive(laneOff, PIT_LIMIT); return; }
+    const dBox = idxAhead(pi, b.idx) * tr.spacing; if (dBox > n * tr.spacing * .5 || dBox < 24) { ai.pitState = 'park'; }      /* start easing into the box 24 m early, so it arrives pointing the way it is going */
+    else { laneDrive(laneOff, dBox < 60 ? Math.min(PIT_LIMIT, Math.sqrt(2 * 6 * Math.max(0, dBox - 26)) + 8) : PIT_LIMIT); return; }
   }
-  if (ai.pitState === 'park') {                                                // from the lane into the box, stopping on the mark
-    const dx = b.x - car.x, dz = b.z - car.z, d = Math.hypot(dx, dz), vt = d < 1.3 ? 0 : Math.min(9, Math.max(1.6, d * .9));
-    steerTo(b.x, b.z, 2.8); inp.throttle = sp < vt ? .5 : 0; inp.brake = sp > vt + .5 ? clamp((sp - vt) / 3, .3, 1) : 0; inp.nitro = false;
+  if (ai.pitState === 'park') {                                                // from the lane into the box on a smooth arc, straight along the box, stopping on the mark
+    const sn = Math.sin(b.th), cs = Math.cos(b.th), dx = b.x - car.x, dz = b.z - car.z, d = Math.hypot(dx, dz), sLong = -(dx * sn + dz * cs), vt = d < 1.3 ? 0 : Math.min(9, Math.max(1.6, d * .7));      /* sLong: how far the car is past the box centre along the box's direction (negative: still short of it) */
+    const tgt = Math.min(0, sLong + Math.max(3.2, Math.min(7, d * .7)));            /* aim at a point on the box's centre line, never beyond the box: the car lines up with the box and its heading */
+    steerTo(b.x + sn * tgt, b.z + cs * tgt, 2.8); inp.throttle = sp < vt ? .5 : 0; inp.brake = sp > vt + .5 ? clamp((sp - vt) / 3, .3, 1) : 0; inp.nitro = false;
     if (d < 2.6 && sp < 2.2) { ai.pitState = 'service'; ai.svcT = 0; } else if (d > 40) { ai.pitState = 'out'; }
     if (ai.pitState === 'park') return;
   }
   if (ai.pitState === 'service') { b.svc = { t: ai.svcT, jobs: ai.pitJobsL || (ai.pitJobsL = pitJobs(car)), car };                                             // wheels off, engine seen to, tyres and fuel: the same jobs and times as the player's stop
     car.vx *= .7; car.vz *= .7; inp.throttle = 0; inp.brake = 1; inp.steer = 0; ai.svcT += dt;
+    { const k = Math.min(1, dt * 5); car.th += wrap(b.th - car.th) * k; car.x += (b.x - car.x) * Math.min(1, dt * 3); car.z += (b.z - car.z) * Math.min(1, dt * 3); car.r *= .5; }      /* sits in the box square, pointing along the lane */
     if (ai.svcT >= ai.pitNeed) { car.repair(); car.fuel = 1; fitTyres(car, R.wet > .4 ? 'rain' : R.laps - Math.max(0, car.lap) > 4 ? 'hard' : (car.tn.comp === 'rain' ? 'medium' : 'soft')); R.aiPits = (R.aiPits || 0) + 1; ai.pitState = 'out'; ai.pitOff = null; b.svc = null; ai.pitJobsL = null; car.lift = 0; }
     return;
   }
@@ -681,12 +743,12 @@ function startEvent() {
   const tr = R.track, me = R.player, n = tr.n, E = R.ev, opts = ['oil', 'rush', 'gold', 'haze', 'trap'].concat(R.mode === 'race' && R.cars.length > 1 ? ['bounty', 'bounty'] : []).filter(t => t !== E.last);
   const type = opts[Math.random() * opts.length | 0], c = E.cur = { type, t: 0 }; E.last = type; let label = '';
   const ahead = (m, lat) => { const q = tr.path[(me.idx + Math.round(m / tr.spacing)) % n], x = q.x + q.tz * lat, z = q.z - q.tx * lat; return { x, z, y: tr.height(x, z) }; };
-  if (type === 'oil') { c.t = 6; label = 'Oil on track'; for (const m of [140, 260]) { const p = ahead(m, (Math.random() - .5) * 5), mesh = new THREE.Mesh(new THREE.CircleGeometry(2.7, 22), new THREE.MeshStandardMaterial({ color: 0x040405, roughness: .04, metalness: .95, transparent: true, opacity: .88, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7 })); mesh.rotation.x = -Math.PI / 2; mesh.position.set(p.x, p.y + .06, p.z); tr.group.add(mesh); R.slicks.push({ x: p.x, z: p.z, m: mesh, until: R.t + 45 }); } radio('Oil on the track ahead. Dark patches — stay off them.', true); }
-  else if (type === 'rush') { c.t = 12; label = 'Nitro rush'; radio('Nitro rush! Tanks are refilling, use it.'); }
-  else if (type === 'gold') { c.t = 26; label = 'Golden coin'; const p = ahead(170, (Math.random() - .5) * 4), m = new THREE.Mesh(R.coinG, R.coinM); m.scale.setScalar(2); m.position.set(p.x, p.y + 1.4, p.z); tr.group.add(m); c.pick = { x: p.x, z: p.z, y: p.y + 1.4, m, nitro: false, gold: true, t: 0 }; R.picks.push(c.pick); radio('Golden coin on the racing line. Worth 200.'); }
-  else if (type === 'haze') { c.t = 16; label = tr.def.theme === 'desert' ? 'Sandstorm' : 'Fog bank'; radio(label + ' rolling in. Trust the lines.', true); }
-  else if (type === 'trap') { c.kmh = Math.round(me.spec.top * 3.6 * .78 / 10) * 10; c.t = 20; label = 'Speed trap ' + c.kmh + ' km/h'; radio('Speed trap is live. Hit ' + c.kmh + ' for a bonus.'); }
-  else { c.t = 24; label = 'Bounty: overtake'; radio('Bounty on the car ahead. Take the place, take the money.'); }
+  if (type === 'oil') { c.t = 6; label = 'Oil on track'; for (const m of [140, 260]) { const p = ahead(m, (Math.random() - .5) * 5), mesh = new THREE.Mesh(new THREE.CircleGeometry(2.7, 22), new THREE.MeshStandardMaterial({ color: 0x040405, roughness: .04, metalness: .95, transparent: true, opacity: .88, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7 })); mesh.rotation.x = -Math.PI / 2; mesh.position.set(p.x, p.y + .06, p.z); tr.group.add(mesh); R.slicks.push({ x: p.x, z: p.z, m: mesh, until: R.t + 45 }); } sayB('Oil on the track ahead. Dark patches, stay off them.', 'زيت على المضمار أمامك. البقع الداكنة، ابتعد عنها.', 'زَيْتٌ عَلَى المِضْمَارِ أَمَامَك. البُقَعُ الدَّاكِنَة، اِبْتَعِدْ عَنْهَا.', 'urgent', true); }
+  else if (type === 'rush') { c.t = 12; label = 'Nitro rush'; sayB('Nitro rush! Tanks are refilling, use it.', 'اندفاع النيترو! الخزانات تمتلئ، استخدمه.', 'انْدِفَاعُ النِّيتْرُو! الخَزَّانَاتُ تَمْتَلِئ، اِسْتَخْدِمْه.', 'excited'); }
+  else if (type === 'gold') { c.t = 26; label = 'Golden coin'; const p = ahead(170, (Math.random() - .5) * 4), m = new THREE.Mesh(R.coinG, R.coinM); m.scale.setScalar(2); m.position.set(p.x, p.y + 1.4, p.z); tr.group.add(m); c.pick = { x: p.x, z: p.z, y: p.y + 1.4, m, nitro: false, gold: true, t: 0 }; R.picks.push(c.pick); sayB('Golden coin on the racing line. Worth 200.', 'عملة ذهبية على خط السباق. قيمتها 200.', 'عُمْلَةٌ ذَهَبِيَّةٌ عَلَى خَطِّ السِّبَاق. قِيمَتُهَا مِئَتَان.', 'happy'); }
+  else if (type === 'haze') { c.t = 16; label = tr.def.theme === 'desert' ? 'Sandstorm' : 'Fog bank'; sayB(label + ' rolling in. Trust the lines.', label + ' قادمة. ثق بالخطوط.', 'حَدَثٌ قَادِم. ثِقْ بِالخُطُوط.', 'tense', true); }
+  else if (type === 'trap') { c.kmh = Math.round(me.spec.top * 3.6 * .78 / 10) * 10; c.t = 20; label = 'Speed trap ' + c.kmh + ' km/h'; sayB('Speed trap is live. Hit ' + c.kmh + ' for a bonus.', 'كاميرا السرعة تعمل. بلّغ ' + c.kmh + ' للحصول على مكافأة.', 'كَامِيرَا السُّرْعَةِ تَعْمَل. اِبْلُغْ ' + arN(c.kmh) + ' لِلحُصُولِ عَلَى مُكَافَأَة.', 'excited'); }
+  else { c.t = 24; label = 'Bounty: overtake'; sayB('Bounty on the car ahead. Take the place, take the money.', 'مكافأة على السيارة التي أمامك. خذ المركز وخذ المال.', 'مُكَافَأَةٌ عَلَى السَّيَّارَةِ الَّتِي أَمَامَك. خُذِ المَرْكَزَ وَخُذِ المَال.', 'excited'); }
   c.label = label; flash(label, type === 'oil' || type === 'haze', 1500); audio.beep(520, .2);
 }
 function liveEvents(dt) {
@@ -699,21 +761,21 @@ function liveEvents(dt) {
   }
   setTxt('hTow', tx(me.burn ? 'Burnout' : me.wspin > .25 || me.wspinF > .25 ? 'Wheelspin' : Math.abs(me.beta) > .16 && me.speed > 9 ? 'Oversteer' : me.useF > 1.03 && me.useR < .9 && me.speed > 10 && Math.abs(me.steer) > .08 ? 'Understeer' : me.draft > .25 ? 'Slipstream' : ''));
   if (me.draft > .25 && Math.random() < .5) { const a = Math.random() * 6.28; R.fx.smoke.emit(me.x + Math.cos(a) * 2.5 + Math.sin(me.th) * 6, me.y + .5 + Math.random() * 1.5, me.z + Math.sin(a) * 2.5 + Math.cos(me.th) * 6, -me.vx * .6, 0, -me.vz * .6, .25, .12, 0, 1, 1, 1, .25); }
-  if (me.draft > .4 && !R.towSaid) { R.towSaid = true; radio('You\u2019re in the tow. Stay tucked in, pull out late.'); }
+  if (me.draft > .4 && !R.towSaid) { R.towSaid = true; sayB('You are in the tow. Stay tucked in, pull out late.', 'أنت في تيار السحب. ابق خلفه واخرج متأخرا.', 'أَنْتَ فِي تَيَّارِ السَّحْب. اِبْقَ خَلْفَهُ وَاخْرُجْ مُتَأَخِّرًا.', 'calm'); }
   const pos = rank().indexOf(me) + 1;
   if (R.lastPos && R.t > 6 && R.cars.length > 1 && !me.finished) {
-    if (pos < R.lastPos) { if (R.pro && R.sc && !R.sc.green) penalise(me, 5, 'Overtaking under the safety car.'); R.coins += 40; R.overtakes++; flash('+40 overtake', false, 700); radio(pos === 1 ? 'P1! You lead. Keep it clean.' : 'P' + pos + '. Next one is just ahead.'); if (E.cur && E.cur.type === 'bounty') { R.coins += 150; endEvent('Bounty paid: +150'); } }
-    else if (pos > R.lastPos) radio('Lost a place. P' + pos + '. Stay calm, take it back.');
+    if (pos < R.lastPos) { if (R.pro && R.sc && !R.sc.green) penalise(me, 5, 'Overtaking under the safety car.'); R.coins += 40; R.overtakes++; flash('+40 overtake', false, 700);  if (E.cur && E.cur.type === 'bounty') { R.coins += 150; endEvent('Bounty paid: +150'); } }
+    
   }
   R.lastPos = pos;
-  if (me.tyre < .3 && !R.saidTyre) { R.saidTyre = true; radio('Tyres are nearly gone. Box at the blue pit.', true); }
-  if (me.lap === R.laps - 1 && !R.saidLast && R.laps > 1) { R.saidLast = true; radio('Last lap. Everything you have.', true); }
+  
+  
   if (R.attract) return;
-  if (R.t > 1 && !R.saidGo) { R.saidGo = true; radio(R.story ? 'Radio check. Clean first corner, then push.' : 'Lights out. Clean first corner.', true); }
+  if (R.t > 1 && !R.saidGo) { R.saidGo = true; if (R.story) sayB('Radio check. Clean first corner, then push.', 'اختبار الراديو. منعطف أول نظيف، ثم اضغط.', 'اِخْتِبَارُ الرَّادْيُو. مُنْعَطَفٌ أَوَّلُ نَظِيف، ثُمَّ اِضْغَط.', 'calm', true); else sayB('Lights out. Clean first corner.', 'انطلق السباق. منعطف أول نظيف.', 'اِنْطَلَقَ السِّبَاق. مُنْعَطَفٌ أَوَّلُ نَظِيف.', 'excited', true); }
   R.slicks = R.slicks.filter(s => s.until > R.t || (tr.group.remove(s.m), false));
-  for (const s of R.slicks) for (const c of R.cars) if (!c.isRemote && c.oil <= 0 && (c.x - s.x) ** 2 + (c.z - s.z) ** 2 < 7.5) { c.oil = c === me ? 1.1 : .4; if (c === me) radio('Oil! Easy on the wheel.', true); }
-  if (me.fuel < .15 && !R.saidFuel) { R.saidFuel = true; radio('Fuel is low. Box this lap or you will not make it.', true); }
-  if (me.fuel <= 0 && !R.saidDry) { R.saidDry = true; radio('We are out of fuel. Coast it to the pit lane.', true); }
+  for (const s of R.slicks) for (const c of R.cars) if (!c.isRemote && c.oil <= 0 && (c.x - s.x) ** 2 + (c.z - s.z) ** 2 < 7.5) { c.oil = c === me ? 1.1 : .4; if (c === me) sayB('Oil! Easy on the wheel.', 'زيت! خفف على المقود.', 'زَيْت! خَفِّفْ عَلَى المِقْوَد.', 'urgent', true); }
+  
+  if (me.fuel <= 0 && !R.saidDry) { R.saidDry = true; sayB('We are out of fuel. Coast it to the pit lane.', 'نفد الوقود. انزلق نحو ممر الحظيرة.', 'نَفِدَ الوَقُود. اِنْزَلِقْ نَحْوَ مَمَرِّ الحَظِيرَة.', 'urgent', true); }
   if (R.mode === 'online' || R.rules !== 'arcade') return;   // pickups-and-events are the Arcade ruleset; Circuit rules and duels are pure racing
   const c = E.cur;
   if (c) {
@@ -828,14 +890,14 @@ function raceExtras(dt) {
   if (R.state === 'go') {
     const d2 = (me.x - pit.x) ** 2 + (me.z - pit.z) ** 2, jobs = pitJobs(me), est = jobs.reduce((a, j) => a + j[1], 0);
     me.pitZone = !!pit.zone && d2 < 300;
-    if (me.inPit && !R.wasPit && !pit.busy) radio(est > .3 ? 'Limiter on. Stop in your box — about ' + est.toFixed(1) + ' seconds for ' + jobs.map(j => j[0].toLowerCase()).join(', ') + '.' : 'Limiter on. Nothing to do — drive through.', true);
+    if (me.inPit && !R.wasPit && !pit.busy) { const JA = { Tyres: ['الإطارات', 'الإِطَارَات'], Fuel: ['الوقود', 'الوَقُود'], Engine: ['المحرك', 'المُحَرِّك'], Gearbox: ['ناقل الحركة', 'نَاقِلُ الحَرَكَة'], Bodywork: ['الهيكل', 'الهَيْكَل'] }, ja = jobs.map(j => JA[j[0]] || [j[0], j[0]]); if (est > .3) sayB('Limiter on. Stop in your box, about ' + est.toFixed(1) + ' seconds for ' + jobs.map(j => j[0].toLowerCase()).join(', ') + '.', 'المحدد يعمل. توقف في صندوقك، نحو ' + est.toFixed(1) + ' ثانية لـ' + ja.map(j => j[0]).join(' و'), 'المُحَدِّدُ يَعْمَل. تَوَقَّفْ فِي صُنْدُوقِك، نَحْوَ ' + gapT(est, 'ar') + ' لِـ' + ja.map(j => j[1]).join(' وَ'), 'calm', true); else sayB('Limiter on. Nothing to do, drive through.', 'المحدد يعمل. لا شيء لفعله، أكمل الطريق.', 'المُحَدِّدُ يَعْمَل. لَا شَيْءَ لِفِعْلِه، أَكْمِلِ الطَّرِيق.', 'calm', true); }
     R.wasPit = me.inPit;
     if (pit.busy || (d2 < 10 && me.speed < 2 && est > .3)) {
       if (!pit.busy) { pit.busy = true; pit.t = 0; pit.jobs = jobs; pit.total = est; }
       pit.t += Math.max(dt, rawDt); pit.tick -= dt; if (pit.tick <= 0) { pit.tick = .55; audio.wrench(); }
       let acc2 = 0, cur = pit.jobs[0][0]; for (const j of pit.jobs) { if (pit.t >= acc2) cur = j[0]; acc2 += j[1]; }
       pit.fl = (pit.fl || 0) - dt; if (pit.fl <= 0) { pit.fl = .2; flash(cur + '  ' + Math.max(0, pit.total - pit.t).toFixed(1) + 's', false, 320); }
-      if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); radio((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
+      if (pit.t >= pit.total) { me.repair(); me.fuel = 1; me.nitro = 1; fitTyres(me, nextCompFor(me)); pit.busy = false; pit.t = 0; R.warned = R.saidTyre = R.saidFuel = R.saidDry = false; R.pits++; flash('Go', false, 800); audio.beep(660, .4); sayB((me.wetTyres ? 'Wet tyres on' : 'Fresh tyres') + ', full tank. Mind the limiter to the pit exit.', (me.wetTyres ? 'إطارات المطر جاهزة' : 'إطارات جديدة') + '، خزان ممتلئ. انتبه للمحدد حتى مخرج الحظيرة.', (me.wetTyres ? 'إِطَارَاتُ المَطَرِ جَاهِزَة' : 'إِطَارَاتٌ جَدِيدَة') + '، خَزَّانٌ مُمْتَلِئ. اِنْتَبِهْ لِلمُحَدِّدِ حَتَّى مَخْرَجِ الحَظِيرَة.', 'happy', true); if (R.mode === 'online' && room) room.send({ k: 'fix', w: me.wetTyres }); }
     }
   }
   if (R.sc) safetyTick(dt);
@@ -869,7 +931,7 @@ function raceExtras(dt) {
     }
   }
   // --- rain rolls in: less grip, wet shine on the road, darker sky
-  if (R.t > R.rainAt && R.wet < 1) { if (R.wet === 0) { flash('Rain', true, 1600); radio('Rain. Brake earlier — box for wet tyres if it gets heavy.', true); } R.wet = Math.min(1, R.wet + dt / 9); tr.wet = R.wet;
+  if (R.t > R.rainAt && R.wet < 1) { if (R.wet === 0) { flash('Rain', true, 1600); sayB('Rain. Brake earlier, box for wet tyres if it gets heavy.', 'مطر. افرمل مبكرا، وادخل لإطارات المطر إن اشتد.', 'مَطَر. اِفْرْمِلْ مُبَكِّرًا، وَادْخُلْ لِإِطَارَاتِ المَطَرِ إِنِ اشْتَدّ.', 'concerned', true); } R.wet = Math.min(1, R.wet + dt / 9); tr.wet = R.wet;
     for (const [m, r0, m0] of R.roadMats) { m.roughness = r0 - (r0 - .5) * R.wet; m.metalness = m0 + (.14 - m0) * R.wet; }
     scene.fog.density = baseFog * (1 + .5 * R.wet); sun.intensity = baseSun * (1 - .35 * R.wet); hemi.intensity = baseHemi * (1 - .2 * R.wet); }
   R.haze += ((R.ev.cur && R.ev.cur.type === 'haze' ? 1 : 0) - R.haze) * Math.min(1, dt * .8); scene.fog.density = baseFog * (1 + .5 * R.wet) * (1 + 4.5 * R.haze);
@@ -889,7 +951,7 @@ function raceExtras(dt) {
 }
 
 function updateRace(dt) {
-  const tr = R.track, me = R.player;
+  const tr = R.track, me = R.player; R.lastDt = dt;
   if (R.state === 'wait') { R.waitT += dt; if (R.waitT > 1) { R.waitT = 0; room && room.send({ k: 'loaded' }); checkGo(); } }
   if (R.state === 'count') {
     R.countT -= dt; const n = Math.min(5, Math.floor((3.6 - R.countT) / .6)), L = $('lights').children;
@@ -901,9 +963,9 @@ function updateRace(dt) {
 
   // AI decisions once per frame (also the player's autopilot after the flag)
   { const tn2 = me.tn, nx = R.nextComp && R.nextComp !== 'auto' ? ' › ' + COMP_LETTER[R.nextComp] : '', lo = tn2.tOpt - tn2.tSpan, hi = tn2.tOpt + tn2.tSpan;
-    setTxt('hTyreLbl', (COMP_LETTER[tn2.comp] || '?') + ' ' + Math.round(me.tT) + '°' + nx);
-    const col = me.tT < lo - 12 ? '#38bdf8' : me.tT < lo ? '#7dd3fc' : me.tT <= hi ? '' : me.tT < hi + 14 ? '#f59e0b' : '#ef4444';      // blue: cold, normal colour: in the window, orange/red: overheating
-    if (hudCache.tyreCol !== col) { hudCache.tyreCol = col; if (col) $('gTyre').style.setProperty('--c', col); else $('gTyre').style.removeProperty('--c'); } }
+    setTxt('hTyreLbl', (COMP_LETTER[tn2.comp] || '?') + nx);
+    /* four tyres, four colours: blue = too cold, green = working window, yellow = on the edge of overheating, red = overheated (grip is already dropping) */
+    for (let i = 0; i < 4; i++) { const T = me.tTw[i], k = T < lo ? 0 : T <= tn2.tOpt + tn2.tSpan * .55 ? 1 : T <= hi + 2 ? 2 : 3, el = $('tt' + i); if (hudCache['tc' + i] !== k) { hudCache['tc' + i] = k; el.className = 'c' + k; } setTxt('ttv' + i, String(Math.round(T))); } }
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
     if (car !== me && live) { const left = R.laps - Math.max(0, car.lap), short = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * Math.min(left, 3) * 1.05 && left > 1, ahead = R.cars.some(o => o !== car && !o.out && o.prog > car.prog && (o.prog - car.prog) * tr.spacing < Math.max(18, car.speed * 1.2)); car.pace = short || car.tyre < .35 ? 0 : ahead && car.tyre > .5 ? 2 : 1; }   // AI manages its pace like a driver: saves when fuel or tyres are short, pushes when a car is within reach
@@ -940,6 +1002,7 @@ function updateRace(dt) {
   const detail = pixelRatio < 1.2 ? .6 : 1;
   if (tr2Tick(tr), !$('tele').hidden) telemetry(me, dt);
   for (const c of R.cars) { c.render(dt, tr, c.isRemote ? 1 : clamp(acc / H, 0, 1)); c.effects(dt, R.fx, tr, c === me ? detail : detail * .6); }
+  R.fx.smoke.mat.uniforms.uTint.value = tr.def.theme === 'night' ? .34 : tr.def.theme === 'dusk' ? .72 : 1;      /* smoke is as bright as the light on it */
   R.fx.smoke.update(dt); R.fx.glow.update(dt); R.fx.sparks.update(dt); R.fx.skids.flush(); R.debris.update(dt, tr, R.cars); if (R.people) R.people.update(dt, R.cars, tr); R.props.update(dt, R.cars, tr, (car, power, x, z) => { if (car === me) { audio.crash(power * .7); hitPulse = Math.max(hitPulse, Math.min(.6, power / 22)); if (isTouch && navigator.vibrate) navigator.vibrate(20); } for (let i = 0; i < 6; i++) R.fx.smoke.emit(x, car.y + .3, z, (Math.random() - .5) * 4, 1 + Math.random() * 2, (Math.random() - .5) * 4, .6, .5, 2.5, .7, .66, .6, .25); });
   updateCamera(dt);
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360)); R.fx.smoke.mat.uniforms.uScale.value = R.fx.glow.mat.uniforms.uScale.value = sc;
@@ -1063,11 +1126,11 @@ function telemetry(me, dt) {
 // ---------------- HUD ----------------
 let mini = null;
 function buildMini() {
-  const b = R.track.box, s = 156 / Math.max(b.maxx - b.minx, b.maxz - b.minz), ox = 90 - (b.minx + b.maxx) / 2 * s, oz = 90 - (b.minz + b.maxz) / 2 * s;
-  const bg = document.createElement('canvas'); bg.width = bg.height = 180; const c = bg.getContext('2d');
+  const b = R.track.box, s = 264 / Math.max(b.maxx - b.minx, b.maxz - b.minz), ox = 150 - (b.minx + b.maxx) / 2 * s, oz = 150 - (b.minz + b.maxz) / 2 * s;
+  const bg = document.createElement('canvas'); bg.width = bg.height = 300; const c = bg.getContext('2d');
   c.lineJoin = 'round'; c.beginPath(); R.track.path.forEach((p, i) => i ? c.lineTo(p.x * s + ox, p.z * s + oz) : c.moveTo(p.x * s + ox, p.z * s + oz)); c.closePath();
-  c.strokeStyle = 'rgba(23,24,28,.85)'; c.lineWidth = 9; c.stroke(); c.strokeStyle = '#f3f4f6'; c.lineWidth = 3.5; c.stroke();
-  const p0 = R.track.path[0]; c.fillStyle = '#e3262e'; c.fillRect(p0.x * s + ox - 3, p0.z * s + oz - 3, 6, 6);
+  c.strokeStyle = 'rgba(23,24,28,.85)'; c.lineWidth = 13; c.stroke(); c.strokeStyle = '#9aa0ab'; c.lineWidth = 5.5; c.stroke();
+  const p0 = R.track.path[0]; c.fillStyle = '#e3262e'; c.fillRect(p0.x * s + ox - 4, p0.z * s + oz - 4, 8, 8);
   mini = { bg, s, ox, oz, ctx: $('mini').getContext('2d') };
 }
 const hudCache = {};
@@ -1088,10 +1151,12 @@ function updateHUD(dt) {
   if ((key !== R.orderKey || gk !== R.gapK) && R.cars.length > 1) { R.orderKey = key; R.gapK = gk; $('order').innerHTML = rows.map((i, q) => { const c = order[i]; return `<li class="${c === me ? 'me' : ''}${q && rows[q - 1] !== i - 1 ? ' gap' : ''}" style="border-left-color:${hex(c.color)}"><span>${i + 1}</span>${c.name}<em>${gapOf(c)}</em></li>`; }).join(''); }
   if (hudCache.pace !== me.pace) { hudCache.pace = me.pace; const el = $('hPace'); el.textContent = tx(TUNE.pace[me.pace].name); el.className = 'p' + me.pace; }
   if (frameN & 1) return;                 // the map redraws every other frame
-  const c = mini.ctx; c.clearRect(0, 0, 180, 180); c.drawImage(mini.bg, 0, 0);
+  const c = mini.ctx; c.clearRect(0, 0, 300, 300); c.drawImage(mini.bg, 0, 0);
   c.fillStyle = '#19a7ce'; c.fillRect(R.pit.x * mini.s + mini.ox - 3.5, R.pit.z * mini.s + mini.oz - 3.5, 7, 7);
-  for (const car of R.cars) { if (car === me) continue; c.fillStyle = hex(car.color); c.strokeStyle = '#17181c'; c.lineWidth = 1.5; c.beginPath(); c.arc(car.x * mini.s + mini.ox, car.z * mini.s + mini.oz, 4.5, 0, 7); c.fill(); c.stroke(); }
-  { const mx = me.x * mini.s + mini.ox, mz = me.z * mini.s + mini.oz; c.fillStyle = 'rgba(45,255,114,.28)'; c.beginPath(); c.arc(mx, mz, 11, 0, 7); c.fill(); c.fillStyle = '#2dff72'; c.strokeStyle = '#ffffff'; c.lineWidth = 2.4; c.beginPath(); c.arc(mx, mz, 6.5, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(mx + Math.sin(me.th) * 11, mz + Math.cos(me.th) * 11); c.lineTo(mx + Math.sin(me.th + 2.5) * 6.5, mz + Math.cos(me.th + 2.5) * 6.5); c.lineTo(mx + Math.sin(me.th - 2.5) * 6.5, mz + Math.cos(me.th - 2.5) * 6.5); c.closePath(); c.fill(); }      // the player: electric green with a heading arrow, unlike any car colour
+  /* minimap colours: every computer car white, the online opponent red, you blue */
+  for (const car of R.cars) { if (car === me || car.isRemote) continue; c.fillStyle = '#ffffff'; c.strokeStyle = '#17181c'; c.lineWidth = 2; c.beginPath(); c.arc(car.x * mini.s + mini.ox, car.z * mini.s + mini.oz, 6, 0, 7); c.fill(); c.stroke(); }
+  for (const car of R.cars) { if (!car.isRemote) continue; c.fillStyle = '#ff2d2d'; c.strokeStyle = '#ffffff'; c.lineWidth = 2.4; c.beginPath(); c.arc(car.x * mini.s + mini.ox, car.z * mini.s + mini.oz, 7.5, 0, 7); c.fill(); c.stroke(); }
+  { const mx = me.x * mini.s + mini.ox, mz = me.z * mini.s + mini.oz; c.fillStyle = 'rgba(47,123,255,.32)'; c.beginPath(); c.arc(mx, mz, 15, 0, 7); c.fill(); c.fillStyle = '#2f7bff'; c.strokeStyle = '#ffffff'; c.lineWidth = 2.4; c.beginPath(); c.arc(mx, mz, 8.5, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(mx + Math.sin(me.th) * 15, mz + Math.cos(me.th) * 15); c.lineTo(mx + Math.sin(me.th + 2.5) * 8.5, mz + Math.cos(me.th + 2.5) * 8.5); c.lineTo(mx + Math.sin(me.th - 2.5) * 8.5, mz + Math.cos(me.th - 2.5) * 8.5); c.closePath(); c.fill(); }      // the player: blue with a heading arrow, unlike any car colour
 }
 
 // ---------------- results + rewards ----------------
@@ -1132,7 +1197,7 @@ function showResults() {
   $('resTitle').textContent = title; $('resSub').textContent = sub; $('resReward').textContent = '+' + reward + ' credits';
   const lead = order[0].finishTime;
   $('resTable').innerHTML = R.cars.length > 1
-    ? order.map((c, i) => `<tr class="${c === me ? 'me' : ''}"><td>${i + 1}</td><td>${c.name}</td><td>${c.spec.name}</td><td>${c.finished ? (i ? '+' + ((c.finishTime - lead) / 1000).toFixed(2) : fmt(c.finishTime)) : 'still racing'}</td></tr>`).join('')
+    ? order.map((c, i) => `<tr class="${c === me ? 'me' : ''}"><td>${i + 1}</td><td>${c.name}</td><td>${c.spec.name}</td><td>${c.finished ? (i ? '+' + ((c.finishTime - lead) / 1000).toFixed(3) : fmt(c.finishTime)) : 'still racing'}</td></tr>`).join('')
     : me.laps.map((l, i) => `<tr class="${l === best ? 'me' : ''}"><td>Lap ${i + 1}</td><td>${fmt(l)}</td></tr>`).join('') + `<tr><td>Drift score</td><td>${R.drift.toLocaleString()}</td></tr>`;
   $('againBtn').textContent = R.mode === 'online' ? 'Back to lobby' : R.gp ? tx(save.gp && save.gp.done ? 'Finish' : 'Next round') : R.story ? (lastPassed ? 'Continue' : 'Try again') : tx('Race again');
   show('results', true);
@@ -1615,5 +1680,5 @@ function frame(now) {
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   await loadCars(); showGarageCar(); refreshMenu(); requestAnimationFrame(frame); window.__booted = true;
   const rc = new URLSearchParams(location.search).get('room'); if (rc) { sel.tab = 'online'; sel.mode = 'online'; refreshMenu(); joinRoom(rc.toUpperCase()); }   // invite link
-  window.__game = { get cine() { return R && R.cine; }, THREE, get tts() { return { synth: ttsSynth, TTS }; }, get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) { rawDt = fdt; updateRace(fdt); } }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
+  window.__game = { get cine() { return R && R.cine; }, THREE, get tts() { return { synth: ttsSynth, TTS, ENG }; }, get renderer() { return renderer; }, get scene() { return scene; }, get garageCar() { return garageCar; }, get TUNE() { return TUNE; }, garageRot: () => garageCar ? +garageCar.root.rotation.y.toFixed(3) : null, get people() { return R && R.people; }, perfScore, get audio() { return audio; }, get camState() { return cam; }, get arena() { return arena; }, get camera() { return camera; }, get R() { return R; }, impact, Car, carThumb, carThumbAt: a => { thumb.ang = a; carThumb(); thumb.ang = 0; }, get garageCar() { return garageCar; }, arena, arenaTick, cam3: () => camera.position, paused: () => paused, boxTick, box, touch, readInput, TUNE, physics, get acc() { return acc; }, audio, startEvent, checkTrophies, setGfx, get gfx() { return gfx; }, sim(sec, fdt = 1 / 60) { for (let i = 0; i < Math.round(sec / fdt) && R; i++) { rawDt = fdt; updateRace(fdt); } }, CARS, renderer, sun, keys, save, startRace, sel, TRACKS };
 })();

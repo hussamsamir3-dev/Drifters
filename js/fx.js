@@ -5,26 +5,29 @@ import * as THREE from 'three';
 export const LIGHTS = { p: [0, 1, 2, 3].map(() => new THREE.Vector3(0, -999, 0)), d: [0, 1, 2, 3].map(() => new THREE.Vector3(0, 0, 1)), c: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) };
 const LIT = 'uniform vec3 uLP[4]; uniform vec3 uLD[4]; uniform vec4 uLC[4]; vec3 beams(vec3 w){ vec3 l=vec3(0.); for(int i=0;i<4;i++){ vec3 d=w-uLP[i]; float dist=length(d)+.001; float c=dot(d/dist,uLD[i]); l+=uLC[i].rgb*uLC[i].a*smoothstep(.88,.975,c)*max(0.,1.-dist/48.)*min(1.,dist*.5); } return l; }';
 let PUFF = null;
-function puffTex() {            // a cloudy puff: many soft blobs piled up, brighter on top, with a ragged edge
-  if (PUFF) return PUFF; const c = document.createElement('canvas'); c.width = c.height = 256; const k = c.getContext('2d'); k.scale(2, 2);
-  for (let i = 0; i < 120; i++) { const a = Math.random() * 6.28, r = Math.pow(Math.random(), .7) * 34, x = 64 + Math.cos(a) * r, y = 64 + Math.sin(a) * r, s = 7 + Math.random() * 19, v = Math.min(255, 120 + (64 - y) * 1.6 + Math.random() * 90) | 0, g = k.createRadialGradient(x, y, 0, x, y, s); g.addColorStop(0, `rgba(${v},${v},${v},.34)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`); k.fillStyle = g; k.fillRect(x - s, y - s, s * 2, s * 2); }
-  PUFF = new THREE.CanvasTexture(c); return PUFF;
+function puffTex() {            // four different cloud shapes in one 2x2 atlas: piled soft blobs with turbulent, ragged edges, bright on top, dark underneath
+  if (PUFF) return PUFF; const c = document.createElement('canvas'); c.width = c.height = 512; const k = c.getContext('2d');
+  for (let v = 0; v < 4; v++) { k.save(); k.translate((v & 1) * 256, (v >> 1) * 256); k.beginPath(); k.rect(0, 0, 256, 256); k.clip(); k.scale(2, 2);
+    const lobes = 3 + (v % 3), cx = [], cy = []; for (let q = 0; q < lobes; q++) { const a = Math.random() * 6.28, r = 10 + Math.random() * 16; cx.push(64 + Math.cos(a) * r); cy.push(64 + Math.sin(a) * r); }
+    for (let i = 0; i < 230; i++) { const L = i % lobes, a = Math.random() * 6.28, r = Math.pow(Math.random(), .8) * (16 + Math.random() * 14), x = cx[L] + Math.cos(a) * r, y = cy[L] + Math.sin(a) * r * (.8 + Math.random() * .3), s2 = 4 + Math.random() * 15, sh = Math.min(255, 105 + (64 - y) * 1.9 + Math.random() * 95) | 0, g = k.createRadialGradient(x, y, 0, x, y, s2); g.addColorStop(0, `rgba(${sh},${sh},${sh},.30)`); g.addColorStop(.6, `rgba(${sh},${sh},${sh},.12)`); g.addColorStop(1, `rgba(${sh},${sh},${sh},0)`); k.fillStyle = g; k.fillRect(x - s2, y - s2, s2 * 2, s2 * 2); }
+    k.restore(); }
+  PUFF = new THREE.CanvasTexture(c); PUFF.anisotropy = 4; return PUFF;
 }
 export class Particles {
   constructor(scene, max = 1800, additive = false) {
     this.max = max; this.cur = 0;
     this.pos = new Float32Array(max * 3); this.col = new Float32Array(max * 4); this.size = new Float32Array(max);
     this.vel = new Float32Array(max * 3); this.life = new Float32Array(max); this.maxLife = new Float32Array(max);
-    this.grow = new Float32Array(max); this.alpha = new Float32Array(max); this.grav = new Float32Array(max); this.rot = new Float32Array(max); this.spin = new Float32Array(max);
+    this.vari = new Float32Array(max); this.wind = [.7, 0, .35]; this.tm = 0; this.grow = new Float32Array(max); this.alpha = new Float32Array(max); this.grav = new Float32Array(max); this.rot = new Float32Array(max); this.spin = new Float32Array(max);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     g.setAttribute('aColor', new THREE.BufferAttribute(this.col, 4));
-    g.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1)); g.setAttribute('aRot', new THREE.BufferAttribute(this.rot, 1));
+    g.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1)); g.setAttribute('aRot', new THREE.BufferAttribute(this.rot, 1)); g.setAttribute('aVar', new THREE.BufferAttribute(this.vari, 1));
     this.mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
-      uniforms: { uScale: { value: 600 }, uTex: { value: puffTex() }, uSoft: { value: additive ? 0 : 1 }, uLP: { value: LIGHTS.p }, uLD: { value: LIGHTS.d }, uLC: { value: LIGHTS.c } },
-      vertexShader: LIT + 'attribute vec4 aColor; attribute float aSize, aRot; varying vec4 vC; varying vec3 vL; varying float vR; uniform float uScale; void main(){ vC=aColor; vR=aRot; vL=beams(position); vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*uScale/max(-mv.z,.1); }',
-      fragmentShader: 'uniform sampler2D uTex; uniform float uSoft; varying vec4 vC; varying vec3 vL; varying float vR; void main(){ vec2 p=gl_PointCoord-.5; float d=length(p); float c=cos(vR), s=sin(vR); vec4 t=texture2D(uTex, vec2(c*p.x-s*p.y, s*p.x+c*p.y)+.5); float a=mix(smoothstep(.5,.1,d), t.a*smoothstep(.5,.42,d), uSoft)*vC.a; if(a<.008) discard; gl_FragColor=vec4(vC.rgb*mix(1., .72+.5*t.r, uSoft)+vL*.85, min(1., a*(1.+dot(vL,vec3(.5))))); }',   // each puff is a turning, uneven cloud with lit and shaded parts, not a round dot   // smoke and dust inside a headlight beam glow
+      uniforms: { uScale: { value: 600 }, uTex: { value: puffTex() }, uSoft: { value: additive ? 0 : 1 }, uTint: { value: 1 }, uLP: { value: LIGHTS.p }, uLD: { value: LIGHTS.d }, uLC: { value: LIGHTS.c } },
+      vertexShader: LIT + 'attribute vec4 aColor; attribute float aSize, aRot, aVar; varying vec4 vC; varying vec3 vL; varying float vR, vV; uniform float uScale; void main(){ vC=aColor; vR=aRot; vV=aVar; vL=beams(position); vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*uScale/max(-mv.z,.1); vC.a*=smoothstep(.6,3.5,-mv.z); }',
+      fragmentShader: 'uniform sampler2D uTex; uniform float uSoft, uTint; varying vec4 vC; varying vec3 vL; varying float vR, vV; void main(){ vec2 p=gl_PointCoord-.5; float d=length(p); float c=cos(vR), s=sin(vR); vec2 q=vec2(c*p.x-s*p.y, s*p.x+c*p.y)+.5; vec2 cell=vec2(mod(vV,2.), floor(vV/2.)); vec4 t=texture2D(uTex, (clamp(q,.002,.998)+cell)*.5); float a=mix(smoothstep(.5,.1,d), t.a*smoothstep(.5,.42,d), uSoft)*vC.a; if(a<.008) discard; gl_FragColor=vec4(vC.rgb*mix(1., .72+.5*t.r, uSoft)*mix(1., uTint, uSoft)+vL*.85, min(1., a*(1.+dot(vL,vec3(.5))))); }',   // each puff is a turning, uneven cloud with lit and shaded parts, not a round dot   // smoke and dust inside a headlight beam glow
     });
     this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; this.points.renderOrder = 5;
     scene.add(this.points); this.geo = g;
@@ -34,20 +37,23 @@ export class Particles {
     this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
     this.vel[i * 3] = vx; this.vel[i * 3 + 1] = vy; this.vel[i * 3 + 2] = vz;
     this.life[i] = this.maxLife[i] = life; this.size[i] = size; this.grow[i] = grow; this.alpha[i] = a; this.grav[i] = grav;
-    this.col[i * 4] = r; this.col[i * 4 + 1] = g; this.col[i * 4 + 2] = b; this.col[i * 4 + 3] = 0; this.rot[i] = Math.random() * 6.28; this.spin[i] = (Math.random() - .5) * 2.2;
+    this.col[i * 4] = r; this.col[i * 4 + 1] = g; this.col[i * 4 + 2] = b; this.col[i * 4 + 3] = 0; this.rot[i] = Math.random() * 6.28; this.spin[i] = (Math.random() - .5) * 2.2; this.vari[i] = Math.floor(Math.random() * 4);
   }
   update(dt) {
-    const { pos, vel, life, maxLife, size, grow, col, alpha, grav } = this;
+    const { pos, vel, life, maxLife, size, grow, col, alpha, grav } = this, W = this.wind; this.tm += dt; const tm = this.tm;
     for (let i = 0; i < this.max; i++) {
       if (life[i] <= 0) continue;
       life[i] -= dt;
       if (life[i] <= 0) { size[i] = 0; col[i * 4 + 3] = 0; continue; }
-      const j = i * 3; vel[j + 1] -= grav[i] * dt;
+      const j = i * 3, bil = grow[i] > .5, age = 1 - life[i] / maxLife[i]; vel[j + 1] -= grav[i] * dt;
+      if (bil) {      /* billowing smoke: warm air lifts it at first, eddies push it about (more as it spreads), and the wind carries it away */
+        const ph = i * 1.37, tb = (.5 + age * 2.2) * dt; vel[j] += (Math.sin(pos[j + 2] * 1.3 + tm * 1.7 + ph) * 1.5 + W[0] * .9) * tb; vel[j + 2] += (Math.cos(pos[j] * 1.1 + tm * 1.3 + ph) * 1.5 + W[2] * .9) * tb; vel[j + 1] += (Math.sin(tm * 2.1 + ph) * .5 + .55 * (1 - age)) * dt; vel[j + 1] *= 1 - dt * .9; }
       pos[j] += vel[j] * dt; pos[j + 1] += vel[j + 1] * dt; pos[j + 2] += vel[j + 2] * dt;
-      const k = 1 - dt * 1.6; vel[j] *= k; vel[j + 2] *= k;
+      if (!bil && pos[j + 1] < .03 && vel[j + 1] < 0) { pos[j + 1] = .03; vel[j + 1] *= -.32; vel[j] *= .75; vel[j + 2] *= .75; }      /* flung grit and rubber bounce on the road */
+      const k = 1 - dt * (bil ? 1.9 + age * 1.5 : 1.6); vel[j] *= k; vel[j + 2] *= k;
       size[i] += grow[i] * dt; this.rot[i] += this.spin[i] * dt; col[i * 4 + 3] = alpha[i] * (life[i] / maxLife[i]) * Math.min(1, (maxLife[i] - life[i]) / .07 + .15);   // fades in quickly, then thins out
     }
-    const a = this.geo.attributes; a.position.needsUpdate = a.aColor.needsUpdate = a.aSize.needsUpdate = a.aRot.needsUpdate = true;
+    const a = this.geo.attributes; a.position.needsUpdate = a.aColor.needsUpdate = a.aSize.needsUpdate = a.aRot.needsUpdate = a.aVar.needsUpdate = true;
   }
   clear() { this.life.fill(0); this.size.fill(0); }
 }
@@ -165,7 +171,7 @@ export class Props {
 
 // Metal sparks: bright streaks (each is a short line along its own velocity) that fly off a scraped wall or a car, arc under gravity, bounce on the road and cool from white-yellow to orange to nothing.
 export class Sparks {
-  constructor(scene, N = 800) {
+  constructor(scene, N = 1600) {
     this.N = N; this.p = new Float32Array(N * 3); this.v = new Float32Array(N * 3); this.life = new Float32Array(N); this.max = new Float32Array(N).fill(1); this.i = 0;
     const g = new THREE.BufferGeometry(); this.pos = new Float32Array(N * 6); this.col = new Float32Array(N * 6); g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
     this.mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); this.mesh.frustumCulled = false; this.mesh.renderOrder = 9; scene.add(this.mesh);
@@ -177,7 +183,7 @@ export class Sparks {
       if (this.life[i] <= 0) { if (col[b] !== 0 || col[b + 3] !== 0) { col.fill(0, b, b + 6); pos.fill(0, b, b + 6); } continue; }
       this.life[i] -= dt; V[a + 1] -= 17 * dt; const dr = 1 - 1.1 * dt; V[a] *= dr; V[a + 1] *= dr; V[a + 2] *= dr; P[a] += V[a] * dt; P[a + 1] += V[a + 1] * dt; P[a + 2] += V[a + 2] * dt;
       if (P[a + 1] < .03) { P[a + 1] = .03; V[a + 1] *= -.38; V[a] *= .7; V[a + 2] *= .7; }
-      const k = Math.max(0, this.life[i] / this.max[i]); pos[b] = P[a]; pos[b + 1] = P[a + 1]; pos[b + 2] = P[a + 2]; pos[b + 3] = P[a] - V[a] * .05; pos[b + 4] = P[a + 1] - V[a + 1] * .05; pos[b + 5] = P[a + 2] - V[a + 2] * .05;
+      const k = Math.max(0, this.life[i] / this.max[i]); pos[b] = P[a]; pos[b + 1] = P[a + 1]; pos[b + 2] = P[a + 2]; pos[b + 3] = P[a] - V[a] * .07; pos[b + 4] = P[a + 1] - V[a + 1] * .07; pos[b + 5] = P[a + 2] - V[a + 2] * .07;
       const hk = Math.sqrt(k); col[b] = 1.4 * hk; col[b + 1] = (.25 + .75 * k) * 1.1 * hk; col[b + 2] = (k * k * .6) * hk; col[b + 3] = .9 * k; col[b + 4] = .22 * k; col[b + 5] = 0; }
     this.mesh.geometry.attributes.position.needsUpdate = true; this.mesh.geometry.attributes.color.needsUpdate = true;
   }

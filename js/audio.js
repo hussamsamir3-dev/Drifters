@@ -29,17 +29,17 @@ class EngineVoice {
   }
   fadeOut(sec = .25) { const k = this.cur; if (!k) return; const t = this.au.ctx.currentTime; k.fade.gain.cancelScheduledValues(t); k.fade.gain.setValueAtTime(k.fade.gain.value, t); k.fade.gain.linearRampToValueAtTime(0, t + sec); for (const l of k.layers) { l.src.stop(t + sec + .05); l.src.onended = () => { l.src.disconnect(); l.g.disconnect(); this.au.stats.live--; }; } setTimeout(() => k.fade.disconnect(), (sec + .2) * 1000); this.cur = null; this.name = ''; }
   set(rpm, load, vol) {      // rpm sets pitch (and which layers are heard); load sets loudness and brightness only
-    if (!this.cur) return; if (!(rpm >= 0)) rpm = 900; load = clamp(+load || 0, 0, 1); vol = +vol || 0;      // one bad frame (a NaN before the first physics step) must never reach, or stick in, the audio graph
+    if (!this.cur) return; if (!(rpm >= 0)) rpm = 900; this.rs = Number.isFinite(this.rs) ? this.rs + (rpm - this.rs) * .22 : rpm; rpm = this.rs;      /* the engine note follows the revs through a gentle smoothing, so it glides instead of jittering */ load = clamp(+load || 0, 0, 1); vol = +vol || 0;      // one bad frame (a NaN before the first physics step) must never reach, or stick in, the audio graph
     const t = this.au.ctx.currentTime, L = this.cur.layers, n = L.length;
     if (this.cur.bank) {       // held-rpm bank: linear cross-fade between neighbouring anchors, on/off-load blended by the smoothed throttle
       let b = 0; while (b < ANCH.length - 2 && rpm > ANCH[b + 1]) b++; const u = clamp((rpm - ANCH[b]) / (ANCH[b + 1] - ANCH[b]), 0, 1), lt = clamp(load, 0, 1); if (!Number.isFinite(this.ld)) this.ld = lt; this.ld += (lt - this.ld) * .3;
-      for (const l of L) { const ai = ANCH.indexOf(l.rpm), aw = ai === b ? 1 - u : ai === b + 1 ? u : 0, lw = l.ld === 'on' ? this.ld : 1 - this.ld; l.src.playbackRate.setTargetAtTime(clamp(rpm / l.rpm, .55, 1.9), t, .035); l.g.gain.setTargetAtTime(aw * lw, t, .03); }
-      this.level.gain.setTargetAtTime(vol * (.3 + .32 * load), t, .06); this.lp.frequency.setTargetAtTime(2400 + load * 4600 + clamp(rpm / 3000, 0, 2.5) * 400, t, .07); return;
+      for (const l of L) { const ai = ANCH.indexOf(l.rpm), aw = ai === b ? 1 - u : ai === b + 1 ? u : 0, lw = l.ld === 'on' ? this.ld : 1 - this.ld; l.src.playbackRate.setTargetAtTime(clamp(rpm / l.rpm, .55, 1.9), t, .07); l.g.gain.setTargetAtTime(aw * lw, t, .03); }
+      this.level.gain.setTargetAtTime(vol * (.34 + .2 * load), t, .12); this.lp.frequency.setTargetAtTime(1250 + load * 1500 + clamp(rpm / 3000, 0, 2.5) * 180, t, .14); return;      /* calm: a darker tone, and loudness that hardly swells with the throttle */
     }
     let a = 0; while (a < n - 2 && rpm > L[a + 1].rpm) a++;
     const u = n > 1 ? clamp(Math.log(rpm / L[a].rpm) / Math.log(L[a + 1].rpm / L[a].rpm), 0, 1) : 0;
-    L.forEach((l, i) => { l.src.playbackRate.setTargetAtTime(clamp(rpm / l.rpm, n > 1 ? .45 : .25, n > 1 ? 2.4 : 3.4), t, .035); l.g.gain.setTargetAtTime(n === 1 ? 1 : i === a ? Math.cos(u * 1.5708) : i === a + 1 ? Math.sin(u * 1.5708) : 0, t, .03); });
-    this.level.gain.setTargetAtTime(vol * (.16 + .39 * load), t, .06); this.lp.frequency.setTargetAtTime(1300 + load * 4200 + clamp(rpm / 3000, 0, 2.5) * 500, t, .07);
+    L.forEach((l, i) => { l.src.playbackRate.setTargetAtTime(clamp(rpm / l.rpm, n > 1 ? .45 : .25, n > 1 ? 2.4 : 3.4), t, .07); l.g.gain.setTargetAtTime(n === 1 ? 1 : i === a ? Math.cos(u * 1.5708) : i === a + 1 ? Math.sin(u * 1.5708) : 0, t, .06); });
+    this.level.gain.setTargetAtTime(vol * (.26 + .2 * load), t, .12); this.lp.frequency.setTargetAtTime(950 + load * 1500 + clamp(rpm / 3000, 0, 2.5) * 200, t, .14);
   }
 }
 
@@ -57,7 +57,7 @@ export class GameAudio {
     { const len = Math.floor(c.sampleRate * .32), ir = c.createBuffer(1, len, c.sampleRate), d = ir.getChannelData(0); for (let i = 0; i < len; i++) { const tt = i / c.sampleRate; d[i] = (Math.random() * 2 - 1) * Math.exp(-tt / .07) * (tt < .004 ? 0 : 1); } for (const ms of [11, 23, 37, 58]) d[Math.floor(ms / 1000 * c.sampleRate)] += .5;
       const cv = c.createConvolver(); cv.buffer = ir; const wl = c.createBiquadFilter(); wl.type = 'lowpass'; wl.frequency.value = 2600; const wg = c.createGain(); wg.gain.value = .22; this.engBus.connect(cv); cv.connect(wl); wl.connect(wg); wg.connect(this.master); }
     this.shotLP = c.createBiquadFilter(); this.shotLP.type = 'lowpass'; this.shotLP.frequency.value = 5200; this.shotLP.Q.value = .4; this.shotLP.connect(this.engBus);     // bangs come from the tailpipe, behind and below: slightly muffled
-    this.airLP = c.createBiquadFilter(); this.airLP.type = 'lowpass'; this.airLP.frequency.value = 5200; this.airLP.connect(this.engBus);                                    // turbo air: brighter, but still through the car
+    this.airLP = c.createBiquadFilter(); this.airLP.type = 'lowpass'; this.airLP.frequency.value = 1700; this.airLP.Q.value = .3; this.airLP.connect(this.engBus);                                    // turbo air: brighter, but still through the car
     this.sfx = c.createGain(); this.sfx.gain.value = this.vol; this.sfx.connect(this.master);
     { const blen = Math.floor(c.sampleRate * 2), bir = c.createBuffer(2, blen, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = bir.getChannelData(ch); for (let i = 0; i < blen; i++) { const tt = i / c.sampleRate; d[i] = (Math.random() * 2 - 1) * Math.exp(-tt / .5) * Math.min(1, tt / .014); } }
       this.bigIn = c.createGain(); this.engBus.connect(this.bigIn); this.sfx.connect(this.bigIn); const bcv = c.createConvolver(); bcv.buffer = bir; this.bigLP = c.createBiquadFilter(); this.bigLP.type = 'lowpass'; this.bigLP.frequency.value = 4000; this.bigG = c.createGain(); this.bigG.gain.value = 0; this.bigIn.connect(bcv); bcv.connect(this.bigLP); this.bigLP.connect(this.bigG); this.bigG.connect(this.master); }      // a big, long room that only opens near grandstands and under the footbridge
@@ -131,16 +131,16 @@ export class GameAudio {
     if (this.state === 'ready' && sp) {
       if (s.running === false) { if (this.voice.cur) this.voice.fadeOut(.5); }
       else { if (this.voice.name !== this.snd(sp.snd)) this.voice.start(this.snd(sp.snd), s.rpm / REF_RPM);
-        let vol = 1; if (t < (this.dipUntil || 0)) vol = .42;                                              // gear change: drive is cut, the note drops back, then returns
-        if (s.limiter) vol *= .5;                                           // rev limiter: a soft stutter while the cut is active
+        let vol = 1; if (t < (this.dipUntil || 0)) vol = .72;                                              // gear change: drive is cut, the note drops back, then returns
+        if (s.limiter) vol *= .8;                                           // rev limiter: a soft stutter while the cut is active
         this.voice.set(s.rpm, s.load, vol);
         // Turbo. Boost builds with load and revs and lags behind the throttle like a real compressor. The spool is a whistle whose pitch
         // follows boost; lifting off while on boost dumps it through the blow-off valve (with flutter if you lift at high revs).
-        const tb = s.turbo || 0, want = tb ? Math.min(1, s.load * (.25 + s.rpmN * 1.1)) : 0; this.boost = (this.boost || 0) + (want - (this.boost || 0)) * (want > (this.boost || 0) ? .045 : .12);
-        if (this.ty) { this.ty.spool.g.gain.setTargetAtTime(Math.min(1, tb) * this.boost * this.boost * .12, t, .1); this.ty.spool.src.playbackRate.setTargetAtTime(.45 + this.boost * .75 + s.rpmN * .2, t, .1); }
+        const tb = s.turbo || 0, want = tb ? Math.min(1, s.load * (.25 + s.rpmN * 1.1)) : 0; this.boost = (this.boost || 0) + (want - (this.boost || 0)) * (want > (this.boost || 0) ? .028 : .07);
+        if (this.ty) { this.ty.spool.g.gain.setTargetAtTime(Math.min(1, tb) * this.boost * this.boost * .03, t, .28); this.ty.spool.src.playbackRate.setTargetAtTime(.5 + this.boost * .45 + s.rpmN * .1, t, .3);      /* turbo: a soft, low whoosh far under the engine, rising and falling slowly */ }
         this.spool.g.gain.setTargetAtTime(0, t, .1);
         if (this.lastLoad > .6 && s.load < .15 && t - (this.liftT || 0) > .9) { this.liftT = t;
-          if (tb && this.boost > .35) { const bst = this.boost; this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .36 + bst * .24, true); this.boost *= .2; const nf = bst > .5 && s.rpmN > .4 ? (sp.flut || 0) : 0; for (let i = 1; i <= nf; i++) setTimeout(() => this.shot('bov1', (.3 + bst * .2) * (1 - i * .14), true, 1.18 + Math.random() * .25), 85 * i); }      // compressor surge: a rapid run of flutters on big-turbo cars
+          if (tb && this.boost > .35) { const bst = this.boost; this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .1 + bst * .08, true); this.boost *= .2; const nf = bst > .5 && s.rpmN > .4 ? (sp.flut || 0) : 0; for (let i = 1; i <= nf; i++) setTimeout(() => this.shot('bov1', (.08 + bst * .06) * (1 - i * .14), true, .95 + Math.random() * .12), 85 * i); }      // compressor surge: a rapid run of flutters on big-turbo cars
           if (s.rpmN > .5) { if (sp.pops === 'crackle' && Math.random() < .55) this.shot('crackle', .42, true); else this.shot('pop', .34 + s.rpmN * .2, true); } }     // lifting off at high revs: the exhaust pops (the flame is drawn by the car)
         this.lastLoad += (s.load - this.lastLoad) * .5; }
     }
@@ -156,7 +156,7 @@ export class GameAudio {
       { const v = s.speed, sqK = s.surf === 'road' || !s.surf ? 1 : s.surf === 'wet' ? .45 : 0, amt = Math.max(sl, (s.lock || 0) * .6) * (.4 + .6 * sp2) * dry * road * .36 * sqK * (s.soft || 1) * (1 + (1 - (s.tmpK ?? 1)) * 1.5), w0 = 1 - Math.min(1, Math.max(0, (v - 9) / 11)), w2 = Math.min(1, Math.max(0, (v - 24) / 16)), w1 = Math.max(0, 1 - w0 - w2), bend = (s.lock || 0) * .14 - (s.spin || 0) * .12, tc = sl > .05 ? .05 : .16;
         set(T.sqLow, amt * w0, .8 + v / 30 * .35 + bend, tc); set(T.sqMid, amt * w1, .78 + v / 45 * .4 + bend, tc); set(T.sqHigh, amt * w2 * 1.1, .75 + v / 70 * .45 + bend, tc); }
       { const wk = sp.whine ?? .4; set(T.whine, k * Math.sqrt(k) * .05 * (.3 + wk * 1.6), (.35 + s.speed / 42) * (sp.drive === 'awd' ? .88 : 1) * (1 + (wk > .7 ? .12 : 0)), .15); }      // straight-cut dog boxes whine loudly and high; helical road gears are quiet; four-wheel-drive adds a lower driveline note                                       // gear whine: pitch is road speed, the sound of going fast
-      set(T.limiter, s.limiter ? .45 : 0, 1, s.limiter ? .01 : .04);                                       // rev limiter: the ignition-cut stutter, for as long as it is cutting
+      set(T.limiter, s.limiter ? .16 : 0, 1, s.limiter ? .03 : .08);                                       // rev limiter: the ignition-cut stutter, for as long as it is cutting
       set(T.grass, (s.sand ? 0 : s.dirt * (.25 + .75 * sp2) * 1.1) + (s.surf === 'mud' ? (.45 + sl * .4) * sp2 * 1.2 : 0), (.8 + k * .9) * (s.surf === 'mud' ? .62 : 1)); set(T.gravel, ((s.sand ? s.dirt : s.dirt * .25) * (.25 + .75 * sp2) * 1.6) + (s.surf === 'gravel' ? (.4 + sl * .6) * sp2 * 1.5 : 0), .8 + k * .8);
       set(T.kerb, (s.kerb || 0) * Math.min(1, s.speed / 12) * 1.6, Math.max(.4, s.speed / 13));
       this.skid.g.gain.setTargetAtTime(0, t, .1); this.dirt.g.gain.setTargetAtTime(0, t, .1); this.sq.g.gain.setTargetAtTime(0, t, .1);

@@ -593,3 +593,17 @@ h3{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--acc)
 /* cinematic bars over the menu showcase */
 #letterbox{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;transition:opacity 1.4s ease;background:linear-gradient(#000 0,#000 6.5%,transparent 6.5%,transparent 93.5%,#000 93.5%,#000 100%)}
 body.cine #letterbox{opacity:1}
+
+/* ---------- build 54: bigger HUD, bigger map, tyre temperature tiles ---------- */
+.tt{display:flex;flex-direction:column;gap:3px;font-style:normal;text-shadow:none}.tt span{display:flex;gap:3px}
+.tt i{display:grid;place-items:center;width:34px;height:23px;border-radius:6px;font-style:normal;transition:background .35s,color .35s;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.tt i b{font-size:12px;font-weight:800;font-style:normal;font-variant-numeric:tabular-nums;margin:0;line-height:1}
+.tt i.c0{background:#2b7bff;color:#fff}.tt i.c1{background:#22b866;color:#04230f}.tt i.c2{background:#f4c20d;color:#2a2100}.tt i.c3{background:#ec2d2d;color:#fff;animation:pulse .7s infinite}
+body:not(.touch) #hud .hp,body:not(.touch) #hud .ht{zoom:1.32}
+body:not(.touch) #hud .hg{zoom:1.38}
+body:not(.touch) #hud .hx{zoom:1.25}
+#hud #mini{width:300px;height:300px}
+@media (max-width:1100px){body:not(.touch) #hud .hp,body:not(.touch) #hud .ht{zoom:1.12}body:not(.touch) #hud .hg{zoom:1.15}#hud #mini{width:230px;height:230px}}
+@media (max-width:760px){#hud #mini{width:150px;height:150px}.tt i{width:26px;height:18px}.tt i b{font-size:10px}}
+body.touch #hud #mini{width:180px;height:180px}
+body.touch .tt i{width:26px;height:18px}body.touch .tt i b{font-size:10px}

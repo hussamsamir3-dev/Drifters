@@ -214,7 +214,12 @@ function findApexes(path, n, hw) {
     const shift = ang > 1.2 ? .14 : ang > .7 ? .07 : 0, aq = Math.max(r.s + 1, Math.min(r.end - 2, bq + Math.round(shift * len))), ai = at(start + aq);
     let kb = Math.max(7, Math.min(22, Math.round(len * .3))), ka = Math.max(5, Math.min(14, Math.round(len * .22)));
     while (kb > 6 && r.sgn * ref[at(ai - kb)] < hw - 3.4) kb--; while (ka > 4 && r.sgn * ref[at(ai + ka)] < hw - 3.4) ka--;      // not where the line is nowhere near the edge
-    out.push({ i: ai, side: r.sgn, len, ang, a: at(start + r.s), b: at(start + r.end), kb, ka }); }
+    out.push({ i: ai, side: r.sgn, len, ang, a: at(start + r.s), b: at(start + r.end), kb, ka });
+    /* corner-exit kerb: on the OUTSIDE of the road, where the line unwinds and runs out to the edge (as on every real circuit's medium and fast corners) */
+    if (ang > .7) { let qs = -1, qe = -1; for (let q = 2; q <= ka + 30; q++) { const near = -r.sgn * ref[at(ai + q)] > hw - 3.0; if (near) { if (qs < 0) qs = q; qe = q; } else if (qs >= 0 && q - qe > 2) break; }
+      if (qs >= 0 && qe - qs >= 6) out.push({ exit: true, i: ai, i0: at(ai + qs), cnt: Math.min(26, qe - qs + 1), side: -r.sgn, len, ang }); } }
+  for (let x = out.length - 1; x >= 0; x--) { const e = out[x]; if (!e.exit) continue;      /* an exit kerb that would sit on another corner's inside kerb (chicanes) is not drawn twice */
+    if (out.some(o => !o.exit && o.side === e.side && Math.min(at(e.i0 - (o.i - o.kb)), at(o.i + o.ka - e.i0)) >= -2 && at(e.i0 - (o.i - o.kb)) < o.kb + o.ka + e.cnt + 3)) out.splice(x, 1); }
   out.ref = ref; return out;
 }
 function ribbon(path, offL, offR, y, vScale, closed = true, mask = null) {
@@ -321,7 +326,7 @@ function buildProc(track) {
     return mergeGeometries([box(.4, .58, .25, 0, 1.1, 0, 0, 0), box(.27, .3, .27, 0, 1.55, 0, 1, 5), box(.14, .82, .17, .09, .41, 0, 2, 3), box(.14, .82, .17, -.09, .41, 0, 2, 4), box(.1, .5, .11, .26, 1.06, 0, 0, 1), box(.1, .5, .11, -.26, 1.06, 0, 0, 2)]);
   })();
   const people = all => {
-    if (window.__noPeople) return;      // (the menu showcase has cars only)
+    return;      /* build 54: no figures at the roadside or in the stands (the stands keep their painted crowd) */
     const cells = new Map(); for (const q of all) { const k = Math.floor(q.x / 60) + ',' + Math.floor(q.z / 60); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(q); }
     for (const list of cells.values()) {
       const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
@@ -339,7 +344,10 @@ function buildProc(track) {
   const cx = (minx + maxx) / 2, cz = (minz + maxz) / 2;
   // kerbs only where a driver uses them: on the inside of each corner, around its apex (never along the outside or down the straights)
   const apexes = findApexes(path, n, hw), kerbRuns = []; track.apexes = apexes; track.kerbRuns = kerbRuns; track.refLine = apexes.ref;
-  for (const a of apexes) { const nodes = [], wd = []; for (let q = -a.kb; q <= a.ka; q++) { const u = Math.min(q + a.kb, a.ka - q) / 5, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push(((a.i + q) % n + n) % n); wd.push(1.5 * s); } kerbRuns.push({ side: a.side, nodes, w: wd }); }      // each kerb tapers to nothing at both ends
+  for (const a of apexes) { const nodes = [], wd = [];
+    if (a.exit) { const W = 1.0; for (let q = 0; q < a.cnt; q++) { const u = Math.min(q, a.cnt - 1 - q) / 5, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push((a.i0 + q) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd, exit: true }); continue; }
+    const W = 1.15 + .5 * Math.min(1, a.ang / 1.8);      /* sharper corners get a wider kerb */
+    for (let q = -a.kb; q <= a.ka; q++) { const u = Math.min(q + a.kb, a.ka - q) / 6, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push(((a.i + q) % n + n) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd }); }      // each kerb tapers to nothing at both ends
 
   // -- physics grid, rasterised with a 2D canvas: R = road, G = inside the barriers, B = kerb band
   const cell = 0.5, pad = Math.max(30, B + 8), x0 = minx - pad, z0 = minz - pad, w = Math.ceil((maxx - minx + pad * 2) / cell), h = Math.ceil((maxz - minz + pad * 2) / cell);
@@ -424,13 +432,15 @@ function buildProc(track) {
   const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 9), new THREE.MeshStandardMaterial({ map: atex, bumpMap: abump, bumpScale: .9, roughness: .84 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
   const white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .7 });
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
-  const ktex = canvasTex(64, 64, (k) => { k.fillStyle = day ? '#e8475a' : '#e3262e'; k.fillRect(0, 0, 64, 32); k.fillStyle = day ? '#f2c230' : '#f4f4f4'; k.fillRect(0, 32, 64, 32); });
-  const kmat = new THREE.MeshStandardMaterial({ map: ktex, roughness: .7 });
-  { const pos = [], uv = [], idx = []; let base = 0;
+  /* Kerbs, as built on real circuits: alternating red and white blocks of equal length, a raised profile that rises from the road on a ramp, a flat top, and a steep outer face. */
+  const ktex = canvasTex(64, 128, (k) => { k.fillStyle = '#c70f18'; k.fillRect(0, 0, 64, 64); k.fillStyle = '#f6f6f4'; k.fillRect(0, 64, 64, 64); k.fillStyle = 'rgba(0,0,0,.10)'; for (let i = 0; i < 160; i++) k.fillRect(Math.random() * 64, Math.random() * 128, 2, 2); }, 1, 1);
+  const kmat = new THREE.MeshStandardMaterial({ map: ktex, roughness: .62, side: THREE.DoubleSide, emissive: night ? 0x331010 : 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  { const pos = [], uv = [], idx = []; let base = 0; const KH = .085, STRIPE = 1.25;
     for (const kr of kerbRuns) { let d = 0; kr.nodes.forEach((j, q) => { const p = path[j]; if (q) { const pp = path[kr.nodes[q - 1]]; d += Math.hypot(p.x - pp.x, p.z - pp.z); }
-        const o1 = kr.side * (hw - .03), o2 = kr.side * (hw + kr.w[q]); pos.push(p.x + p.tz * o1, .045, p.z - p.tx * o1, p.x + p.tz * o2, .045, p.z - p.tx * o2); uv.push(0, d / 4, 1, d / 4);
-        if (q) { const a = base + (q - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2, a, a + 2, a + 1, a + 1, a + 2, a + 3); } }); base += kr.nodes.length * 2; }
-    if (pos.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); const km = new THREE.Mesh(g, kmat); km.receiveShadow = true; G.add(km); } }
+        const W = kr.w[q], hh = KH * (.3 + .7 * Math.min(1, W / .9)), v = d / (STRIPE * 2), ox = [hw - .03, hw + Math.min(.3, W * .28), hw + Math.max(W * .72, W - .12), hw + W], oy = [.03, .03 + hh, .03 + hh, .03];
+        for (let c2 = 0; c2 < 4; c2++) { const o = kr.side * ox[c2]; pos.push(p.x + p.tz * o, oy[c2], p.z - p.tx * o); uv.push(c2 / 3, v); }
+        if (q) { const a = base + (q - 1) * 4; for (let c2 = 0; c2 < 3; c2++) idx.push(a + c2, a + c2 + 1, a + c2 + 4, a + c2 + 1, a + c2 + 5, a + c2 + 4); } }); base += kr.nodes.length * 4; }
+    if (pos.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); const km = new THREE.Mesh(g, kmat); km.receiveShadow = true; km.castShadow = true; G.add(km); } }
 
   // -- barriers
   // Barriers: painted steel crash rail with a corrugated profile, bolted to posts every few metres, scuffed, streaked with rust and dirty at the foot. The bump map carries the corrugation.

@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#17181c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;1,700;1,900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=53">
+<link rel="stylesheet" href="style.css?v=54">
 <script type="importmap">{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }</script>
 </head>
 <body>
@@ -106,7 +106,7 @@
       <dt data-t>Drift</dt><dd><i id="stDrift"></i></dd>
     </dl>
   </section>
-  <footer class="credit">Cars: "1965-2002 Rally Cars" by supercarmodels (CC BY 4.0) · EGYSeal · build 53</footer>
+  <footer class="credit">Cars: "1965-2002 Rally Cars" by supercarmodels (CC BY 4.0) · EGYSeal · build 54</footer>
 </div>
 
 <!-- ============ LOADING ============ -->
@@ -135,6 +135,7 @@
     <div class="ring" id="gBody"><b id="hBody">100</b><small data-t>Car</small></div>
     <div class="ring" id="gFuel"><b id="hFuel">100</b><small data-t>Fuel</small></div>
     <div class="ring" id="gTyre"><b id="hTyre">100</b><small id="hTyreLbl">Tyres</small></div>
+    <div class="tt" id="gTT" title="Tyre temperature: blue cold, green ideal, yellow near overheating, red overheated"><span><i id="tt0" class="c1"><b id="ttv0">0</b></i><i id="tt1" class="c1"><b id="ttv1">0</b></i></span><span><i id="tt2" class="c1"><b id="ttv2">0</b></i><i id="tt3" class="c1"><b id="ttv3">0</b></i></span></div>
     <div class="parts" title="Engine, gearbox, wheels"><i id="pE">ENG</i><i id="pG">GBX</i><span><i id="pW0"></i><i id="pW1"></i><i id="pW2"></i><i id="pW3"></i></span><small id="hFuelL"></small></div>
     <button id="hPace" class="p1" title="Pace: keys 1 2 3">Race</button>
     <div class="spd"><b id="hSpeed">0</b><span id="hUnit">km/h</span><em id="hGear">1</em></div>
@@ -143,7 +144,7 @@
     <div class="nitro"><i id="hNitro"></i></div>
     <div class="drift" id="hDrift"><span>Drift</span><b id="hDriftPts">0</b><em id="hCombo"></em></div>
   </div>
-  <canvas id="mini" width="180" height="180"></canvas>
+  <canvas id="mini" width="300" height="300"></canvas>
   <div id="radio"><b>Amm Saber</b><span></span></div>
   <div id="hEvent"></div><i id="hFlag"></i>
   <div id="hTow"></div>
@@ -202,7 +203,7 @@ addEventListener('error',function(e){ if(!window.__booted) fatal(e.message||('co
 addEventListener('unhandledrejection',function(e){ if(!window.__booted) fatal((e.reason&&e.reason.message)||String(e.reason)); });
 // Opened by double-click (file://): browsers refuse ES modules there, so load the pre-built single-file copy.
 (function(){var s=document.createElement('script');
-  if(location.protocol==='file:'){s.src='game.bundle.js?v=53';}else{s.type='module';s.src='js/main.js?v=53';}
+  if(location.protocol==='file:'){s.src='game.bundle.js?v=54';}else{s.type='module';s.src='js/main.js?v=54';}
   document.body.appendChild(s);})();
 </script>
 </body>
