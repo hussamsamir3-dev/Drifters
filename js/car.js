@@ -946,11 +946,12 @@ export function aiDrive(car, track, ai, cars, dt) {
   }
   if (ai.merge > 0) { ai.merge -= dt; v0cap = Math.min(v0cap, 30); }      // just out of the pit lane: slow, and drift onto the line instead of cutting across
   { const kk = Math.min(1, dt * (ai.merge > 0 ? .75 : 2.7)), dOff = (clamp(want, -ai.max, ai.max) - ai.off) * kk, lim = (ai.merge > 0 ? 1.3 : (ai.rt ?? 99) < 10 ? .9 + (ai.rt ?? 0) * .25 : 99) * dt; ai.off += clamp(dOff, -lim, lim); }      // the first ten seconds: the line is joined gradually
+  if (ai.st0 == null) { ai.st0 = 1; const p0 = p[car.idx % n]; ai.off = (car.x - p0.x) * p0.tz - (car.z - p0.z) * p0.tx; }      /* build 57: start on the line the car is standing on and join the racing line gradually, never snap to it */
   const tx = tgt.x + tgt.tz * ai.off, tz = tgt.z - tgt.tx * ai.off;
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
-  const B = ai.brain || (ai.brain = { react: .09 + Math.random() * .1, consist: [.955, .972, .984][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
+  const B = ai.brain || (ai.brain = { react: .09 + Math.random() * .1, consist: [.955, .974, .99][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
   const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
@@ -967,7 +968,8 @@ export function aiDrive(car, track, ai, cars, dt) {
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;
   if (sp > 8 && Math.abs(car.beta) > .1) inp.throttle *= Math.abs(car.beta) > .25 ? .15 : .5;   // feather the throttle when the tail steps out
   inp.hand = false; inp.nitro = ai.skill > .9 && Math.abs(tgt.k) < .004 && Math.abs(err) < .08 && car.nitro > .5;
-  if (Math.abs(err) > 1.9 && sp < 12) { inp.steer = err > 0 ? 1 : -1; inp.throttle = .6; inp.brake = 0; }           // facing the wrong way: spin it round
+  if (Math.abs(err) > 1.9 && sp < 12 && !car.held) { inp.steer = err > 0 ? 1 : -1; inp.throttle = .6; inp.brake = 0; }           // facing the wrong way: spin it round
+  { const held = car.held && sp < 2, want = held ? 0 : inp.steer, rate = (sp < 6 ? 1.1 : sp < 20 ? 2.4 : 3.6) * dt, prev = ai.sPrev ?? 0; inp.steer = ai.sPrev = prev + clamp(want - prev, -rate, rate); }      /* wheels: straight while the lights count, then a limited turn rate like a real steering arm and hands */
   /* Recovery. A real driver who has spun or nosed into a barrier does not sit and wait: he looks where the road is, reverses if it is behind him, turns the car round and rejoins.
      stk counts the time spent nearly stopped while the race is live; after .8 s the recovery starts. Reverse while the road is behind or beside the car (steering opposite, which swings the nose
      towards the target), then forward once the nose points at the road; if forward stalls against a wall, back off again. */

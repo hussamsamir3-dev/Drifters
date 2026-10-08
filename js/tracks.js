@@ -81,7 +81,7 @@ export function resampleClosed(pts, spacing) {
   const n = pts.length, dense = [];
   for (let i = 0; i < n; i++) {
     const a = pts[(i + n - 1) % n], b = pts[i], c = pts[(i + 1) % n], d = pts[(i + 2) % n];
-    for (let k = 0; k < 24; k++) { const t = k / 24; dense.push([catmull(a[0], b[0], c[0], d[0], t), catmull(a[1], b[1], c[1], d[1], t)]); }
+    const K = Math.max(24, Math.ceil(Math.hypot(c[0] - b[0], c[1] - b[1]) / .5)); for (let k = 0; k < K; k++) { const t = k / K; dense.push([catmull(a[0], b[0], c[0], d[0], t), catmull(a[1], b[1], c[1], d[1], t)]); }
   }
   const cum = [0];
   for (let i = 1; i <= dense.length; i++) { const p = dense[i - 1], q = dense[i % dense.length]; cum.push(cum[i - 1] + Math.hypot(q[0] - p[0], q[1] - p[1])); }
@@ -118,8 +118,8 @@ export class Track {
     const n = pts.length; this.path = pts; this.n = n;
     let len = 0;
     for (let i = 0; i < n; i++) {
-      const p = pts[i], q = pts[(i + 1) % n], a = pts[(i + n - 1) % n];
-      const tx = q.x - a.x, tz = q.z - a.z, l = Math.hypot(tx, tz) || 1;
+      const p = pts[i], q = pts[(i + 1) % n], a = pts[(i + n - 1) % n], q2 = pts[(i + 3) % n], a2 = pts[(i + n - 3) % n];
+      const tx = (q.x - a.x) + .5 * (q2.x - a2.x), tz = (q.z - a.z) + .5 * (q2.z - a2.z), l = Math.hypot(tx, tz) || 1;
       p.tx = tx / l; p.tz = tz / l; len += Math.hypot(q.x - p.x, q.z - p.z);
     }
     this.len = len; this.spacing = len / n;
@@ -326,7 +326,6 @@ function buildProc(track) {
     return mergeGeometries([box(.4, .58, .25, 0, 1.1, 0, 0, 0), box(.27, .3, .27, 0, 1.55, 0, 1, 5), box(.14, .82, .17, .09, .41, 0, 2, 3), box(.14, .82, .17, -.09, .41, 0, 2, 4), box(.1, .5, .11, .26, 1.06, 0, 0, 1), box(.1, .5, .11, -.26, 1.06, 0, 0, 2)]);
   })();
   const people = all => {
-    return;      /* build 54: no figures at the roadside or in the stands (the stands keep their painted crowd) */
     const cells = new Map(); for (const q of all) { const k = Math.floor(q.x / 60) + ',' + Math.floor(q.z / 60); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(q); }
     for (const list of cells.values()) {
       const g = personGeo.clone(), N = list.length, beh = new Float32Array(N), ph = new Float32Array(N), sk = new Float32Array(N * 3), wk = new Float32Array(N);
@@ -396,7 +395,7 @@ function buildProc(track) {
   // -- ground
   const night = th.night, desert = def.theme === 'desert', day = def.theme === 'day';
   // Grass that reads as grass: a 1024 px texture (about 1 cm per pixel) with big soft patches, thousands of blade strokes, clover and bare soil, and a mowing pattern, plus a bump map of the blades.
-  const GR = (k, W, H, bump) => { const rnd = (a, b) => a + Math.random() * (b - a), base = desert ? [206, 172, 104] : night ? [34, 40, 44] : day ? [60, 116, 42] : [62, 106, 48];
+  const GR = (k, W, H, bump) => { const rnd = (a, b) => a + Math.random() * (b - a), base = desert ? [206, 172, 104] : night ? [34, 40, 44] : day ? [70, 104, 46] : [70, 100, 50];
     const col = (d, a = 1) => 'rgba(' + [0, 1, 2].map(q => Math.max(0, Math.min(255, base[q] + d * (q === 1 ? 1 : q === 0 ? .8 : .5)))).map(Math.round).join(',') + ',' + a + ')';
     k.fillStyle = bump ? '#808080' : col(0); k.fillRect(0, 0, W, H);
     if (!bump) for (let q = 0; q < 70; q++) { const x = rnd(0, W), y = rnd(0, H), r = rnd(50, 200), g = k.createRadialGradient(x, y, 0, x, y, r), d = rnd(-26, 24); g.addColorStop(0, col(d, .5)); g.addColorStop(1, col(d, 0)); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); }
@@ -409,6 +408,11 @@ function buildProc(track) {
   };
   const gtex = canvasTex(1024, 1024, (k, W, H) => GR(k, W, H, false), 220, 220); gtex.anisotropy = 8; const gbump = canvasTex(512, 512, (k, W, H) => GR(k, W, H, true), 220, 220); gbump.colorSpace = THREE.NoColorSpace;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), new THREE.MeshStandardMaterial({ map: gtex, bumpMap: gbump, bumpScale: 1.4, roughness: 1 }));
+  { /* build 57: a large-scale tint (dry patches, lush patches, worn tracks) laid over the tiled grass in world space, so the field stops looking like a repeated carpet */
+    const mt = canvasTex(256, 256, (k, W, H) => { k.fillStyle = '#808080'; k.fillRect(0, 0, W, H); for (let q = 0; q < 90; q++) { const x = Math.random() * W, y = Math.random() * H, r = 18 + Math.random() * 60, g = k.createRadialGradient(x, y, 0, x, y, r), v = Math.random() < .5 ? 40 : 200; g.addColorStop(0, 'rgba(' + v + ',' + v + ',' + v + ',.45)'); g.addColorStop(1, 'rgba(' + v + ',' + v + ',' + v + ',0)'); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); } }, 1, 1); mt.colorSpace = THREE.NoColorSpace;
+    ground.material.onBeforeCompile = sh => { sh.uniforms.uMacro = { value: mt };
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vWp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.)).xz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vWp; uniform sampler2D uMacro;').replace('#include <map_fragment>', '#include <map_fragment>\n{ float m = texture2D(uMacro, vWp * .0021).r * .65 + texture2D(uMacro, vWp * .0073 + .37).r * .35; diffuseColor.rgb *= mix(vec3(.82, .86, .78), vec3(1.16, 1.1, 1.0), m); }'); }; }
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.02, cz); ground.receiveShadow = true; G.add(ground);
 
   // -- road, lines, kerbs
@@ -429,12 +433,12 @@ function buildProc(track) {
   }, 1, 1); atex.anisotropy = 8;
   const abump = canvasTex(512, 512, (k, W, H) => { k.fillStyle = '#6a6a6a'; k.fillRect(0, 0, W, H); const im = k.getImageData(0, 0, W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const v = 96 + Math.random() * 46; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } k.putImageData(im, 0, 0);
     for (let i = 0; i < 14000; i++) { const x = Math.random() * W, y = Math.random() * H, r = .8 + Math.random() * 2.6, v = 150 + Math.random() * 100 | 0; const g = k.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(' + v + ',' + v + ',' + v + ',.9)'); g.addColorStop(1, 'rgba(' + v + ',' + v + ',' + v + ',0)'); k.fillStyle = g; k.fillRect(x - r, y - r, r * 2, r * 2); } }, 1, 1); abump.colorSpace = THREE.NoColorSpace; abump.anisotropy = 8;
-  const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 9), new THREE.MeshStandardMaterial({ map: atex, bumpMap: abump, bumpScale: .9, roughness: .84 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
-  const white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .7 });
+  const road = new THREE.Mesh(ribbon(path, hw, -hw, 0.02, 1 / 9), new THREE.MeshStandardMaterial({ map: atex, bumpMap: abump, bumpScale: .9, roughness: .84, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); road.receiveShadow = true; road.material.name = 'racetrack'; G.add(road);
+  const white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .7, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
   for (const s of [1, -1]) { const l = new THREE.Mesh(ribbon(path, s * hw - .35 + (s > 0 ? 0 : .7), s * hw - .65 + (s > 0 ? 0 : .7), 0.035, 1), white); l.receiveShadow = true; G.add(l); }
   /* Kerbs, as built on real circuits: alternating red and white blocks of equal length, a raised profile that rises from the road on a ramp, a flat top, and a steep outer face. */
   const ktex = canvasTex(64, 128, (k) => { k.fillStyle = '#c70f18'; k.fillRect(0, 0, 64, 64); k.fillStyle = '#f6f6f4'; k.fillRect(0, 64, 64, 64); k.fillStyle = 'rgba(0,0,0,.10)'; for (let i = 0; i < 160; i++) k.fillRect(Math.random() * 64, Math.random() * 128, 2, 2); }, 1, 1);
-  const kmat = new THREE.MeshStandardMaterial({ map: ktex, roughness: .62, side: THREE.DoubleSide, emissive: night ? 0x331010 : 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const kmat = new THREE.MeshStandardMaterial({ map: ktex, roughness: .62, side: THREE.DoubleSide, emissive: night ? 0x331010 : 0, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 });
   { const pos = [], uv = [], idx = []; let base = 0; const KH = .085, STRIPE = 1.25;
     for (const kr of kerbRuns) { let d = 0; kr.nodes.forEach((j, q) => { const p = path[j]; if (q) { const pp = path[kr.nodes[q - 1]]; d += Math.hypot(p.x - pp.x, p.z - pp.z); }
         const W = kr.w[q], hh = KH * (.3 + .7 * Math.min(1, W / .9)), v = d / (STRIPE * 2), ox = [hw - .03, hw + Math.min(.3, W * .28), hw + Math.max(W * .72, W - .12), hw + W], oy = [.03, .03 + hh, .03 + hh, .03];
@@ -513,12 +517,12 @@ function buildProc(track) {
     }
   }
   // -- verge strip between tarmac and grass
-  if (!night) { const vm = new THREE.MeshStandardMaterial({ color: desert ? 0xc49a5c : 0xa85f38, roughness: 1 }); for (const s of [1, -1]) { const v = new THREE.Mesh(ribbon(path, s > 0 ? hw + 2.2 : -hw, s > 0 ? hw : -hw - 2.2, 0.012, 1), vm); v.receiveShadow = true; G.add(v); } }
+  if (!night) { const vm = new THREE.MeshStandardMaterial({ color: desert ? 0xc49a5c : 0xa85f38, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); for (const s of [1, -1]) { const v = new THREE.Mesh(ribbon(path, s > 0 ? hw + 2.2 : -hw, s > 0 ? hw : -hw - 2.2, 0.012, 1), vm); v.receiveShadow = true; G.add(v); } }
   // -- pit lane surface, boxes, crew and garage
   if (pb) {
     const mask = path.map((_, i) => inPit(i));
-    const lane = new THREE.Mesh(ribbon(path, hw + 7.6, hw, .02, 1 / 12, true, mask), new THREE.MeshStandardMaterial({ color: night ? 0x34353d : 0x5c5c60, roughness: .9, name: 'racetrack' })); lane.receiveShadow = true; G.add(lane);
-    const ln = new THREE.Mesh(ribbon(path, hw + .25, hw - .05, .05, 1, true, mask), new THREE.MeshStandardMaterial({ color: 0xf2c230, roughness: .7 })); G.add(ln);
+    const lane = new THREE.Mesh(ribbon(path, hw + 7.6, hw, .02, 1 / 12, true, mask), new THREE.MeshStandardMaterial({ color: night ? 0x34353d : 0x5c5c60, roughness: .9, name: 'racetrack', polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); lane.receiveShadow = true; G.add(lane);
+    const ln = new THREE.Mesh(ribbon(path, hw + .25, hw - .05, .05, 1, true, mask), new THREE.MeshStandardMaterial({ color: 0xf2c230, roughness: .7, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 })); G.add(ln);
     track.pitBoxes = []; const crew = [], crewCols = [0xe3262e, 0x19a7ce, 0xffc21a, 0x2fb457, 0xff7ab0, 0xf3f4f6].map(c => new THREE.Color(c));
     track.pitIn = n - nb; track.pitOut = na; track.pitHw = hw;      // where the pit lane starts and ends, and the track's half width
     for (let j = 0; j < 12; j++) {          // twelve boxes: every car on the grid has its own
@@ -539,7 +543,7 @@ function buildProc(track) {
   // -- trackside life: spectators, sponsor boards, hay bales, support vans
   if (!def.dev) {
     const ppl = [], shirt = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c)), skin = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
-    for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 6; r++) { if (rnd() > .82 * CK) continue;
+    for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s > 0 && inPit(i)) continue; for (let r = 0; r < 5; r++) { if (rnd() > .82 * CK) continue;
       const p = path[i], off = s * (B + 1.7 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .92 + rnd() * .2, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0], i, sd: s, row: r }); } } }
     const body = new THREE.CapsuleGeometry(.28, .7, 3, 8); body.translate(0, .63, 0); const head = new THREE.SphereGeometry(.24, 8, 6); head.translate(0, 1.42, 0);
     // marshals in orange at every corner, flags along the fences
@@ -549,7 +553,7 @@ function buildProc(track) {
     const pole = new THREE.CylinderGeometry(.05, .05, 4.4, 5); pole.translate(0, 2.2, 0); G.add(instanced(pole, new THREE.MeshStandardMaterial({ color: 0xd8d8d8 }), flags.map(f => ({ x: f.x, z: f.z })), false));
     const fg = new THREE.PlaneGeometry(1.7, 1, 8, 1); fg.translate(.85, 3.8, 0);
     const fm = instanced(fg, anim(new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: .8 }), 'transformed.z += sin(position.x * 3.5 - uTime * 6. + instanceMatrix[3][0]) * .16 * position.x; transformed.y += sin(position.x * 2. - uTime * 4.) * .04 * position.x;'), flags, false); G.add(fm);
-    ppl.push(...marsh.map(m => ({ ...m, s: 1.05, k: skin[1] })));
+    /* build 57: no marshals; nobody stands inside the barriers */
     // who does what: the front rows are fans, further back people stand in twos and threes talking, and some stroll behind the crowd
     ppl.forEach((q, n2) => { if (q.i == null) { q.beh = 0; return; } const p = path[q.i], face = Math.atan2(p.x - q.x, p.z - q.z);
       if (q.row < 2) { q.beh = rnd() < .7 ? 1 : 0; q.r = face + (rnd() - .5) * .5; }

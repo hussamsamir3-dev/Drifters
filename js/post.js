@@ -26,6 +26,7 @@ const FX = {
       col=mix(vec3(dot(col,vec3(.299,.587,.114))), col, 1.+.3*grade); col*=mix(vec3(1.), vec3(1.05,1.,.93), grade);
       col=mix(col, col*vec3(.86,.93,1.04), wet*.6);
       col*=1.-vig*smoothstep(.42,1.,length(c)*1.22);
+      col+=(fract(sin(dot(uv*vec2(1731.3,911.7)+time,vec2(12.9898,78.233)))*43758.5453)-.5)*.014;      /* film grain */
       gl_FragColor=vec4(col,1.);
     }`,
 };
@@ -33,7 +34,7 @@ const FX = {
 export class Post {
   constructor(renderer, scene, camera) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 2 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
     this.bloom = { strength: 0 };   // bloom removed: lights stay crisp

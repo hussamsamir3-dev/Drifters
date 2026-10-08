@@ -214,6 +214,22 @@ export class GameAudio {
   pickup(nitro) { if (nitro) { this.tone(520, .12, .12); this.tone(780, .2, .1); } else { this.tone(1320, .09, .08); this.tone(1760, .16, .07); } }
   wrench() { for (let i = 0; i < 5; i++) setTimeout(() => this.burst('bandpass', 3200, 6, .05, .12, 2), i * 55); }
   horn() { this.tone(392, .4, .1, 'square'); this.tone(494, .4, .08, 'square'); }
+  /* build 57: more effects, all synthesised: a car passing you, the grandstand, a lap chime, kerb and bump thuds, an ABS chatter, a flag tick */
+  whoosh(vol = .3, side = 0) {
+    if (!this.ctx || this.quiet) return; const c = this.ctx, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(), t = c.currentTime, pn = c.createStereoPanner ? c.createStereoPanner() : null;
+    s.buffer = this.noiseBuf; s.playbackRate.value = .8; fl.type = 'bandpass'; fl.Q.value = .9; fl.frequency.setValueAtTime(900, t); fl.frequency.exponentialRampToValueAtTime(260, t + .75);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .16); g.gain.exponentialRampToValueAtTime(.001, t + .8); s.connect(fl); fl.connect(g); if (pn) { pn.pan.value = side; g.connect(pn); pn.connect(this.sfx); } else g.connect(this.sfx);
+    s.onended = () => { s.disconnect(); fl.disconnect(); g.disconnect(); if (pn) pn.disconnect(); }; s.start(t, Math.random() * 2); s.stop(t + .85);
+  }
+  cheer(vol = .12, dur = 2.4) {
+    if (!this.ctx || this.quiet) return; const c = this.ctx, t = c.currentTime;
+    for (const [f, q] of [[1100, .8], [2300, 1.2]]) { const s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); s.buffer = this.noiseBuf; s.playbackRate.value = .7; fl.type = 'bandpass'; fl.frequency.value = f; fl.Q.value = q;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol * (f > 2000 ? .5 : 1), t + .5); g.gain.setTargetAtTime(0, t + dur * .55, dur * .22); s.connect(fl); fl.connect(g); g.connect(this.sfx); s.onended = () => { s.disconnect(); fl.disconnect(); g.disconnect(); }; s.start(t, Math.random() * 2); s.stop(t + dur + 1); }
+  }
+  chime(best) { if (best) { this.tone(880, .22, .09); setTimeout(() => this.tone(1175, .22, .09), 110); setTimeout(() => this.tone(1568, .4, .09), 220); } else { this.tone(784, .16, .06); setTimeout(() => this.tone(1047, .3, .06), 100); } }
+  thud(vol = .2) { this.tone(70, .16, vol, 'sine', .6); this.burst('lowpass', 260, .7, .12, vol * .8); }
+  chatter(vol = .06) { this.burst('bandpass', 1800, 3, .035, vol, 2); }
+  flagTick() { this.tone(1500, .05, .06); setTimeout(() => this.tone(1500, .05, .06), 90); }
   turboDemo() { if (this.ty) { const t = this.ctx.currentTime, v = this.ty.spool; v.g.gain.setTargetAtTime(.2, t, .2); v.src.playbackRate.setTargetAtTime(1.2, t, .3); v.g.gain.setTargetAtTime(0, t + .8, .05); } setTimeout(() => this.shot('bov2', .6, true), 820); }
 }
 const t0 = au => au.ctx.currentTime;
