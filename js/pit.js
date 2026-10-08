@@ -90,7 +90,7 @@ export function buildCrew(G, box, suitHex, label, opts = {}) {
     if (!group.visible) return;
     const T = performance.now() / 1000, car = svc ? svc.car : null, busy = !!svc && !!car; if (car) lastCar = car;
     // which job is running, and how far through it
-    let job = '', u = 0; if (busy) { let a = 0; for (const j of svc.jobs) { if (svc.t >= a && svc.t < a + j[1]) { job = j[0]; u = (svc.t - a) / j[1]; } a += j[1]; } if (!job) { job = svc.jobs[svc.jobs.length - 1][0]; u = 1; } }
+    let job = '', u = 0; if (busy) { let a = 0; for (const j of svc.jobs) { if (svc.t >= a && svc.t < a + j[1]) { job = j[0]; u = (svc.t - a) / j[1]; } a += j[1]; } if (!job && svc.jobs.length) { job = svc.jobs[svc.jobs.length - 1][0]; u = 1; } }
     const tyres = busy && job === 'Tyres', fuel = busy && job === 'Fuel', fix = busy && !tyres && !fuel, done = busy && svc.t >= svc.jobs.reduce((s, j) => s + j[1], 0) - .35;
     blend += ((busy ? 1 : 0) - blend) * Math.min(1, dt * 3);
     // the car's frame

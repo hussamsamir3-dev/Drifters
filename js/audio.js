@@ -141,8 +141,9 @@ export class GameAudio {
         this.spool.g.gain.setTargetAtTime(0, t, .1);
         if (this.lastLoad > .6 && s.load < .15 && t - (this.liftT || 0) > .9) { this.liftT = t;
           if (tb && this.boost > .35) { const bst = this.boost; this.shot(s.rpmN > .62 ? 'bov2' : 'bov1', .1 + bst * .08, true); this.boost *= .2; const nf = bst > .5 && s.rpmN > .4 ? (sp.flut || 0) : 0; for (let i = 1; i <= nf; i++) setTimeout(() => this.shot('bov1', (.08 + bst * .06) * (1 - i * .14), true, .95 + Math.random() * .12), 85 * i); }      // compressor surge: a rapid run of flutters on big-turbo cars
-          if (s.rpmN > .5) { if (sp.pops === 'crackle' && Math.random() < .55) this.shot('crackle', .42, true); else this.shot('pop', .34 + s.rpmN * .2, true); } }     // lifting off at high revs: the exhaust pops (the flame is drawn by the car)
+          }     // lifting off at high revs: the exhaust pops (the flame is drawn by the car)
         this.lastLoad += (s.load - this.lastLoad) * .5; }
+      this.lastLoadNow = s.load;
     }
     this.wind.g.gain.setTargetAtTime(k * k * .3, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
     this.roll.g.gain.setTargetAtTime(Math.min(.16, k * .3) * (1 - s.dirt), t, .15);
@@ -151,10 +152,13 @@ export class GameAudio {
     const g = Math.max(0, Math.min(1, ((s.grip || 0) - .5) / .5)), dry = 1 - (s.wet || 0) * .85, sl = s.skid || 0, sp2 = Math.min(1, s.speed / 30), T = this.ty, road = 1 - s.dirt;
     const set = (v, gain, rate, tc = .08) => { v.g.gain.setTargetAtTime(gain, t, tc); if (rate) v.src.playbackRate.setTargetAtTime(rate, t, .1); };
     if (T) {
-      set(T.scrub, (g * .5 + sl * .35 + k * .12) * sp2 * road, .75 + k * .7 + g * .15);
+      set(T.scrub, (g * .5 + sl * .3 + k * .12) * sp2 * road * .7, .75 + k * .7 + g * .15);
       // squeal follows the speed of the slide: a low juddering howl when slow, a clean howl in the middle, a high screech when fast. Pitch climbs with speed inside each band.
-      { const v = s.speed, sqK = s.surf === 'road' || !s.surf ? 1 : s.surf === 'wet' ? .45 : 0, amt = Math.max(sl, (s.lock || 0) * .6) * (.4 + .6 * sp2) * dry * road * .36 * sqK * (s.soft || 1) * (1 + (1 - (s.tmpK ?? 1)) * 1.5), w0 = 1 - Math.min(1, Math.max(0, (v - 9) / 11)), w2 = Math.min(1, Math.max(0, (v - 24) / 16)), w1 = Math.max(0, 1 - w0 - w2), bend = (s.lock || 0) * .14 - (s.spin || 0) * .12, tc = sl > .05 ? .05 : .16;
-        set(T.sqLow, amt * w0, .8 + v / 30 * .35 + bend, tc); set(T.sqMid, amt * w1, .78 + v / 45 * .4 + bend, tc); set(T.sqHigh, amt * w2 * 1.1, .75 + v / 70 * .45 + bend, tc); }
+      /* Tyre squeal, as it really is: nothing until the tyre is truly sliding (a light slip is only the soft rush of the scrub), then one steady howl that swells with the slip and bends a little with speed.
+         It comes in gently and leaves gently, never a sudden screech; the loud high band is kept well back, and the pitch sits lower than before. */
+      { const v = s.speed, sqK = s.surf === 'road' || !s.surf ? 1 : s.surf === 'wet' ? .45 : 0, sIn = Math.max(sl, (s.lock || 0) * .75), sE = Math.min(1, Math.max(0, (sIn - .32) / .55)), sA = sE * sE * (3 - 2 * sE),
+          amt = sA * (.3 + .7 * sp2) * dry * road * .15 * sqK * (s.soft || 1) * (1 + (1 - (s.tmpK ?? 1)) * 1.2), w0 = 1 - Math.min(1, Math.max(0, (v - 9) / 11)), w2 = Math.min(1, Math.max(0, (v - 24) / 16)), w1 = Math.max(0, 1 - w0 - w2), bend = (s.lock || 0) * .08 - (s.spin || 0) * .08, tc = sA > (this.sqPrev || 0) ? .16 : .28;
+        this.sqPrev = sA; set(T.sqLow, amt * w0, .7 + v / 30 * .25 + bend, tc); set(T.sqMid, amt * w1, .72 + v / 45 * .28 + bend, tc); set(T.sqHigh, amt * w2 * .55, .68 + v / 70 * .3 + bend, tc); }
       { const wk = sp.whine ?? .4; set(T.whine, k * Math.sqrt(k) * .05 * (.3 + wk * 1.6), (.35 + s.speed / 42) * (sp.drive === 'awd' ? .88 : 1) * (1 + (wk > .7 ? .12 : 0)), .15); }      // straight-cut dog boxes whine loudly and high; helical road gears are quiet; four-wheel-drive adds a lower driveline note                                       // gear whine: pitch is road speed, the sound of going fast
       set(T.limiter, s.limiter ? .16 : 0, 1, s.limiter ? .03 : .08);                                       // rev limiter: the ignition-cut stutter, for as long as it is cutting
       set(T.grass, (s.sand ? 0 : s.dirt * (.25 + .75 * sp2) * 1.1) + (s.surf === 'mud' ? (.45 + sl * .4) * sp2 * 1.2 : 0), (.8 + k * .9) * (s.surf === 'mud' ? .62 : 1)); set(T.gravel, ((s.sand ? s.dirt : s.dirt * .25) * (.25 + .75 * sp2) * 1.6) + (s.surf === 'gravel' ? (.4 + sl * .6) * sp2 * 1.5 : 0), .8 + k * .8);
@@ -165,9 +169,14 @@ export class GameAudio {
     this.nitro.g.gain.setTargetAtTime(s.nitro ? .16 : 0, t, .1); this.rain.g.gain.setTargetAtTime((s.rain || 0) * .1, t, .5);
   }
   // The single entry point for a completed gear change. dir +1 up, -1 down.
+  /* Overrun burble. When the throttle closes at high revs, unburnt fuel reaches the hot exhaust and fires in a loose run of pops: sharp at first, then slower, softer and more
+     irregular as the revs fall, over a second or so. Each pop picks its own size and pitch, some are missed, and the run stops as soon as the driver is back on the power. */
+  overrun(sched, crackle) {      /* the schedule comes from the car, so the flames at the tailpipe and the sound are the same pops */
+    for (const e of sched) setTimeout(() => { if (!this.ctx || this.quiet || (this.lastLoadNow || 0) > .35) return; this.shot(e.big && crackle ? 'bang' + (1 + (Math.random() * 3 | 0)) : Math.random() < .5 ? 'pop' : (crackle ? 'crackle' : 'pop'), (e.big ? .5 : .3) * e.a, true, (e.big ? .92 : 1.0) + (Math.random() - .5) * .22); }, e.t);
+  }
   shift(dir, load, rpmN, pops) {
     if (!this.ctx || this.quiet) return; const t = this.ctx.currentTime; this.dipUntil = t + (dir > 0 ? .13 : .09);
-    if (dir > 0 && load > .6 && rpmN > .5 && pops) { this.shot('bang' + (pops === 'crackle' ? 1 + (Math.random() * 3 | 0) : 1 + (Math.random() * 2 | 0)), .85 + rpmN * .25); if (pops === 'crackle' && Math.random() < .5) setTimeout(() => this.shot('crackle', .28, true), 120); }   // a hard, high-rev upshift lights the exhaust: a bang, and on lively cars a crackle after it   // only on a hard, high-rpm upshift
+    if (dir > 0 && load > .6 && rpmN > .78 && pops === 'crackle' && Math.random() < .35) { this.shot('bang' + (1 + (Math.random() * 3 | 0)), .42 + rpmN * .1); }      /* only the hottest tunes bang on an upshift, and not every time */   // a hard, high-rev upshift lights the exhaust: a bang, and on lively cars a crackle after it   // only on a hard, high-rpm upshift
   }
   shot(kind, vol = .5, force = false, rate = 1) {
     if ((kind === 'pop' || kind === 'crackle') && this.buf[SHOTS[kind + 'B']] && Math.random() < .5) kind += 'B';      // two pops from the pack and two from the game, mixed                   // one-shot exhaust pop: fresh source each time, cooldown, voice cap, small pitch and level variation

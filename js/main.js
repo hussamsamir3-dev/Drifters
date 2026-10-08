@@ -309,10 +309,10 @@ async function startRace(o) {
   ttsWarm(); R.fx = { smoke: new Particles(scene, 4200), glow: new Particles(scene, 1200, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = o.attract ? { update() {}, dispose() {}, hit() {}, setCars() {} } : new Marshals(scene, track, {}); for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.driftMode = o.mode === 'drift'; if (me.driftMode) me.assistK = .22;      // drift: a counter-steer aid stays on, so the car holds a big angle instead of spinning me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
-  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1 });
+  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1, diff: o.diff ?? 1 });
   R.ais.set(me, mkAI(.95));     // used when the player's car goes on autopilot after the flag
   if (o.mode === 'race') {
-    const base = [.80, .93, 1.06][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
+    const base = [.84, .98, 1.09][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
       const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), LO = aiLoadout(s, o.diff, !!riv), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], LO.up, { wing: s.wing ? 0 : LO.wing, split: LO.split, rim: 0, ai: 1 }, Object.assign(LO.tune.tyre ? LO.tune : { tyre: ['soft', 'medium', 'medium', 'medium', 'hard'][Math.random() * 5 | 0] }, o.weather === 'rain' ? { tyre: 'rain' } : {})); livUsed.add(s.id);
@@ -673,8 +673,9 @@ function aiNeedsPit(car) {
   const P = car.parts, left = R.laps - Math.max(0, car.lap), lowFuel = car.fuelK > 0 && car.fuel < Math.max(.09, (car.fpl || .15) * 1.4);      // stop while there is still a lap and a bit left to reach the pit lane
   const wrecked = car.health < .55 || P.engine > .35 || P.gearbox > .5 || P.wheels.some(w => w > .45) || car.dmg.front > .6 || car.dmg.rear > .6 || car.dmg.left > .6 || car.dmg.right > .6;      // a crash
   const critical = car.health < .35 || P.engine > .6 || P.gearbox > .75 || P.wheels.some(w => w > .7);
-  if (left <= 1 && !critical) return false;                                    // last lap: only stop if the car is truly broken
-  return wrecked || car.tyre < .3 || lowFuel;
+  const dry = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * left * 1.08;      // not enough fuel to reach the flag: stopping beats coasting to a halt
+  if (left <= 1 && !critical && !dry) return false;                            // last lap: only stop if the car is truly broken or would run dry
+  return wrecked || car.tyre < .3 || lowFuel || (dry && left <= 2);
 }
 function aiPit(car, ai, dt) {
   const tr = R.track, n = tr.n;
@@ -695,6 +696,8 @@ function aiPit(car, ai, dt) {
     if (!ok(b)) { b = tr.pitBoxes.filter(ok).sort((x, y) => idxAhead(car.idx, x.idx) - idxAhead(car.idx, y.idx))[0]; if (!b) return; }
     ai.pitBox = b; ai.pitState = 'in'; ai.pitNeed = pitJobs(car).reduce((a, j) => a + j[1], 0); ai.pitOff = null; ai.svcT = 0; R.aiPitCalls = (R.aiPitCalls || 0) + 1;
   }
+  if (ai.pitState === 'in' || ai.pitState === 'lane' || (ai.pitState === 'out' && !ai.exitHold)) { ai.slowT = car.speed < 3 ? (ai.slowT || 0) + dt : 0; if (ai.slowT > 4) { ai.slowT = 0; ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 20; return; } } else ai.slowT = 0;
+  if (ai.rec && (ai.pitState === 'in' || ai.pitState === 'lane' || ai.pitState === 'out')) return;      /* a spun car recovers first (aiDrive has already set its controls), then carries on with the stop */
   const b = ai.pitBox, inp = ai.inp, pi = car.idx, laneOff = hw + 2.3;
   ai.pitT = ai.pitT || .001;                                                   // tells the stuck-car logic this car is busy
   const lat = i => { const q = p[i]; return (car.x - q.x) * q.tz - (car.z - q.z) * q.tx; };
@@ -732,8 +735,8 @@ function aiPit(car, ai, dt) {
     const dOut = idxAhead(pi, tr.pitOut) * tr.spacing, left = inZone(pi) && dOut < n * tr.spacing * .5;
     if (!left) { ai.off = lat(pi); ai.merge = 6.5; ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 50; return; }
     // Careful exit: at the end of the lane it waits until nothing is closing on the exit from behind, then leaves gently and merges over a long distance.
-    let clear = true; if (dOut < 30) for (const o of R.cars) { if (o === car || o.out || o.inPit || o.isRemote) continue; const dd = idxAhead(o.idx ?? 0, tr.pitOut) * tr.spacing; if (dd > 0 && dd < 40 + o.speed * 1.6) { clear = false; break; } }
-    ai.exitHold = !clear && dOut < 14;
+    let clear = true; if (dOut < 30) for (const o of R.cars) { if (o === car || o.out || o.inPit || o.isRemote || (R.ais.get(o) && R.ais.get(o).pitState)) continue; const dd = idxAhead(o.idx ?? 0, tr.pitOut) * tr.spacing; if (dd > 0 && dd < 40 + o.speed * 1.6) { clear = false; break; } }
+    ai.exitWait = !clear && dOut < 14 ? (ai.exitWait || 0) + dt : 0; ai.exitHold = ai.exitWait > 0 && ai.exitWait < 3.5;      /* waits for a gap, but never longer than 3.5 s: a car that has waited goes, the others lift */
     laneDrive(dOut < 26 ? laneOff * Math.max(0, dOut / 26) * .6 : laneOff, ai.exitHold ? 0 : dOut < 18 ? 13 : PIT_LIMIT);
   }
 }
@@ -965,16 +968,16 @@ function updateRace(dt) {
   { const tn2 = me.tn, nx = R.nextComp && R.nextComp !== 'auto' ? ' › ' + COMP_LETTER[R.nextComp] : '', lo = tn2.tOpt - tn2.tSpan, hi = tn2.tOpt + tn2.tSpan;
     setTxt('hTyreLbl', (COMP_LETTER[tn2.comp] || '?') + nx);
     /* four tyres, four colours: blue = too cold, green = working window, yellow = on the edge of overheating, red = overheated (grip is already dropping) */
-    for (let i = 0; i < 4; i++) { const T = me.tTw[i], k = T < lo ? 0 : T <= tn2.tOpt + tn2.tSpan * .55 ? 1 : T <= hi + 2 ? 2 : 3, el = $('tt' + i); if (hudCache['tc' + i] !== k) { hudCache['tc' + i] = k; el.className = 'c' + k; } setTxt('ttv' + i, String(Math.round(T))); } }
+    for (let i = 0; i < 4; i++) { const T = me.tTw[i], k = T < lo ? 0 : T <= tn2.tOpt + tn2.tSpan * .55 ? 1 : T <= hi + 6 ? 2 : 3, el = $('tt' + i); if (hudCache['tc' + i] !== k) { hudCache['tc' + i] = k; el.className = 'c' + k; } setTxt('ttv' + i, String(Math.round(T))); } }
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
     if (car !== me && live) { const left = R.laps - Math.max(0, car.lap), short = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * Math.min(left, 3) * 1.05 && left > 1, ahead = R.cars.some(o => o !== car && !o.out && o.prog > car.prog && (o.prog - car.prog) * tr.spacing < Math.max(18, car.speed * 1.2)); car.pace = short || car.tyre < .35 ? 0 : ahead && car.tyre > .5 ? 2 : 1; }   // AI manages its pace like a driver: saves when fuel or tyres are short, pushes when a car is within reach
-    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; { const me2 = R.player, gapS = me2 && !car.isRemote && car !== me2 && me2.lap >= 0 ? ((me2.prog || 0) - (car.prog || 0)) * tr.spacing / Math.max(14, me2.speed) : 0, cap = R.diffLevel === 2 ? .06 : R.diffLevel === 1 ? .03 : 0; ai.cu = 1 + clamp((gapS - 1.2) * .012, 0, cap); ai.boost = 1 + (ai.cu - 1) * 3; }      // catch-up: when you pull away, the cars behind find a little more pace (up to about 6% on Hard), so the lead never becomes a walkover
+    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; { const me2 = R.player, gapS = me2 && !car.isRemote && car !== me2 && me2.lap >= 0 ? ((me2.prog || 0) - (car.prog || 0)) * tr.spacing / Math.max(14, me2.speed) : 0, cap = R.diffLevel === 2 ? .09 : R.diffLevel === 1 ? .05 : 0; ai.cu = 1 + clamp((gapS - 1.2) * .018, 0, cap); ai.boost = 1 + (ai.cu - 1) * 3; }      // catch-up: when you pull away, the cars behind find a little more pace (up to about 6% on Hard), so the lead never becomes a walkover
       aiDrive(car, tr, ai, R.sc ? R.cars.concat([R.sc.car]) : R.cars, dt);      // the safety car is a car like any other: the field slows behind it
     if (car !== me) ai.boost = R.rules === 'arcade' ? ((me.prog - car.prog) * tr.spacing > 50 ? 1.08 : (me.prog - car.prog) * tr.spacing < -70 ? .93 : 1) : 1;   // Arcade keeps the pack together; Professional never touches the cars
     if (car !== me && live) aiPit(car, ai, dt);
     if (car.finished) { ai.inp.throttle *= .5; }
-    if (live && !ai.pitT) { car.stuck = car.speed < 1.5 ? car.stuck + dt : 0; if (car.stuck > 2.5 && car.stranded) { tow(car); car.stuck = 0; } else if (car.stuck > 2.5) { (R.respLog = R.respLog || []).push(car.name + ' t' + (R.t | 0) + ' idx' + car.idx + ' hp' + car.health.toFixed(2) + ' f' + car.dmg.front.toFixed(2) + ' ty' + car.tyre.toFixed(2) + ' oil' + R.slicks.length + ' pitd' + Math.hypot(car.x - R.pit.x, car.z - R.pit.z).toFixed(0)); respawn(car); car.stuck = 0; R.respawns = (R.respawns || 0) + 1; } }
+    if (live && !ai.pitT) { car.stuck = car.speed < 1.5 ? car.stuck + dt : 0; if (car.stuck > 2.5 && car.stranded) { tow(car); car.stuck = 0; } else if (car.stuck > 4.5) { (R.respLog = R.respLog || []).push(car.name + ' t' + (R.t | 0) + ' idx' + car.idx + ' hp' + car.health.toFixed(2) + ' f' + car.dmg.front.toFixed(2) + ' ty' + car.tyre.toFixed(2) + ' oil' + R.slicks.length + ' pitd' + Math.hypot(car.x - R.pit.x, car.z - R.pit.z).toFixed(0)); respawn(car); car.stuck = 0; R.respawns = (R.respawns || 0) + 1; } }
   }
   acc += dt; let steps = 0; while (acc >= H && steps++ < 8) { acc -= H; physics(H, live); }
   if (R.remote) R.remote.netStep(dt, tr, performance.now());
@@ -1008,6 +1011,7 @@ function updateRace(dt) {
   const sc = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360)); R.fx.smoke.mat.uniforms.uScale.value = R.fx.glow.mat.uniforms.uScale.value = sc;
   updateHUD(dt);
   const skid = (me.slipR > .16 && me.speed > 6) || me.wspin > .12 || (me.locked && me.speed > 3);
+  if (me.burbEvt) { audio.overrun(me.burbEvt.sched, me.burbEvt.crk); me.burbEvt = null; }
   if (me.shiftEvt) { audio.shift(me.shiftEvt, Math.min(1, me.load * (me.shiftT > 0 ? 5 : 1)), me.rpm, me.spec.pops); me.shiftEvt = 0; }                      // one event per completed gear change
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
     { const rt = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); near.forEach(o => { const dx = o.c.x - me.x, dz = o.c.z - me.z, dd = Math.hypot(dx, dz) || 1; o.pan = clamp((dx * rt.x + dz * rt.z) / 26, -1, 1); o.dop = clamp(-(((o.c.vx - me.vx) * dx + (o.c.vz - me.vz) * dz) / dd) / 343 * 1.5, -.05, .05); }); }
