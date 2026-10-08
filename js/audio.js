@@ -78,7 +78,7 @@ export class GameAudio {
     try { const files = [...Object.values(ENGINE_SETS).flatMap(s => s.loops.map(l => l.file)), ...Object.values(SHOTS), ...Object.values(TYRES)];
       this.bad = {}; await Promise.all(files.map(async f => { try { this.buf[f] = await this.ctx.decodeAudioData(await getAsset('audio/' + f)); } catch (err) { this.bad[f] = 1; console.warn('audio file failed:', f, err && err.message); } })); this.state = 'ready';
       // tyre and surface loops: always running, silent until the tyres or the surface give them something to do
-      this.ty = {}; for (const k in TYRES) { const src = this.ctx.createBufferSource(), g = this.ctx.createGain(); src.buffer = this.buf[TYRES[k]]; src.loop = true; g.gain.value = 0; src.connect(g); g.connect(k === 'spool' ? this.airLP : k === 'limiter' || k === 'whine' ? this.engBus : this.sfx); src.start(0, Math.random()); this.ty[k] = { src, g }; } }
+      this.ty = {}; for (const k in TYRES) { const src = this.ctx.createBufferSource(), g = this.ctx.createGain(); src.buffer = this.buf[TYRES[k]]; src.loop = true; g.gain.value = 0; src.connect(g); { const LPF = { scrub: 850, sqLow: 1500, sqMid: 2100, sqHigh: 2600, grass: 2500, gravel: 3000 }[k]; if (LPF) { const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = LPF; lp.Q.value = .5; g.connect(lp); lp.connect(this.sfx); } else g.connect(k === 'spool' ? this.airLP : k === 'limiter' || k === 'whine' ? this.engBus : this.sfx); }      /* the tyre loops are rounded off: the hiss and screech in the recordings are what made it harsh */ src.start(0, Math.random()); this.ty[k] = { src, g }; } }
     catch (e) { console.warn('engine audio failed to load', e); this.state = 'error'; }
   }
   setMuted(m) { this.on = !m; if (this.el) this.music(this.musicOn); if (this.master) this.master.gain.setTargetAtTime(this.on ? .8 : 0, this.ctx.currentTime, .05); }
@@ -145,14 +145,14 @@ export class GameAudio {
         this.lastLoad += (s.load - this.lastLoad) * .5; }
       this.lastLoadNow = s.load;
     }
-    this.wind.g.gain.setTargetAtTime(k * k * .3, t, .2); this.wind.fl.frequency.setTargetAtTime(300 + k * 900, t, .2);
+    this.wind.g.gain.setTargetAtTime(k * k * .17, t, .3); this.wind.fl.frequency.setTargetAtTime(240 + k * 560, t, .3);
     this.roll.g.gain.setTargetAtTime(Math.min(.16, k * .3) * (1 - s.dirt), t, .15);
     // Tyres and surfaces (sample loops). Scrub rises as the tyres are loaded, before they let go. Squeal comes in when they slide:
     // higher with speed and a locked wheel, lower with wheelspin, mostly hiss in the wet. Grass, sand/gravel and kerbs have their own sounds.
     const g = Math.max(0, Math.min(1, ((s.grip || 0) - .5) / .5)), dry = 1 - (s.wet || 0) * .85, sl = s.skid || 0, sp2 = Math.min(1, s.speed / 30), T = this.ty, road = 1 - s.dirt;
     const set = (v, gain, rate, tc = .08) => { v.g.gain.setTargetAtTime(gain, t, tc); if (rate) v.src.playbackRate.setTargetAtTime(rate, t, .1); };
     if (T) {
-      set(T.scrub, (g * .5 + sl * .3 + k * .12) * sp2 * road * .7, .75 + k * .7 + g * .15);
+      { const gs = Math.max(0, Math.min(1, (g - .5) / .45)); set(T.scrub, (gs * gs * (3 - 2 * gs) * .45 + sl * .15) * sp2 * road * .38, .55 + k * .35 + g * .1, .22); }      /* road noise: only a low, soft rush when the tyres are working hard in a corner or under braking, never a constant hiss on the straight */
       // squeal follows the speed of the slide: a low juddering howl when slow, a clean howl in the middle, a high screech when fast. Pitch climbs with speed inside each band.
       /* Tyre squeal, as it really is: nothing until the tyre is truly sliding (a light slip is only the soft rush of the scrub), then one steady howl that swells with the slip and bends a little with speed.
          It comes in gently and leaves gently, never a sudden screech; the loud high band is kept well back, and the pitch sits lower than before. */

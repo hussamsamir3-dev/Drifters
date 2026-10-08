@@ -9,7 +9,7 @@ export const TUNE = {
     // (that is the understeer you feel); rears are stiffer and hold their force deep into a slide, which keeps slides catchable.
     frontB: 15.5, frontC: 1.36,
     rearB: 9.5, rearC: 1.35,
-    driveShare: .32, brakeShare: .38,    // braking uses only part of the grip budget too, so you can brake and turn                    // how much of the drive force competes with cornering in the tyre's grip budget
+    driveShare: .46, brakeShare: .68,    // braking uses only part of the grip budget too, so you can brake and turn                    // how much of the drive force competes with cornering in the tyre's grip budget
     loadSens: .06,                       // how much an axle loses when cornering load shifts to the outside tyres
     wornGrip: .72,                      // grip multiplier of a fully worn tyre (fresh = 1)
     wear: { base: .0011, slip: .011, spin: .008, lock: .03, offroad: .002 },   // per second, scaled by what the tyre is doing
@@ -52,7 +52,7 @@ export const TUNE = {
   pace: [{ name: 'Save', pow: .93, fuel: .72, wear: .78 }, { name: 'Race', pow: 1, fuel: 1, wear: 1 }, { name: 'Push', pow: 1.055, fuel: 1.34, wear: 1.42 }],
   reset: { penalty: 2 },                // seconds held stationary after pressing reset
   // garage tuning: effect of one click (each setting runs from -2 to +2)
-  setup: { gearAcc: .04, gearTop: .035, aeroDown: .35, aeroTop: .02, biasStep: .05, rollStep: .03, compound: { soft: [1.05, 1.6, 86, 18, .94], medium: [1, 1, 94, 20, 1], hard: [.97, .6, 102, 22, 1.02], rain: [.9, 1.1, 64, 20, .97], gravel: [.94, .9, 88, 20, 1.14] } },      // compounds: [grip on tarmac, wear, best temperature, half-width of the best window, grip on loose ground]
+  setup: { gearAcc: .04, gearTop: .035, aeroDown: .35, aeroTop: .02, biasStep: .05, rollStep: .03, compound: { soft: [1.05, 1.6, 78, 16, .94], medium: [1, 1, 85, 18, 1], hard: [.97, .6, 92, 20, 1.02], rain: [.9, 1.1, 55, 18, .97], gravel: [.94, .9, 70, 18, 1.14] } },      // compounds: [grip on tarmac, wear, best temperature, half-width of the best window, grip on loose ground]
   toy: { w: 1.4, h: 1.4, l: 1.4, wheel: 1.4 },
   // Stylised proportions by body type (multiplies the scale above): shorter, taller, wider, bigger wheels.
   body: { k: { w: 1, h: 1, l: 1, wheel: 1 }, toy: { w: 1.1, h: 1.08, l: .93, wheel: 1.22 }, coupe: { w: 1.12, h: 1.2, l: .88, wheel: 1.24 }, sedan: { w: 1.13, h: 1.26, l: .85, wheel: 1.27 }, hatch: { w: 1.14, h: 1.3, l: .84, wheel: 1.3 }, suv: { w: 1.1, h: 1.18, l: .88, wheel: 1.24 }, '4x4': { w: 1.1, h: 1.16, l: .9, wheel: 1.22 }, truck: { w: 1.04, h: 1.02, l: .9, wheel: 1.08 }, bus: { w: 1.06, h: 1.0, l: .92, wheel: 1.12 }, f1: { w: 1.08, h: 1.12, l: .9, wheel: 1.1 } },   // how large cars are drawn and how much room they take on track; their mass, wheelbase and forces stay real   // visual proportions only: short, tall, big-wheeled miniature cars

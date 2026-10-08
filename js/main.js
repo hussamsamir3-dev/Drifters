@@ -479,7 +479,7 @@ const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .12, medium: .3, high: .7 }
 function flipFX(c) {      /* a rolling car slams into the ground: damage, sparks, noise; a car left on its roof is righted by the marshals */
   if (c.flipEvt) { c.flipEvt = 0; const p = c.flipPow || 8; c.hitX = c.x + (Math.random() - .5) * 1.4; c.hitZ = c.z + (Math.random() - .5) * 1.4; c.hitL = [(Math.random() - .5) * 2 * c.hw, (Math.random() - .5) * c.zf]; c.hitN = [Math.random() - .5, Math.random() - .5]; c.scrapeT = .5; impact(c, p * 1.1, true); }
   if (c.roof && c === R.player && c.roofT > .9 && !c._roofSaid) { c._roofSaid = 1; engineer(ENG.roof(), true); }
-  if (c.roof && c.roofT > 3.4) { c.roof = false; c._roofSaid = 0; respawn(c); c.holdT = R.t + 2; if (c === R.player) { flash('Marshals flipped the car back', true, 1800); engineer(ENG.righted(), true); } }
+  if (c.roof && c.roofT > 2.6 && R.state !== 'count') { c.roof = false; c._roofSaid = 0; c.flip = null; tow(c); }      /* a car on its roof is not righted on the spot: the recovery truck takes it to its pit box for a rebuild */
 }
 function impact(car, power, wall) {
   if (R && car === R.player && power > 5 && R.eng && R.t - (R.eng.last.dmg ?? -999) > 12) { R.eng.last.dmg = R.t; engineer(ENG.damage(), true); }
@@ -598,7 +598,7 @@ const ENG = {
   engineHot: () => ({ emo: 'urgent', en: 'Engine temperature critical. Lift and coast, let it cool.', ar: 'حرارة المحرك حرجة. ارفع قدمك ودعه يبرد.', enS: 'Engine temperature critical. Lift and coast, let it cool.', arS: 'حَرَارَةُ المُحَرِّكِ حَرِجَة. اِرْفَعْ قَدَمَكَ وَدَعْهُ يَبْرُد.' }),
   damage: () => ({ emo: 'urgent', en: 'Contact! Are you okay? Checking the car.', ar: 'اصطدام! هل أنت بخير؟ نفحص السيارة.', enS: 'Contact! Are you okay? Checking the car.', arS: 'اِصْطِدَام! هَلْ أَنْتَ بِخَيْر؟ نَفْحَصُ السَّيَّارَة.' }),
   hurt: () => ({ emo: 'concerned', en: 'The car has taken a lot of damage. Bring it home, no risks.', ar: 'السيارة تضررت كثيرا. أوصلها بلا مخاطرة.', enS: 'The car has taken a lot of damage. Bring it home, no risks.', arS: 'السَّيَّارَةُ تَضَرَّرَتْ كَثِيرًا. أَوْصِلْهَا بِلَا مُخَاطَرَة.' }),
-  roof: () => ({ emo: 'urgent', en: 'The car is on its roof! Marshals are on the way. Stay calm, stay put.', ar: 'السيارة انقلبت على سقفها! المشرفون في الطريق. ابق هادئا ولا تتحرك.', enS: 'The car is on its roof! Marshals are on the way. Stay calm, stay put.', arS: 'السَّيَّارَةُ اِنْقَلَبَتْ عَلَى سَقْفِهَا! المُشْرِفُونَ فِي الطَّرِيق. اِبْقَ هَادِئًا وَلَا تَتَحَرَّك.' }),
+  roof: () => ({ emo: 'urgent', en: 'The car is on its roof! Recovery truck is on the way. Stay calm, stay put.', ar: 'السيارة انقلبت على سقفها! شاحنة الإنقاذ في الطريق. ابق هادئا ولا تتحرك.', enS: 'The car is on its roof! Recovery truck is on the way. Stay calm, stay put.', arS: 'السَّيَّارَةُ اِنْقَلَبَتْ عَلَى سَقْفِهَا! شَاحِنَةُ الإِنْقَاذِ فِي الطَّرِيق. اِبْقَ هَادِئًا وَلَا تَتَحَرَّك.' }),
   posUp: p => ({ emo: 'excited', en: pickV(['Good move, you are P' + p + '.', 'Nice pass. P' + p + '.']), ar: 'حركة جيدة، أنت في المركز ' + p + '.', enS: 'Good move, you are in position ' + p + '.', arS: 'حَرَكَةٌ جَيِّدَة، أَنْتَ ' + arPosS(p) + '.' }),
   posDown: p => ({ emo: 'tense', en: 'We lost a place, P' + p + '. Reset and go again.', ar: 'خسرنا مركزا، أنت الآن في المركز ' + p + '. اهدأ وحاول مجددا.', enS: 'We lost a place, position ' + p + '. Reset and go again.', arS: 'خَسِرْنَا مَرْكَزًا، أَنْتَ الآنَ ' + arPosS(p) + '. اِهْدَأْ وَحَاوِلْ مُجَدَّدًا.' }),
   final: () => ({ emo: 'excited', en: 'Final lap. Everything you have got.', ar: 'اللفة الأخيرة. أعطها كل ما لديك.', enS: 'Final lap. Everything you have got.', arS: 'اللَّفَّةُ الأَخِيرَة. أَعْطِهَا كُلَّ مَا لَدَيْك.' }),
@@ -1379,11 +1379,12 @@ function arenaTick(dt) {
 // The menu shows a light 2D scene. The 3D engine is only woken for the garage and tuning tabs, where the car has to be seen.
 function setMenuView() {
   if (racing() || $('menu').hidden || box.on) return; const want = sel.tab === 'garage' || sel.tab === 'tune' ? 'garage' : 'show';
+  if (want === 'show' && menuView === 'show' && (showBusy || (R && R.attract))) return;      /* the showcase keeps running while laps, rivals, weather and the like are changed */
   if (R) { raceToken++; endRace(); }
   if (want === 'garage') { menuBg.stop(); arenaStop(); if (menuView !== 'garage') { applyTheme(null); garage.visible = true; } menuView = 'garage'; }
   else { menuView = 'show'; if (gfx === 'low') { arenaStop(); menuBg.start(); } else { menuBg.stop(); arenaStart(); } }
 }
-const sel = { rivals: 5, wx: 'random', tab: 'quick', ev: 0, ch: 0, mode: 'race', track: 0, laps: 3, diff: 1, car: Math.max(0, CARS.findIndex(c => c.id === save.car)) };
+const sel = { rivals: save.rivals ?? 5, wx: 'random', tab: 'quick', ev: 0, ch: 0, mode: 'race', track: 0, laps: save.laps ?? 3, diff: 1, car: Math.max(0, CARS.findIndex(c => c.id === save.car)) };
 const menuPaths = {};
 async function menuPath(def) {
   if (menuPaths[def.id]) return menuPaths[def.id];
@@ -1453,13 +1454,13 @@ async function refreshMenu() {
   if (hasSupabase && sel.mode !== 'drift') topLaps(def.id).then(rows => { if (TRACKS[sel.track] !== def || !rows || !rows.length) return; bd.innerHTML = rows.map((r, i) => `<li><span>${i + 1}. ${r.name.replace(/[<>&]/g, '')}</span><b>${fmt(r.ms)}</b></li>`).join(''); bd.hidden = false; });
 }
 const pick = (key, n, d) => { sel[key] = (sel[key] + d + n) % n; };
-$('trkPrev').onclick = () => { pick('track', TRACKS.length, -1); sel.laps = TRACKS[sel.track].laps; refreshMenu(); };
-$('trkNext').onclick = () => { pick('track', TRACKS.length, 1); sel.laps = TRACKS[sel.track].laps; refreshMenu(); };
+$('trkPrev').onclick = () => { pick('track', TRACKS.length, -1); sel.laps = save.laps ?? TRACKS[sel.track].laps; refreshMenu(); };
+$('trkNext').onclick = () => { pick('track', TRACKS.length, 1); sel.laps = save.laps ?? TRACKS[sel.track].laps; refreshMenu(); };
 const carChanged = () => { const s = CARS[sel.car]; if (save.owned.includes(s.id)) { save.car = s.id; persist(); tellPeer(); arenaSwap(); } showGarageCar(); refreshMenu(); };   // the arena restarts with the newly chosen car
 $('carPrev').onclick = () => { pick('car', CARS.length, -1); carChanged(); };
 $('carNext').onclick = () => { pick('car', CARS.length, 1); carChanged(); };
-$('lapMinus').onclick = () => { sel.laps = Math.max(1, sel.laps - 1); refreshMenu(); };
-$('lapPlus').onclick = () => { sel.laps = Math.min(15, sel.laps + 1); refreshMenu(); };
+$('lapMinus').onclick = () => { sel.laps = Math.max(1, sel.laps - 1); save.laps = sel.laps; persist(); refreshMenu(); };
+$('lapPlus').onclick = () => { sel.laps = Math.min(15, sel.laps + 1); save.laps = sel.laps; persist(); refreshMenu(); };
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; sel.tab = b.dataset.tab; sel.mode = sel.tab === 'online' ? 'online' : sel.mode === 'online' ? 'race' : sel.mode; if (sel.tab === 'garage' || sel.tab === 'tune') showGarageCar(); refreshMenu(); };
 $('modeSeg').onclick = e => { const b = e.target.closest('button'); if (b) { sel.mode = b.dataset.mode; refreshMenu(); } };
 $('chPrev').onclick = () => { sel.ch = (sel.ch + CHAPTERS.length - 1) % CHAPTERS.length; sel.ev = EVENTS.indexOf(CHAPTERS[sel.ch].events[0]); refreshMenu(); };
@@ -1479,7 +1480,7 @@ const zoomBy = d => { save.zoom = clamp(Math.round((save.zoom + d) * 100) / 100,
 $('zoomOut').onclick = () => zoomBy(.15); $('zoomIn').onclick = () => zoomBy(-.15);
 $('unitSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.units = b.dataset.u; persist(); refreshMenu(); } };
 $('wxSeg').onclick = e => { const b = e.target.closest('button'); if (b) { sel.wx = b.dataset.w; refreshMenu(); } };
-$('rivMinus').onclick = () => { sel.rivals = Math.max(1, sel.rivals - 2); refreshMenu(); }; $('rivPlus').onclick = () => { sel.rivals = Math.min(11, sel.rivals + 2); refreshMenu(); };
+$('rivMinus').onclick = () => { sel.rivals = Math.max(1, sel.rivals - 2); save.rivals = sel.rivals; persist(); refreshMenu(); }; $('rivPlus').onclick = () => { sel.rivals = Math.min(11, sel.rivals + 2); save.rivals = sel.rivals; persist(); refreshMenu(); };
 $('musicVol').oninput = e => { save.mvol = audio.mvol = e.target.value / 100; persist(); audio.init(); audio.music(!racing()); };
 $('sfxVol').oninput = e => { save.svol = audio.vol = e.target.value / 100; persist(); audio.setVolumes(); };
 $('engVol').oninput = e => { save.evol = audio.evol = e.target.value / 100; persist(); audio.setVolumes(); };

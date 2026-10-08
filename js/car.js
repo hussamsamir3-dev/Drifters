@@ -264,7 +264,13 @@ export class Car {
     const dm = dm0, dmk = s.drive === 'rwd' ? 1 : s.drive === 'awd' ? .4 : .12, dF = s.drive === 'fwd' ? 1 : s.drive === 'awd' ? TN.split : 0, crn = clamp(Math.abs(this.ayS) / (g * .8), 0, 1) * clamp(thr, 0, 1), trac = 1 - (1 - TN.diff) * .2 * crn, und = 1 - TN.diff * .1 * crn;      // diff: open loses traction out of corners, locked pushes the nose wide
     const capF = (1 + dm * .12) * muF * gripK * (tmpKF / tmpK) * Nf * ltF * (s.drive === 'fwd' ? 1.2 : 1) * und * (dF > .5 ? trac : 1 - (1 - trac) * dF) * (1 + TUNE.slowTurn * clamp(-this.axS / 8, 0, 1)), capR = (1 - dm * dmk * (.06 + .24 * clamp(thr, 0, 1))) * muR * gripK * (tmpKR / tmpK) * s.rear * TUNE.rearBias * Nr * ltR * (1 - (1 - trac) * (1 - dF)) * (1 + TN.diff * .03 * crn) * (1 - (this.driftCut || TUNE.drift.rearCut) * this.di) * (this.abs ? 1 + .5 * brk : 1);   // with ABS on, brake force is shared so the rear stays planted while you brake and turn
     this.wspinF = dF > 0 && !this.tc ? Math.max(0, (Fdrive * dF - capF) / capF) : 0; this.wspin = 0; this.locked = false;
-    let FxF = clamp(Fdrive * dF - sg * bf * TN.bias, -capF, capF), FxR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias);
+    /* Braking. A tyre's longitudinal peak sits a little above its lateral one (about 5%), at roughly 10-15% slip; beyond it the wheel locks and the force falls to the sliding value (about 80%), and a locked
+       wheel has almost nothing left for steering. With ABS the wheel is held just under the peak, so the stopping distance is at its shortest and the steering still works. */
+    const bkP = 1.05, demF = Fdrive * dF - sg * bf * TN.bias, demR = Fdrive * (1 - dF) - sg * bf * (1 - TN.bias); this.lockedF = this.lockedR = false;
+    let FxF = clamp(demF, -capF * bkP, capF * bkP), FxR = demR;
+    if (live && brk > .2 && speed > 3) { const bF = -sg * demF, bR = -sg * demR;
+      if (this.abs) { if (bF > capF * bkP) FxF = -sg * capF * bkP * .97; }
+      else { if (bF > capF * bkP * 1.03) { FxF = -sg * capF * bkP * .8; this.lockedF = true; this.locked = true; } if (bR > capR * bkP * 1.03) { FxR = -sg * capR * bkP * .8; this.lockedR = true; this.locked = true; } } }
 
     // Four tyres. Each has its own load, its own slip angle (from the car's speed, its spin and where the tyre is: the front wheels also carry the Ackermann steering angle, the inner
     // one turning more than the outer), its own relaxation lag (a tyre takes a fraction of a second to build its side force), and its share of the drive and brake force.
@@ -276,13 +282,13 @@ export class Car {
     for (let i = 0; i < 4; i++) {
       const fr = i < 2, fi = fr ? a : -b, li = (i & 1) ? -tw : tw, pair = fr ? lwF : lwR, mw = this.muW[i] || 1, mAvg = (fr ? muF : muR) || .01, cap = (fr ? capF : capR) * (lw[i] * mw / mAvg) / pair, Fzi = Math.max(Fz[i], 1), ax2 = fr ? FxF : FxR;
       // the axle's longitudinal force is shared between its wheels: braking by load; drive equally through an open diff, towards the more loaded wheel as the diff locks
-      const share = ax2 * (fr ? 1 : 1) < 0 ? lw[i] / pair : .5 + clamp(TN.diff, 0, 1) * .9 * (lw[i] / pair - .5), Fxi = clamp(ax2 * share, -cap, cap);
+      const share = ax2 * (fr ? 1 : 1) < 0 ? lw[i] / pair : .5 + clamp(TN.diff, 0, 1) * .9 * (lw[i] / pair - .5), Fxi = clamp(ax2 * share, -cap * (ax2 < 0 ? bkP : 1), cap * (ax2 < 0 ? bkP : 1));
       const vlw = vl + this.r * fi, vfw = vf - this.r * li, d = fr ? stA(i) : 0; let Fyi;
       if (hand && !fr) { this.wUse[i] = 1; const vm = Math.hypot(vfw, vlw) || 1, fk = cap * .7; FxB += -fk * vfw / vm; FyB += -fk * vlw / vm; Mz += fi * (-fk * vlw / vm) - li * (-fk * vfw / vm); this.locked = true; this.slipR = 1; continue; }
       const aRaw = Math.atan2(vlw, vden) - d * sg; SU.alpha[i] += (aRaw - SU.alpha[i]) * relax; const al = SU.alpha[i];
       if (fr) Fyi = -Math.sqrt(Math.max(cap * cap - (Fxi > 0 ? Fxi * TY.driveShare : Fxi * (this.abs ? TY.brakeShare : 1.12)) ** 2, cap * cap * .15)) * Math.sin(TY.frontC * Math.atan(TY.frontB * al));
       else Fyi = -Math.sqrt(Math.max(cap * cap - Fxi * Fxi * s.loose * TUNE.powerSlide * (this.tc ? .45 : 1), cap * cap * .12)) * Math.sin(TY.rearC * Math.atan(TY.rearB * al));
-      if (burn && !fr) Fyi *= .3; if (!Fzi || Fz[i] < 1) { Fyi = 0; }
+      if (burn && !fr) Fyi *= .3; if (fr ? this.lockedF : this.lockedR) Fyi *= .35; if (!Fzi || Fz[i] < 1) { Fyi = 0; }
       this.wUse[i] = Math.min(1.3, Math.hypot(Fxi, Fyi) / Math.max(cap, 1)); const cdw = Math.cos(d), sdw = Math.sin(d), Fxb = Fxi * cdw - Fyi * sdw, Fyb = Fyi * cdw + Fxi * sdw; FxB += Fxb; FyB += Fyb; Mz += fi * Fyb - li * Fxb;
       if (fr) { uFx += Fxi; uFy += Fyi; aFs += al / 2; FyFt += Fyb; sat += -Fyi * Math.max(0, .035 * (1 - Math.abs(al) / .2)); } else { uRx += Fxi; uRy += Fyi; aRm = Math.max(aRm, Math.abs(al)); }
     }
@@ -324,7 +330,7 @@ export class Car {
          heat soaked in from the brake disc, wheelspin and lock-ups. The air takes it away, faster with speed and in the wet. Hard cornering therefore heats the outside tyres first, and full throttle heats the driven pair. */
       for (let i = 0; i < 4; i++) {
         const u = clamp((this.wUse[i] - .2) / .8, 0, 1.3), ld = clamp(Fz[i] / mg4, .35, 1.9), driven = (i >= 2 && s.drive !== 'fwd') || (i < 2 && s.drive !== 'rwd'), spin = (i < 2 ? this.wspinF : this.wspin) * (driven ? 1 : 0);
-        const heat = hs * .78 * (4.2 * (speed / 40) ** 1.3 * (.55 + .45 * ld) + 1.7 * u ** 1.4 * (.45 + speed / 38) * ld ** .5 + 2.6 * this.bT * (i < 2 ? 1 : .55) + (driven && thr > .5 ? .5 * thr : 0) + spin * 2.4 + (this.locked ? 2.4 : 0) + (speed > 1 ? .12 : 0)) * (this.wsurf[i] === GRASS ? .5 : 1);
+        const heat = hs * .75 * (4.2 * (speed / 40) ** 1.3 * (.55 + .45 * ld) + 1.7 * u ** 1.4 * (.45 + speed / 38) * ld ** .5 + 2.6 * this.bT * (i < 2 ? 1 : .55) + (driven && thr > .5 ? .5 * thr : 0) + spin * 2.4 + (this.locked ? 2.4 : 0) + (speed > 1 ? .12 : 0)) * (this.wsurf[i] === GRASS ? .5 : 1);
         const cool = !live || (this.inPit && speed < 3) ? 0 : (TW[i] - amb) * (.03 + speed * .0007) * (1 + wetK * 1.2) * (1 + (this.wsurf[i] === GRASS ? .25 : 0));      /* tyre blankets on the grid and in the pit box */
         TW[i] = clamp(TW[i] + (heat - cool) * dt, amb, 150);
       }
@@ -915,12 +921,12 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (ai.init === undefined) { const q0 = p[car.idx % n]; ai.off = (car.x - q0.x) * q0.tz - (car.z - q0.z) * q0.tx; ai.init = 1; }      // start from where the car actually is on the grid, so there is no sudden swerve onto the line      // cd: which way the corner ahead turns (the inside car owns the apex)
   { const k1 = RL.k[(car.idx + look + 3) % n], k2 = RL.k[(car.idx + look + 12) % n], kc = Math.abs(k1) > Math.abs(k2) ? k1 : k2; if (Math.abs(kc) > .004) cd = Math.sign(kc); }
   let want = RL.o[rix] + ai.lane * clamp(1 - (ai.rt ?? 99) / 12, 0, 1) * .8 + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
-  const rs = clamp(1 - (ai.rt ?? 99) / 7, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
+  const rs = clamp(1 - (ai.rt ?? 99) / 12, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
   let v0cap = 1e9, brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
     if (o === car || o.out) continue;
-    { const tau = .5, rx = (o.x + o.vx * tau) - (car.x + car.vx * tau), rz = (o.z + o.vz * tau) - (car.z + car.vz * tau), f2 = rx * sn0 + rz * cs0, l2 = rx * cs0 - rz * sn0;      // where we will be relative to each other in half a second
-      if (Math.abs(f2) < 5.6 && Math.abs(l2) < 2.8 && !(o.held && o.speed < 1)) { if (f2 > -1.5) { brakeFor = Math.max(brakeFor, .7); want += (l2 > 0 ? -1 : 1) * 1.8; } else want += (l2 > 0 ? -1 : 1) * 1.4; } }      // a predicted overlap: lift if it is level or ahead, move away if it is behind
+    { const tau = .8, rx = (o.x + o.vx * tau) - (car.x + car.vx * tau), rz = (o.z + o.vz * tau) - (car.z + car.vz * tau), f2 = rx * sn0 + rz * cs0, l2 = rx * cs0 - rz * sn0;      // where we will be relative to each other in half a second
+      if (Math.abs(f2) < 6.4 && Math.abs(l2) < 3.1 && !(o.held && o.speed < 1)) { if (f2 > -1.5) { brakeFor = Math.max(brakeFor, .7); want += (l2 > 0 ? -1 : 1) * 1.8; } else want += (l2 > 0 ? -1 : 1) * 1.4; } }      // a predicted overlap: lift if it is level or ahead, move away if it is behind
     { const qf = (o.x - car.x) * sn0 + (o.z - car.z) * cs0, ql = (o.x - car.x) * cs0 - (o.z - car.z) * sn0;      // a slow or spun car ahead in my lane: slow down early and pass it wide, like a driver who has seen the incident
       if (qf > 2 && qf < 55 && Math.abs(ql) < 3.2 && o.speed < car.speed * .5 && car.speed > 8) { brakeFor = Math.max(brakeFor, clamp((car.speed - o.speed) / (qf + 2) * .7, 0, 1)); want += (ql > 0 ? -1 : 1) * 2.4; } }
     const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0, pk = 1.3;      // everyone gets the same room: the player is a rival, not a guest
@@ -928,12 +934,13 @@ export function aiDrive(car, track, ai, cars, dt) {
       if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + .5 && Math.abs(setup) > .3 && !(ai.defT > 0)) { want += setup * 1.6 * ai.care; if (!ai.defend) ai.defend = 1.2; } continue; }
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
-    if (f > 0 && f < 34 && Math.abs(l) < 2.7 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 9 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6);      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
+    if (f > 0 && f < 70 && Math.abs(l) < 2.6 + Math.abs(ovl) * .35) { const gap = Math.max(.3, f - 4.5), cl = car.vf - ovf; if (cl > 1) { const need = cl * cl / (2 * gap); if (need > 4.5) brakeFor = Math.max(brakeFor, clamp(need / 9, .3, 1)); } }      /* the physics of not hitting anyone: the braking needed to match the speed of a car in my path inside the gap that is left (v^2 / 2d); if it is more than a comfortable 4.5 m/s^2, brake now */
+    if (f > 0 && f < 34 && Math.abs(l) < 3.1 && o.speed > 3 && !o.isRemote) vFollow = Math.min(vFollow, o.vx * sn0 + o.vz * cs0 + Math.max(f - 9 - 9 * rs - Math.max(0, car.speed - o.speed) * .5, -3) * .8 + Math.min(0, o.axS || 0) * .6);      // match the car ahead, leave more room the faster I am closing, and anticipate it braking for the corner      // keep a gap: never faster than closes the distance gently
     if (o.speed < 4 && f > 0 && Math.abs(l) < 3.4) { want += l > 0 ? -3.6 : 3.6; if (ttc < 1.1) brakeFor = Math.max(brakeFor, .6); }          // stopped or crashed car ahead: go round, lift early
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
     else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
       if (cd && l * cd > 0) { want += -cd * 3 * ai.care * pk; brakeFor = Math.max(brakeFor, .1); }          // that car holds the inside: it owns the apex, so give it the room
-      else want += (l > 0 ? -1 : 1) * 2.1 * ai.care * pk;                                                      // otherwise leave more than a car's width
+      else want += (l > 0 ? -1 : 1) * 2.5 * ai.care * pk;                                                      // otherwise leave more than a car's width
       if (f > 1.2 && Math.abs(l) < 3.6 * pk) brakeFor = Math.max(brakeFor, .32);                                  // door to door: the car whose nose is behind lifts and drops back, so nobody fights for the same space
     }
   }
@@ -948,13 +955,13 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) ** 2 * .86 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) ** 2 * .83 * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
   for (let i = 0; i < 70; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
   if (car.grass > .4) v = Math.min(v, 16); 
-  v = Math.min(v, vFollow, v0cap); const rsc = clamp((10 - (ai.rt ?? 99)) / 6, 0, 1); if (rsc > 0 && Math.abs(tgt.k) > .003) v *= 1 - .1 * rsc;      /* the opening seconds: a little less speed into corners while the pack is bunched (the launch itself is full throttle) */
+  v = Math.min(v, vFollow, v0cap); const rsc = clamp((18 - (ai.rt ?? 99)) / 10, 0, 1); if (rsc > 0 && Math.abs(tgt.k) > .003) v *= 1 - .1 * rsc;      /* the opening seconds: a little less speed into corners while the pack is bunched (the launch itself is full throttle) */
   if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
   const inp = ai.inp; inp.steer = clamp(ef * 2.4, -1, 1);
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;

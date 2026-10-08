@@ -203,21 +203,21 @@ function referenceLine(path, hw) {      // the shortest smooth line round the ci
 function findApexes(path, n, hw) {
   const sp = Math.hypot(path[1].x - path[0].x, path[1].z - path[0].z) || 2, at = i => ((i % n) + n) % n, ref = referenceLine(path, hw);
   const dot = path.map((p, i) => { const a = path[at(i - 1)], b = path[at(i + 1)]; return (b.x - 2 * p.x + a.x) * p.tz - (b.z - 2 * p.z + a.z) * p.tx; });      // + : the centre of the bend is on the positive-offset side
-  const ks = path.map(p => p.k || 0), ksm = ks.map((_, i) => { let s = 0; for (let q = -4; q <= 4; q++) s += Math.abs(ks[at(i + q)]); return s / 9; }), thr = 1 / 160;
+  const ks = path.map(p => p.k || 0), ksm = ks.map((_, i) => { let s = 0; for (let q = -4; q <= 4; q++) s += Math.abs(ks[at(i + q)]); return s / 9; }), thr = 1 / 240;
   let start = ksm.findIndex(v => v < thr * .6); if (start < 0) start = 0; const runs = []; let cur = null;
   for (let q = 1; q <= n; q++) { const v = ksm[(start + q) % n], d = dot[(start + q) % n], sgn = v > thr ? Math.sign(d) || 1 : 0;
     if (sgn) { if (cur && cur.sgn === sgn) cur.end = q; else { if (cur) runs.push(cur); cur = { sgn, s: q, end: q }; } } else if (cur && q - cur.end > 8) { runs.push(cur); cur = null; } }
   if (cur) runs.push(cur);
   const out = [];
-  for (const r of runs) { let ang = 0; for (let q = r.s; q <= r.end; q++) ang += ksm[(start + q) % n] * sp; const len = r.end - r.s + 1; if (ang < .45 || len * sp < 20) continue;      // under about 26 degrees is a bend, not a corner
+  for (const r of runs) { let ang = 0; for (let q = r.s; q <= r.end; q++) ang += ksm[(start + q) % n] * sp; const len = r.end - r.s + 1; if (ang < .26 || len * sp < 14) continue;      // under about 15 degrees is a bend, not a corner: every real corner has its kerb
     let bq = r.s, bv = -1e9; for (let q = r.s - 6; q <= r.end + 6; q++) { const v = r.sgn * ref[at(start + q)]; if (v > bv + 1e-6) { bv = v; bq = q; } }      // closest approach of the ideal line to the inside edge
     const shift = ang > 1.2 ? .14 : ang > .7 ? .07 : 0, aq = Math.max(r.s + 1, Math.min(r.end - 2, bq + Math.round(shift * len))), ai = at(start + aq);
-    let kb = Math.max(7, Math.min(22, Math.round(len * .3))), ka = Math.max(5, Math.min(14, Math.round(len * .22)));
-    while (kb > 6 && r.sgn * ref[at(ai - kb)] < hw - 3.4) kb--; while (ka > 4 && r.sgn * ref[at(ai + ka)] < hw - 3.4) ka--;      // not where the line is nowhere near the edge
+    let kb = Math.max(8, Math.min(28, Math.round(len * .38))), ka = Math.max(6, Math.min(18, Math.round(len * .28)));
+    while (kb > 6 && r.sgn * ref[at(ai - kb)] < hw - 6.2) kb--; while (ka > 4 && r.sgn * ref[at(ai + ka)] < hw - 6.2) ka--;      // not where the line is nowhere near the edge
     out.push({ i: ai, side: r.sgn, len, ang, a: at(start + r.s), b: at(start + r.end), kb, ka });
     /* corner-exit kerb: on the OUTSIDE of the road, where the line unwinds and runs out to the edge (as on every real circuit's medium and fast corners) */
-    if (ang > .7) { let qs = -1, qe = -1; for (let q = 2; q <= ka + 30; q++) { const near = -r.sgn * ref[at(ai + q)] > hw - 3.0; if (near) { if (qs < 0) qs = q; qe = q; } else if (qs >= 0 && q - qe > 2) break; }
-      if (qs >= 0 && qe - qs >= 6) out.push({ exit: true, i: ai, i0: at(ai + qs), cnt: Math.min(26, qe - qs + 1), side: -r.sgn, len, ang }); } }
+    if (ang > .5) { let qs = -1, qe = -1; for (let q = 2; q <= ka + 30; q++) { const near = -r.sgn * ref[at(ai + q)] > hw - 6.6; if (near) { if (qs < 0) qs = q; qe = q; } else if (qs >= 0 && q - qe > 2) break; }
+      if (qs >= 0 && qe - qs >= 5) out.push({ exit: true, i: ai, i0: at(ai + qs), cnt: Math.min(26, qe - qs + 1), side: -r.sgn, len, ang }); } }
   for (let x = out.length - 1; x >= 0; x--) { const e = out[x]; if (!e.exit) continue;      /* an exit kerb that would sit on another corner's inside kerb (chicanes) is not drawn twice */
     if (out.some(o => !o.exit && o.side === e.side && Math.min(at(e.i0 - (o.i - o.kb)), at(o.i + o.ka - e.i0)) >= -2 && at(e.i0 - (o.i - o.kb)) < o.kb + o.ka + e.cnt + 3)) out.splice(x, 1); }
   out.ref = ref; return out;
@@ -345,8 +345,8 @@ function buildProc(track) {
   // kerbs only where a driver uses them: on the inside of each corner, around its apex (never along the outside or down the straights)
   const apexes = findApexes(path, n, hw), kerbRuns = []; track.apexes = apexes; track.kerbRuns = kerbRuns; track.refLine = apexes.ref;
   for (const a of apexes) { const nodes = [], wd = [];
-    if (a.exit) { const W = 1.0; for (let q = 0; q < a.cnt; q++) { const u = Math.min(q, a.cnt - 1 - q) / 5, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push((a.i0 + q) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd, exit: true }); continue; }
-    const W = 1.15 + .5 * Math.min(1, a.ang / 1.8);      /* sharper corners get a wider kerb */
+    if (a.exit) { const W = 1.3; for (let q = 0; q < a.cnt; q++) { const u = Math.min(q, a.cnt - 1 - q) / 5, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push((a.i0 + q) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd, exit: true }); continue; }
+    const W = 1.5 + .7 * Math.min(1, a.ang / 1.6);      /* sharper corners get a wider kerb */
     for (let q = -a.kb; q <= a.ka; q++) { const u = Math.min(q + a.kb, a.ka - q) / 6, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push(((a.i + q) % n + n) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd }); }      // each kerb tapers to nothing at both ends
 
   // -- physics grid, rasterised with a 2D canvas: R = road, G = inside the barriers, B = kerb band
@@ -495,7 +495,9 @@ function buildProc(track) {
     if (desert) {
       const pyr = new THREE.ConeGeometry(1, 1, 4); pyr.rotateY(Math.PI / 4); pyr.translate(0, .5, 0);
       const pm = new THREE.MeshStandardMaterial({ color: 0xd2a45c, roughness: 1, flatShading: true });
-      G.add(instanced(pyr, pm, [{ x: cx + 420, z: cz - 380, sx: 330, sy: 210, sz: 330 }, { x: cx + 40, z: cz - 520, sx: 280, sy: 180, sz: 280 }, { x: cx - 330, z: cz - 430, sx: 190, sy: 120, sz: 190 }], false));
+      /* the pyramids stand outside the circuit: each starts at its preferred spot and is pushed straight away from the middle until its whole base (plus a wide margin) is clear of every road node and the pit lane */
+      const pyrAt = (px, pz, s) => { const R0 = s * .75 + 90; let dx = px - cx, dz = pz - cz; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L; for (let k = 0; k < 80; k++) { let ok = true; for (let i = 0; i < n; i += 3) { const q = path[i]; if ((q.x - px) ** 2 + (q.z - pz) ** 2 < R0 * R0) { ok = false; break; } } if (ok) break; px += dx * 30; pz += dz * 30; } return { x: px, z: pz, sx: s, sy: s * .64, sz: s }; };
+      G.add(instanced(pyr, pm, [pyrAt(cx + 420, cz - 380, 330), pyrAt(cx + 40, cz - 520, 280), pyrAt(cx - 330, cz - 430, 190)], false));
       const rock = new THREE.DodecahedronGeometry(1.4, 0);
       G.add(instanced(rock, new THREE.MeshStandardMaterial({ color: 0xb08a55, roughness: 1, flatShading: true }), spots.filter((_, i) => i % 3 === 1).map(s => ({ ...s, y: .3, s: s.s * 1.4 }))));
     }
