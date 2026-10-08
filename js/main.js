@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS } from './tracks.js';
+import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS, PL } from './tracks.js';
 import { CLASSES, balance, TUNE } from './config.js';
 import { buildCrew } from './pit.js';
 import { Marshals } from './people.js';
@@ -703,7 +703,7 @@ function tow(car) {
 }
 // The AI's pit stop. A car that has crashed, worn its tyres out or run low on fuel brakes for the pit entry, drives the lane at the limiter
 // to its OWN numbered box, stops, is serviced, and rejoins. Boxes are never shared: a car whose box is taken uses the nearest free one.
-const PIT_LIMIT = 20;
+const PIT_LIMIT = 16.4;
 function aiNeedsPit(car) {
   const P = car.parts, left = R.laps - Math.max(0, car.lap), lowFuel = car.fuelK > 0 && car.fuel < Math.max(.09, (car.fpl || .15) * 1.4);      // stop while there is still a lap and a bit left to reach the pit lane
   const wrecked = car.health < .55 || P.engine > .35 || P.gearbox > .5 || P.wheels.some(w => w > .45) || car.dmg.front > .6 || car.dmg.rear > .6 || car.dmg.left > .6 || car.dmg.right > .6;      // a crash
@@ -721,10 +721,11 @@ function aiPit(car, ai, dt) {
     if (d < 3.4 && car.speed < 4) { car.vx *= .8; car.vz *= .8; ai.inp.throttle = 0; if (!ai.pitT) ai.pitNeed = pitJobs(car).reduce((a, j) => a + j[1], 0); ai.pitT = (ai.pitT || 0) + dt; if (ai.pitT > ai.pitNeed) { car.repair(); car.fuel = 1; car.wetTyres = R.wet > .4; ai.pitT = 0; R.aiPits = (R.aiPits || 0) + 1; } }
     return;
   }
-  const p = tr.path, sp = car.speed, hw = tr.pitHw, inZone = i => i >= tr.pitIn || i <= tr.pitOut;
+  const p = tr.path, sp = car.speed, hw = tr.pitHw, lane = tr.pit, Lq = lane.L, m = lane.m, side = lane.side, inZone = i => lane.qOf[i] >= 0;
   const idxAhead = (a, b) => ((b - a) % n + n) % n;                            // nodes from a forward to b
   if (!ai.pitState) {
     if (R.t < 10 || car.stranded || (ai.pitCool || 0) > R.t || !aiNeedsPit(car)) return;
+    { const dIn0 = idxAhead(car.idx, tr.pitIn) * tr.spacing; if (inZone(car.idx) || dIn0 < 40 + Math.max(0, (car.speed * car.speed - PIT_LIMIT * PIT_LIMIT) / (2 * 8))) return; }      /* too close to the entry to slow down for it: wait for the next lap */
     // choose a box: the car's own, or the nearest free one that is not the player's or the rival's
     const taken = new Set(); for (const [c2, a2] of R.ais) if (c2 !== car && a2.pitState && a2.pitBox) taken.add(a2.pitBox);
     const off = new Set([R.myBox, R.rivBox]); let b = ai.box; const ok = q => !taken.has(q) && !off.has(tr.pitBoxes.indexOf(q));
@@ -733,46 +734,52 @@ function aiPit(car, ai, dt) {
   }
   if (ai.pitState === 'in' || ai.pitState === 'lane' || (ai.pitState === 'out' && !ai.exitHold)) { ai.slowT = car.speed < 3 ? (ai.slowT || 0) + dt : 0; if (ai.slowT > 4) { ai.slowT = 0; ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 20; return; } } else ai.slowT = 0;
   if (ai.rec && (ai.pitState === 'in' || ai.pitState === 'lane' || ai.pitState === 'out')) return;      /* a spun car recovers first (aiDrive has already set its controls), then carries on with the stop */
-  const b = ai.pitBox, inp = ai.inp, pi = car.idx, laneOff = hw + 2.3;
+  const b = ai.pitBox, inp = ai.inp, pi = car.idx;
   ai.pitT = ai.pitT || .001;                                                   // tells the stuck-car logic this car is busy
   const lat = i => { const q = p[i]; return (car.x - q.x) * q.tz - (car.z - q.z) * q.tx; };
   const cap = vt => { if (sp > vt + .8) { inp.throttle = 0; inp.brake = clamp((sp - vt) / 5, .25, 1); } else if (sp > vt - .5) { inp.throttle = Math.min(inp.throttle, .25); inp.brake = 0; } };
   const steerTo = (x, z, k = 2.4) => { inp.steer = clamp(wrap(Math.atan2(x - car.x, z - car.z) - car.th) * k, -1, 1); };
-  const laneDrive = (target, vmax) => {                                       // follow the lane, ease sideways, keep a gap to the car in front
-    if (ai.pitOff == null) ai.pitOff = lat(pi); ai.pitOff += (target - ai.pitOff) * Math.min(1, dt * 1.4);
-    const L = Math.round((6 + sp * .28) / tr.spacing), q = p[(pi + L) % n]; steerTo(q.x + q.tz * ai.pitOff, q.z - q.tx * ai.pitOff);
+  // the lane is a polyline of its own (tr.pit.L): q is the index along it, ofs the sideways offset from its centre (positive: towards the garages)
+  const FC = -(PL.LW / 2 - PL.FAST / 2), ofsFast = e => e * FC - 3.5 * (1 - e);
+  const laneAt = (q, ofs) => { const q0 = Math.max(0, Math.min(m - 1, Math.floor(q))), q1 = Math.min(m - 1, q0 + 1), f = Math.max(0, Math.min(1, q - q0)), a = Lq[q0], c = Lq[q1]; return [a.x + (c.x - a.x) * f + (a.nx + (c.nx - a.nx) * f) * ofs, a.z + (c.z - a.z) * f + (a.nz + (c.nz - a.nz) * f) * ofs]; };
+  const nearQ = from => { let bq = Math.max(0, from | 0), bd = 1e9; for (let q = Math.max(0, (from | 0) - 3); q < Math.min(m, (from | 0) + 40); q++) { const d = (car.x - Lq[q].x) ** 2 + (car.z - Lq[q].z) ** 2; if (d < bd) { bd = d; bq = q; } } return bq; };
+  const laneDrive = vmax => {                                                  // follow the lane in the fast lane, ease sideways, keep a gap to the car in front
+    ai.lq = nearQ(ai.lq ?? 0); const l0 = Lq[ai.lq], lo = (car.x - l0.x) * l0.nx + (car.z - l0.z) * l0.nz;
+    if (ai.pitOff == null) ai.pitOff = lo; ai.pitOff += (ofsFast(l0.e) - ai.pitOff) * Math.min(1, dt * 1.4);
+    const [tx, tz] = laneAt(Math.min(m - 1, ai.lq + (6 + sp * .28) / 2), ai.pitOff); steerTo(tx, tz);
     let v = vmax; const sn = Math.sin(car.th), cs = Math.cos(car.th); for (const o of R.cars) { if (o === car || o.out) continue; const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn + dz * cs, l = dx * cs - dz * sn; if (f > 0 && f < 14 && Math.abs(l) < 2.2) v = Math.min(v, Math.max(0, o.speed + (f - 7) * .5)); }
     inp.throttle = sp < v ? (sp < v - 3 ? .8 : .45) : 0; inp.brake = 0; cap(v); inp.nitro = false; inp.hand = false;
   };
-  if (ai.pitState === 'in') {                                                  // racing on: brake so as to arrive at the lane at the limit, then turn in
+  if (ai.pitState === 'in') {                                                  // racing on: brake so as to arrive at the lane entry at the limit, drift over to the pit side of the track, then follow the lane
     const dIn = idxAhead(pi, tr.pitIn) * tr.spacing;
-    if (inZone(pi) && dIn > n * tr.spacing * .5) ai.pitState = 'lane';
-    else { if (dIn < 320) cap(Math.sqrt(PIT_LIMIT * PIT_LIMIT + 2 * 10.5 * Math.max(0, dIn - 6))); if (dIn < 50) { const u = Math.max(0, Math.min(1, 1 - dIn / 50)), L = Math.round((7 + sp * .3) / tr.spacing), q = p[(pi + L) % n], o2 = u * u * (3 - 2 * u) * laneOff; steerTo(q.x + q.tz * o2, q.z - q.tx * o2); } else { const L = Math.round((9 + sp * .3) / tr.spacing), q = p[(pi + L) % n]; if (ai.pitOff == null) ai.pitOff = lat(pi); steerTo(q.x + q.tz * ai.pitOff * 0, q.z - q.tx * 0); } return; }      // slow down early enough to arrive at the lane at the limit, then ease in over 50 m instead of swerving
+    if (inZone(pi) && dIn > n * tr.spacing * .5) { ai.pitState = 'lane'; ai.lq = lane.qOf[pi]; ai.pitOff = null; }
+    else { if (dIn < 320) cap(Math.sqrt(PIT_LIMIT * PIT_LIMIT + 2 * 10.5 * Math.max(0, dIn - 6))); const u = Math.max(0, Math.min(1, 1 - dIn / 120)), L = Math.round((9 + sp * .3) / tr.spacing), q = p[(pi + L) % n], o2 = side * (hw - 3.4) * u * u * (3 - 2 * u); steerTo(q.x + q.tz * o2, q.z - q.tx * o2); return; }
   }
   if (ai.pitState === 'lane') {
-    const dBox = idxAhead(pi, b.idx) * tr.spacing; if (dBox > n * tr.spacing * .5 || dBox < 24) { ai.pitState = 'park'; }      /* start easing into the box 24 m early, so it arrives pointing the way it is going */
-    else { laneDrive(laneOff, dBox < 60 ? Math.min(PIT_LIMIT, Math.sqrt(2 * 6 * Math.max(0, dBox - 26)) + 8) : PIT_LIMIT); return; }
+    ai.lq = nearQ(ai.lq ?? 0); const dBox = b.s - Lq[ai.lq].s;
+    if (dBox < 24) { ai.pitState = dBox < -12 ? 'out' : 'park'; ai.pitOff = null; }      /* start easing into the box 24 m early, so it arrives pointing the way it is going; a box that has been passed is left for the next lap */
+    else { laneDrive(dBox < 60 ? Math.min(PIT_LIMIT, Math.sqrt(2 * 6 * Math.max(0, dBox - 26)) + 8) : PIT_LIMIT); return; }
   }
   if (ai.pitState === 'park') {                                                // from the lane into the box on a smooth arc, straight along the box, stopping on the mark
     const sn = Math.sin(b.th), cs = Math.cos(b.th), dx = b.x - car.x, dz = b.z - car.z, d = Math.hypot(dx, dz), sLong = -(dx * sn + dz * cs), vt = d < 1.3 ? 0 : Math.min(9, Math.max(1.6, d * .7));      /* sLong: how far the car is past the box centre along the box's direction (negative: still short of it) */
     const tgt = Math.min(0, sLong + Math.max(3.2, Math.min(7, d * .7)));            /* aim at a point on the box's centre line, never beyond the box: the car lines up with the box and its heading */
     steerTo(b.x + sn * tgt, b.z + cs * tgt, 2.8); inp.throttle = sp < vt ? .5 : 0; inp.brake = sp > vt + .5 ? clamp((sp - vt) / 3, .3, 1) : 0; inp.nitro = false;
-    if (d < 2.6 && sp < 2.2) { ai.pitState = 'service'; ai.svcT = 0; } else if (d > 40) { ai.pitState = 'out'; }
+    if (d < 2.6 && sp < 2.2) { ai.pitState = 'service'; ai.svcT = 0; } else if (d > 40) { ai.pitState = 'out'; ai.pitOff = null; }
     if (ai.pitState === 'park') return;
   }
   if (ai.pitState === 'service') { b.svc = { t: ai.svcT, jobs: ai.pitJobsL || (ai.pitJobsL = pitJobs(car)), car };                                             // wheels off, engine seen to, tyres and fuel: the same jobs and times as the player's stop
     car.vx *= .7; car.vz *= .7; inp.throttle = 0; inp.brake = 1; inp.steer = 0; ai.svcT += dt;
     { const k = Math.min(1, dt * 5); car.th += wrap(b.th - car.th) * k; car.x += (b.x - car.x) * Math.min(1, dt * 3); car.z += (b.z - car.z) * Math.min(1, dt * 3); car.r *= .5; }      /* sits in the box square, pointing along the lane */
-    if (ai.svcT >= ai.pitNeed) { car.repair(); car.fuel = 1; fitTyres(car, R.wet > .4 ? 'rain' : R.laps - Math.max(0, car.lap) > 4 ? 'hard' : (car.tn.comp === 'rain' ? 'medium' : 'soft')); R.aiPits = (R.aiPits || 0) + 1; ai.pitState = 'out'; ai.pitOff = null; b.svc = null; ai.pitJobsL = null; car.lift = 0; }
+    if (ai.svcT >= ai.pitNeed) { car.repair(); car.fuel = 1; fitTyres(car, R.wet > .4 ? 'rain' : R.laps - Math.max(0, car.lap) > 4 ? 'hard' : (car.tn.comp === 'rain' ? 'medium' : 'soft')); R.aiPits = (R.aiPits || 0) + 1; ai.pitState = 'out'; ai.pitOff = null; ai.lq = nearQ(Math.max(0, Math.floor(b.q) - 2)); b.svc = null; ai.pitJobsL = null; car.lift = 0; }
     return;
   }
   if (ai.pitState === 'out') {                                                 // back along the lane at the limiter, then merge onto the track
-    const dOut = idxAhead(pi, tr.pitOut) * tr.spacing, left = inZone(pi) && dOut < n * tr.spacing * .5;
-    if (!left) { ai.off = lat(pi); ai.merge = 6.5; ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.pitCool = R.t + 50; return; }
+    ai.lq = nearQ(ai.lq ?? Math.floor(b.q)); const dOut = Lq[m - 1].s - Lq[ai.lq].s, left = ai.lq < m - 2 && dOut > 3;
+    if (!left) { ai.off = lat(pi); ai.merge = 6.5; ai.pitState = null; ai.pitT = 0; if (ai.pitBox) ai.pitBox.svc = null; ai.pitBox = null; ai.pitOff = null; ai.lq = null; ai.pitCool = R.t + 50; return; }
     // Careful exit: at the end of the lane it waits until nothing is closing on the exit from behind, then leaves gently and merges over a long distance.
     let clear = true; if (dOut < 30) for (const o of R.cars) { if (o === car || o.out || o.inPit || o.isRemote || (R.ais.get(o) && R.ais.get(o).pitState)) continue; const dd = idxAhead(o.idx ?? 0, tr.pitOut) * tr.spacing; if (dd > 0 && dd < 40 + o.speed * 1.6) { clear = false; break; } }
     ai.exitWait = !clear && dOut < 14 ? (ai.exitWait || 0) + dt : 0; ai.exitHold = ai.exitWait > 0 && ai.exitWait < 3.5;      /* waits for a gap, but never longer than 3.5 s: a car that has waited goes, the others lift */
-    laneDrive(dOut < 26 ? laneOff * Math.max(0, dOut / 26) * .6 : laneOff, ai.exitHold ? 0 : dOut < 18 ? 13 : PIT_LIMIT);
+    laneDrive(ai.exitHold ? 0 : dOut < 18 ? 13 : PIT_LIMIT);
   }
 }
 // ---------------- live race events: slipstream, overtakes, oil, bounties, speed traps, haze ----------------

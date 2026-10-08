@@ -47,9 +47,9 @@ function fig(P) {
 const ptm = (a, b, ph) => a + (b - a) * ph;
 
 export function buildCrew(G, box, suitHex, label, opts = {}) {
-  const k = kit(), M = k.m, th0 = box.th, group = new THREE.Group(); G.add(group);
+  const k = kit(), M = k.m, th0 = box.th, SD = box.side || 1, group = new THREE.Group(); G.add(group);      // SD: which side of the lane the garages are on (+1: the driver's left)
   const sc0 = new THREE.Color(suitHex), PT = crewParts(sc0.getHex(), sc0.clone().offsetHSL(0, 0, .25).getHex(), 0xf2f3f5, 0xffffff), PL = crewParts(0xffd400, 0x2a2a2a, 0xffd400, 0xdfe4e8), PM = crewParts(0xf1f1f1, 0xe3262e, 0xf1f1f1, 0xe3262e);      // team suits, a hi-vis lollipop man, a white-and-red marshal
-  const F0 = new THREE.Vector3(Math.sin(th0), 0, Math.cos(th0)), L0 = new THREE.Vector3(Math.cos(th0), 0, -Math.sin(th0));
+  const F0 = new THREE.Vector3(Math.sin(th0), 0, Math.cos(th0)), L0 = new THREE.Vector3(Math.cos(th0) * SD, 0, -Math.sin(th0) * SD);
   const at = (l, f, y = 0, o = box) => new THREE.Vector3(o.x + L0.x * l + F0.x * f, y, o.z + L0.z * l + F0.z * f);
   // ---- box furniture: the yellow pad (yours), the team board and its posts
   let pad = null;
@@ -75,7 +75,7 @@ export function buildCrew(G, box, suitHex, label, opts = {}) {
   // ---- people. roles: 0-3 wheel men (FL, FR, RL, RR), 4 front jack, 5 rear jack, 6 fueller, 7 lollipop, 8 windscreen / bodywork, 9 marshal
   const ROLE = ['tyre', 'tyre', 'tyre', 'tyre', 'jackF', 'jackR', 'fuel', 'lolly', 'clean', 'marshal'], WK = ['FL', 'FR', 'RL', 'RR'];
   const homes = [[3.6, -3.6], [3.6, -2.2], [3.6, -.8], [3.6, .6], [3.6, 2.0], [3.6, 3.4], [3.6, -5.0], [4.8, 1.6], [4.8, .2], [4.8, -1.2]].map(([l, f]) => at(l, f));
-  const people = ROLE.map((role, i) => { const p = fig(role === 'lolly' ? PL : role === 'marshal' ? PM : PT); p.role = role; p.home = homes[i].clone(); p.g.position.copy(p.home); p.g.rotation.y = th0 - Math.PI / 2; p.wi = i; p.ph = i * 1.37; group.add(p.g);
+  const people = ROLE.map((role, i) => { const p = fig(role === 'lolly' ? PL : role === 'marshal' ? PM : PT); p.role = role; p.home = homes[i].clone(); p.g.position.copy(p.home); p.g.rotation.y = th0 - SD * Math.PI / 2; p.wi = i; p.ph = i * 1.37; group.add(p.g);
     if (role === 'tyre') { p.gun = gun(); p.aR.hold.add(p.gun); p.gun.rotation.x = -.3; p.held = heldWheel(); p.torso.add(p.held); p.held.position.set(0, .25, .36); p.held.rotation.x = Math.PI / 2 - .2; p.held.scale.setScalar(.9); }
     if (role === 'fuel') { p.aR.hold.add(nozzle); nozzle.position.z = .1; }
     if (role === 'lolly') { p.aR.hold.add(lolly); lolly.position.set(0, 0, 0); }
@@ -108,7 +108,7 @@ export function buildCrew(G, box, suitHex, label, opts = {}) {
     gaugeBar.scale.y = .5 * (fuel ? 1 - u * .8 : .5 + .05 * Math.sin(T)); gaugeBar.position.y = .7 - (.5 - gaugeBar.scale.y) / 2;
     // people
     for (const p of people) {
-      let tg = p.home.clone(), face = th0 - Math.PI / 2, speed = 7.5, mode = 'ready', via = null;
+      let tg = p.home.clone(), face = th0 - SD * Math.PI / 2, speed = 7.5, mode = 'ready', via = null;
       if (busy && !done) {
         if (p.role === 'tyre') { const kk = WK[p.wi], w = W[kk], side = kk[1] === 'L' ? 1 : -1; const s = .24 + p.wi * .02, q = clamp((u - s) / .5, 0, 1), out = tyres ? (q > .18 && q < .62 ? 1 : 0) : 0; tg = w.clone().addScaledVector(L, side * (1.15 + out * .55)); tg.y = 0; face = Math.atan2(-side * L.x, -side * L.z);
           mode = tyres ? (q < .18 ? 'gun' : q < .62 ? 'wheel' : q < .86 ? 'gun' : 'cheer') : 'crouch'; p.q = q; if (side < 0) via = P(0, fa.clone().sub(P(0, 0)).dot(F) + 3.8); }
