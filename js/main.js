@@ -312,11 +312,14 @@ async function startRace(o) {
   const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1, diff: o.diff ?? 1 });
   R.ais.set(me, mkAI(.95));     // used when the player's car goes on autopilot after the flag
   if (o.mode === 'race') {
-    const base = [.84, 1.05, 1.17][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5);
+    const base = [.84, 1.05, 1.17][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), pl0 = CARS.find(c => c.id === save.car) || spec, ps0 = perfScore(pl0, upOf(pl0.id), tuneSet(pl0.id)), stock = { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' }, noUp0 = { eng: 0, tyre: 0, nitro: 0, armor: 0 };
+    if (o.rules === 'arcade' && !o.rivals && o.diff >= 1) pool.sort((a, b) => (perfScore(b, noUp0, stock) >= ps0 * .8 ? 1 : 0) - (perfScore(a, noUp0, stock) >= ps0 * .8 ? 1 : 0) || Math.random() - .5);      /* build 57: Medium and Hard AIs are picked from cars that can reach your level, so the grid is never full of slow cars */
+    const names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
       const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), LO = aiLoadout(s, o.diff, !!riv, o.rules !== 'arcade'), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], LO.up, { wing: s.wing ? 0 : LO.wing, split: LO.split, rim: 0, ai: 1 }, Object.assign(LO.tune.tyre ? LO.tune : { tyre: ['soft', 'medium', 'medium', 'medium', 'hard'][Math.random() * 5 | 0] }, o.weather === 'rain' ? { tyre: 'rain' } : {})); livUsed.add(s.id);
       car.loadout = LO; if (Math.abs(LO.bop - 1) > .005) { car.bopG = (car.bopG || 1) * Math.min(1.14, Math.max(.94, LO.bop)); car.tn.acc *= Math.min(1.25, Math.max(.9, LO.bop)); }      // Hard: a car that cannot reach the player's level with upgrades alone gets a balance-of-performance boost, so the field is always a real challenge
+      if (o.rules === 'arcade' && !riv && o.diff >= 1) { car.tn.acc *= o.diff === 2 ? 1.1 : 1.05; car.tn.top = (car.tn.top || 1) * (o.diff === 2 ? 1.03 : 1.01); }      /* quicker off the line and a touch more top speed than a stock car */
       R.ais.set(car, mkAI(riv ? riv[i].skill : o.rules !== 'arcade' ? base + (Math.random() - .5) * .014 : base + (4 - i) * .012 + Math.random() * .015)); car.assistK = .7; R.cars.push(car); placeOnGrid(car, i);
     }
     R.cars.push(me); placeOnGrid(me, count);
@@ -612,7 +615,8 @@ const ENG = {
   start: () => ({ emo: 'calm', en: 'Radio check. Loud and clear. Clean start, we are with you.', ar: 'اختبار الراديو. الصوت واضح. انطلاقة نظيفة، نحن معك.', enS: 'Radio check. Loud and clear. Clean start, we are with you.', arS: 'اِخْتِبَارُ الرَّادْيُو. الصَّوْتُ وَاضِح. اِنْطِلَاقَةٌ نَظِيفَة، نَحْنُ مَعَك.' }),
 };
 /* every other radio line is bilingual and spoken too: (English, Arabic subtitle, vowelled Arabic for the voice) */
-const sayB = (en, ar, arS, emo = 'calm', urgent = false) => { if (!R || R.attract) return; if (!urgent && R.t - radioLast < 6) return; engineer({ emo, en, ar, enS: en, arS: arS || ar }, urgent); };
+const SAY_SKIP = /^(You are in the tow|Radio check|Nitro rush|Speed trap|Bounty|.* rolling in)/;
+const sayB = (en, ar, arS, emo = 'calm', urgent = false) => { if (!R || R.attract) return; if (SAY_SKIP.test(en)) return; if (!urgent && R.t - radioLast < 20) return;      /* build 58: the engineer only speaks about what matters */ engineer({ emo, en, ar, enS: en, arS: arS || ar }, urgent); };
 const COMP_AR = { soft: ['ناعمة', 'نَاعِمَة'], medium: ['متوسطة', 'مُتَوَسِّطَة'], hard: ['صلبة', 'صُلْبَة'], rain: ['المطر', 'المَطَر'], gravel: ['الطرق الترابية', 'الطُّرُقِ التُّرَابِيَّة'] };
 const WHY_AR = { 'a crash': ['حادث', 'حَادِث'], 'a recovery': ['عملية إنقاذ', 'عَمَلِيَّةِ إِنْقَاذ'] };
 // how each feeling is voiced: speed and pitch offsets, how much the pitch moves (range), loudness, and how hard the radio chain is driven (k) and boosted (g)
@@ -654,7 +658,7 @@ function engineerTick(me, dt) {
   const E = R.eng || (R.eng = { cd: 6, last: {}, pos: null, hot: 0, cold: 0 }); E.cd -= dt; if (R.state !== 'go') return;
   { const tr0 = R.track, p0 = me.prog || 0, vv = Math.max(12, me.speed); if (R.t - (E.sT ?? -9) > 1) { E.sT = R.t; const oth = R.cars.filter(c => c !== me), a0 = oth.filter(c => (c.prog || 0) > p0).sort((a, b) => a.prog - b.prog)[0], b0 = oth.filter(c => (c.prog || 0) <= p0).sort((a, b) => b.prog - a.prog)[0], ga = a0 ? (a0.prog - p0) * tr0.spacing / vv : null, gb = b0 ? (p0 - b0.prog) * tr0.spacing / vv : null; (E.hA || (E.hA = [])).push([R.t, ga]); (E.hB || (E.hB = [])).push([R.t, gb]); if (E.hA.length > 8) { E.hA.shift(); E.hB.shift(); } }
     if (E.lapMark == null) E.lapMark = { lap: me.lap, fuel: me.fuel }; else if (me.lap !== E.lapMark.lap) { const u = E.lapMark.fuel - me.fuel; if (u > .004) E.use = E.use ? E.use * .5 + u * .5 : u; E.lapMark = { lap: me.lap, fuel: me.fuel }; } }
-  if (E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 14; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
+  if (E.cd > 0) return; const said = (k, gap) => { E.last[k] = R.t; E.cd = 25; return true; }, ok = (k, gap) => R.t - (E.last[k] ?? -999) > gap;
   const tr = R.track, pr = me.prog || 0, others = R.cars.filter(c => c !== me), ahead = others.filter(c => (c.prog || 0) > pr).sort((a, b) => a.prog - b.prog)[0], behind = others.filter(c => (c.prog || 0) <= pr).sort((a, b) => b.prog - a.prog)[0], v = Math.max(12, me.speed);
   const order = [...R.cars].sort((a, b) => (b.prog || 0) - (a.prog || 0)), pos = order.indexOf(me) + 1;
   if (me.eT > .9 && ok('eng', 60)) { engineer(ENG.engineHot(), true); said('eng'); return; }
