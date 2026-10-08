@@ -100,7 +100,7 @@ export class GameAudio {
   setMuted(m) { this.on = !m; if (this.el) this.music(this.musicOn); if (this.master) this.master.gain.setTargetAtTime(this.on ? .8 : 0, this.ctx.currentTime, .05); }
   setVolumes() { if (!this.ctx) return; const t = this.ctx.currentTime; this.engBus.gain.setTargetAtTime(this.evol, t, .05); this.sfx.gain.setTargetAtTime(this.vol, t, .05); }
   /* build 62: the menu music goes through the audio graph (a phone's media element ignores .volume, so a fade never finished and the track never stopped), and it is paused outright when a race starts */
-  hookMusic() { if (!this.ctx || !this.el || this.mg) return; try { const c = this.ctx; this.mg = c.createGain(); this.mg.gain.value = this.musicOn && this.on ? this.mvol : 0; c.createMediaElementSource(this.el).connect(this.mg); this.mg.connect(c.destination); this.el.volume = 1; } catch (e) { this.mg = null; } }
+  hookMusic() { if (!this.ctx || !this.el || this.mg || location.protocol === 'file:') return; try { const c = this.ctx; this.mg = c.createGain(); this.mg.gain.value = this.musicOn && this.on ? this.mvol : 0; c.createMediaElementSource(this.el).connect(this.mg); this.mg.connect(c.destination); this.el.volume = 1; } catch (e) { this.mg = null; } }
   music(on, hard) {
     if (!this.el) { this.el = new Audio('assets/menu.mp3'); this.el.loop = true; this.el.volume = 0; this.el.preload = 'auto'; this.el.setAttribute('playsinline', ''); }
     this.musicOn = on; const el = this.el; this.hookMusic(); const tok = this.mtok = (this.mtok || 0) + 1, want = on && this.on;

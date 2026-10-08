@@ -1656,7 +1656,7 @@ $('paints').onclick = e => { const b = e.target.closest('button'); if (b) { save
 $('buyBtn').onclick = () => { const s = CARS[sel.car]; if (save.credits >= s.price && !save.owned.includes(s.id)) { save.credits -= s.price; save.owned.push(s.id); audio.init(); audio.beep(880, .3); toast(s.name + ' unlocked'); carChanged(); } };
 $('name').onchange = e => { save.name = (e.target.value.trim() || save.name).slice(0, 16); persist(); tellPeer(); refreshMenu(); };
 $('muteBtn').onclick = () => { audio.init(); setMuted(!save.muted); audio.music(!racing()); };
-for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, () => { const fresh = !audio.ctx; audio.init(); if (fresh) audio.music(!racing()); }, { capture: true, passive: true });      /* a phone only lets sound start (or restart after an interruption) from a touch end or a click, so every one of them tries */
+for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, () => { const fresh = !audio.ctx; audio.init(); if (!racing() && (fresh || !audio.el || (audio.el.paused && audio.musicOn !== false))) audio.music(true); }, { capture: true, passive: true });      /* a phone only lets sound start (or restart after an interruption) from a touch end or a click, so every one of them tries */
 $('startBtn').onclick = () => {
   if (sel.tab === 'career') { audio.init(); return briefing(EVENTS[sel.ev]); }
   if ((sel.mode === 'elim' || sel.mode === 'endu') && sel.tab === 'quick') { const e = sel.mode === 'elim'; lastOpts = { mode: 'race', elim: e, endu: !e, track: TRACKS[sel.track].id, laps: e ? sel.rivals : Math.max(10, sel.laps * 4), diff: sel.diff, rules: save.rules, nRivals: sel.rivals, weather: sel.wx }; return startRace(lastOpts); }
