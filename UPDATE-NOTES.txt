@@ -1,0 +1,3 @@
+Tafheet build 65 update (over build 64)
+1. Unzip over your build-64 folder, replacing files.
+2. DELETE the folder  voice/  (the old eSpeak engineer voice, no longer used).

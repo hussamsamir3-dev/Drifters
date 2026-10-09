@@ -163,7 +163,7 @@ export class Car {
     { const T = this.T, e = proto.userData.exhaust; this.exhL = e && e.length ? e.map(p => p.slice()) : null; this.exh = this.exhL ? this.exhL.map(p => [p[0] * T.w, p[1] * T.h, p[2] * T.l]) : [[(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z], [-(box.max.x - box.min.x) * .22, (box.max.y) * .26, box.min.z]]; }
     this.door = proto.userData.door ? proto.userData.door.slice() : null;
     this.hw = (box.max.x - box.min.x) / 2 - .05; this.zf = box.max.z - .1; this.zr = -box.min.z - .1; this.top = box.max.y;
-    this.I = spec.mass * this.a * this.b * spec.yawK; this.Ic = spec.mass * ((this.a + this.b) * .31) ** 2; this.h = .34;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
+    this.I = spec.mass * this.a * this.b * spec.yawK * (1 + .75 * Math.pow(clamp((2.5 - (this.a + this.b)) / .5, 0, 1), .7));      /* build 65: a short wheelbase rotates much faster for the same grip, so small cars carry extra yaw inertia (Mini x1.75, Alpine x1.64, Fulvia x1.35) and no longer snap round in a chicane or a sharp turn */ this.Ic = spec.mass * ((this.a + this.b) * .31) ** 2; this.h = .34;     // centre-of-mass height: sets how much weight moves to the rear under power and to the front under braking
     this.wsurf = [ROAD, ROAD, ROAD, ROAD]; this.lastSk = [null, null]; this.spin = [0, 0];
     this.reset(0, 0, 0);
   }
@@ -338,30 +338,10 @@ export class Car {
     this.lockF = this.braking && brk > .9 && speed > 17 && gr < .5;
     const vlN = this.vx * cs - this.vz * sn;
     let hit = this.collideWalls(track);
-    /* rollover. A car tips when the sideways energy it carries into a trip (a barrier, a kerb, soft ground) is enough to lift its centre of gravity over its outer wheels:
-       the energy needed is m g (sqrt(h^2 + t^2) - h) for a centre of gravity h high and half-track t, and only a fraction of the energy reaches the roll (the rest goes into the ground and the crumpling). */
-    this.flipCool = Math.max(0, (this.flipCool || 0) - dt);
-    if (live && !this.flip && !this.roof && !this.airborne && this.flipCool <= 0) {
-      const need = g * (Math.sqrt(h0 * h0 + this.tw * this.tw) - h0), vS = Math.abs(vlN), wallHit = hit > 5 && this.hitN && Math.abs(this.hitN[0] * sn + this.hitN[1] * cs) < .75;
-      const eta = wallHit ? .055 : gr > .45 ? .06 : this.wsurf.includes(KERB) ? .05 : 0, r = eta * .5 * vS * vS / (need * (this.spec.body === 'f1' ? 1.4 : 1));      /* r > 1: the sideways energy beats the tipping energy */
-      if (r > 1) { this.flipCool = wallHit ? 1.5 : .25; if (Math.random() < clamp((r - 1) * .6 + (wallHit ? .3 : .05), 0, .9)) this.startFlip(vlN, Math.max(hit, vS)); }
-    }
-    if (this.flip) this.stepFlip(dt, g); if (this.roof) this.roofT += dt;
     if (track.surf(this.x, this.z) === WALL) { this.x = x0; this.z = z0; this.vx *= .15; this.vz *= .15; this.r *= .3; hit = Math.max(hit, speed * .5); this.scrapeT = .3; this.hitX = x0; this.hitZ = z0; this.hitL = [0, this.zf]; this.hitN = [-sn, -cs]; }   // never end a step inside a barrier
     return hit;
   }
 
-  startFlip(vl, power) {
-    const k = clamp(Math.round(Math.abs(vl) / 9 + Math.random() * 1.3), 1, 5);      /* half-turns: faster sideways, more rolls */
-    this.flip = { t: 0, k, dur: .85 + .42 * k, dir: vl > 0 ? -1 : 1, last: 0, pow: power }; this.flipEvt = 0; this.flipPow = 0;
-  }
-  stepFlip(dt, g) {
-    const F = this.flip; F.t += dt; const u = Math.min(1, F.t / F.dur), e = 1 - (1 - u) ** 1.7, ang = F.dir * Math.PI * F.k * e, half = Math.floor(Math.abs(ang) / Math.PI + .02);
-    const tp = (this.top || 1.3) * .95; this.flipRoll = ang; this.flipLift = tp * (1 - Math.cos(ang)) / 2 + (u < 1 ? Math.sin(Math.PI * Math.min(1, u * 1.15)) * .5 * Math.min(1, F.k / 2) : 0);
-    const k = Math.exp(-dt * (1.1 + .5 * F.k)); this.vx *= k; this.vz *= k; this.r *= Math.exp(-dt * 2);      /* the car rolls and ploughs: it sheds speed quickly */
-    if (half > F.last) { F.last = half; this.flipEvt = 1; this.flipPow = 7 + Math.min(10, this.speed * .55); }      /* each time a side or the roof hits the ground */
-    if (u >= 1) { const roof = F.k % 2 === 1; this.flip = null; this.flipLift = roof ? tp : 0; this.flipRoll = roof ? F.dir * Math.PI : 0; this.roof = roof; this.roofT = 0; this.flipEvt = 1; this.flipPow = 6; }
-  }
   // Barrier contact. The wall normal is averaged from the open space around the contact point, so the car
   // slides along a barrier instead of ricocheting off the stair-steps of the collision map. Almost no bounce,
   // friction scrubs speed along the wall, and only part of the impulse is allowed to spin the car.
@@ -906,7 +886,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   const look = Math.round((7 + sp * .42) / track.spacing), tgt = p[(car.idx + look) % n];
   // drift the racing line towards the inside of the coming corner, and around slower cars
   if (ai.passCd > 0) ai.passCd -= dt;
-  if (ai.contactT > 0) ai.contactT -= dt; if (ai.defend > 0) { ai.defend -= dt; if (ai.defend <= 0) ai.defT = 3.5; } if (ai.defT > 0) ai.defT -= dt;      /* one defensive move, then a rest of 3 s */      // after any touch: lift, give the other car room, and rejoin the line gently
+  if (ai.contactT > 0) ai.contactT -= dt; if (ai.defend > 0) { ai.defend -= dt; if (ai.defend <= 0) { ai.defT = (ai.diff ?? 1) === 2 ? 1.8 : 3; ai.coverDir = 0; } } if (ai.defT > 0) ai.defT -= dt;      /* one defensive move, then a rest of 3 s */      // after any touch: lift, give the other car room, and rejoin the line gently
   const ap = p[(car.idx + look + Math.round(34 / track.spacing)) % n], inside = clamp(tgt.k * 300, -1, 1), setup = clamp(ap.k * 300, -1, 1);
   // Apex rules, taken from the track's own corners: brake in a straight line, swing out wide on the approach, turn in LATE, clip the apex after the
   // middle of the corner and get on the power, then run out to the edge of the road on the exit. In an S-bend the exit of one corner blends into the entry of the next.
@@ -921,7 +901,7 @@ export function aiDrive(car, track, ai, cars, dt) {
   const RL = track.rl || (track.rl = buildRaceLine(track, ai.max)), rix = (car.idx + look + 7) % n; let cd = 0;
   if (ai.init === undefined) { const q0 = p[car.idx % n]; ai.off = (car.x - q0.x) * q0.tz - (car.z - q0.z) * q0.tx; ai.init = 1; }      // start from where the car actually is on the grid, so there is no sudden swerve onto the line      // cd: which way the corner ahead turns (the inside car owns the apex)
   { const k1 = RL.k[(car.idx + look + 3) % n], k2 = RL.k[(car.idx + look + 12) % n], kc = Math.abs(k1) > Math.abs(k2) ? k1 : k2; if (Math.abs(kc) > .004) cd = Math.sign(kc); }
-  let want = RL.o[rix] + ai.lane * clamp(1 - (ai.rt ?? 99) / 12, 0, 1) * .8 + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
+  let want = (ai.defend > 0 && ai.coverDir && !(ai.contactT > 0) ? ai.coverDir * 2.1 : 0) + RL.o[rix] + ai.lane * clamp(1 - (ai.rt ?? 99) / 12, 0, 1) * .8 + (ai.brain && ai.brain.lapse > 0 && ai.brain.kind === 3 ? ai.brain.bias : 0);
   const rs = clamp(1 - (ai.rt ?? 99) / 12, 0, 1);      // start restraint: the first 15 s are the most crowded, so gaps are wider and the first corner is taken a little carefully
   let v0cap = 1e9, brakeFor = 0, vFollow = 1e9; const sn0 = Math.sin(car.th), cs0 = Math.cos(car.th);
   for (const o of cars) {
@@ -932,7 +912,7 @@ export function aiDrive(car, track, ai, cars, dt) {
       if (qf > 2 && qf < 55 && Math.abs(ql) < 3.2 && o.speed < car.speed * .5 && car.speed > 8) { brakeFor = Math.max(brakeFor, clamp((car.speed - o.speed) / (qf + 2) * .7, 0, 1)); want += (ql > 0 ? -1 : 1) * 2.4; } }
     const dx = o.x - car.x, dz = o.z - car.z, f = dx * sn0 + dz * cs0, l = dx * cs0 - dz * sn0, pk = 1.3;      // everyone gets the same room: the player is a rival, not a guest
     if (f < -3.5) {      /* a faster car behind, the player included: a professional does not move over. He holds the racing line, covers the inside before a corner (one move, never weaving), and lets the other car go only when it is alongside */
-      if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + .5 && !(ai.defT > 0)) { if (Math.abs(setup) > .3) want += setup * 1.6 * ai.care; if (!ai.defend && Math.abs(setup) > .3) ai.defend = (ai.diff ?? 1) === 2 ? 2 : 1.2; } continue; }      /* a car that defends once into the corner, and never weaves on a straight */      /* build 57: Medium and Hard close the door on a faster car behind, on a straight as well as into a corner */
+      if (f > -15 && Math.abs(l) < 3.6 && o.vx * sn0 + o.vz * cs0 > car.vf + .5 && !(ai.defT > 0)) { if (Math.abs(setup) > .3) want += setup * 1.6 * ai.care; if (!ai.defend && Math.abs(setup) > .3) ai.defend = (ai.diff ?? 1) === 2 ? 2 : 1.2; else if (!ai.defend && Math.abs(setup) <= .3 && (ai.diff ?? 1) >= 1 && f > -13 && sp > 15) { ai.defend = (ai.diff ?? 1) === 2 ? 1.6 : 1; ai.coverDir = l > 0 ? 1 : -1; } } continue; }      /* build 65: on a straight the car behind is covered too: one move across to its side, then a rest, never weaving */      /* a car that defends once into the corner, and never weaves on a straight */      /* build 57: Medium and Hard close the door on a faster car behind, on a straight as well as into a corner */
     if (f > 55 || Math.abs(l) > 8 * pk) continue;
     const ovf = o.vx * sn0 + o.vz * cs0, ovl = o.vx * cs0 - o.vz * sn0, closing = car.vf - ovf, ttc = closing > .5 ? Math.max(0, f - 6.4 * pk) / closing : 99, lp = l + ovl * Math.min(ttc, 1.2);   // where it will be, sideways, when we get there
     if (f > 0 && f < 70 && Math.abs(l) < 2.6 + Math.abs(ovl) * .35) { const gap = Math.max(.3, f - 4.5), cl = car.vf - ovf; if (cl > 1) { const need = cl * cl / (2 * gap); if (need > 4.5) brakeFor = Math.max(brakeFor, clamp(need / 9, .3, 1)); } }      /* the physics of not hitting anyone: the braking needed to match the speed of a car in my path inside the gap that is left (v^2 / 2d); if it is more than a comfortable 4.5 m/s^2, brake now */
@@ -943,7 +923,7 @@ export function aiDrive(car, track, ai, cars, dt) {
     else if (f > 0 && Math.abs(lp) < 3.4 * pk && ttc < 2.4 * pk) { want += (lp > 0 ? -1 : 1) * 3 * pk * (1.2 - ttc / (2.4 * pk)); if (ttc < .5 * ai.care * pk) brakeFor = Math.max(brakeFor, 1 - ttc / pk); }   // closing on a car: pick the clear side, brake if it is too late
     else if (f > -5 * pk && f < 7 * pk && Math.abs(l) < 4.3 * pk) {                                                                              // alongside
       if (cd && l * cd > 0) { want += -cd * 3 * ai.care * pk; brakeFor = Math.max(brakeFor, .1); }          // that car holds the inside: it owns the apex, so give it the room
-      else want += (l > 0 ? -1 : 1) * 2.5 * ai.care * pk;                                                      // otherwise leave more than a car's width
+      else want += (l > 0 ? -1 : 1) * 2.5 * ai.care * pk * ((ai.diff ?? 1) === 2 ? .65 : 1);                                                      // otherwise leave more than a car's width
       if (f > 1.2 && Math.abs(l) < 3.6 * pk) brakeFor = Math.max(brakeFor, .32);                                  // door to door: the car whose nose is behind lifts and drops back, so nobody fights for the same space
     }
   }
@@ -962,12 +942,12 @@ export function aiDrive(car, track, ai, cars, dt) {
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
-  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .045 : .09) + Math.random() * (ai.diff === 2 ? .045 : .1), consist: [.955, .974, .99][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
+  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .03 : .09) + Math.random() * (ai.diff === 2 ? .035 : .1), consist: [.955, .974, .994][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
   const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) ** 2 * (ai.diff === 2 ? .89 : ai.diff === 1 ? .86 : .83) * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) ** 2 * ([.83, .88, .95][ai.diff ?? 1]) * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
   for (let i = 0; i < 70; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;

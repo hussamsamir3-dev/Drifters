@@ -56,7 +56,7 @@ class EngineVoice {
 }
 
 export class GameAudio {
-  constructor() { this.on = true; this.ctx = null; this.vol = .7; this.evol = .7; this.mvol = .5; this.buf = {}; this.state = 'idle'; this.stats = { starts: 0, live: 0, shots: 0, liveShots: 0 }; this.lastLoad = 0; this.spec = null; this.riv = []; }
+  constructor() { this.on = true; this.ctx = null; this.vol = .7; this.evol = .7; this.mvol = .5; this.rvol = .9; this.dk = 1; this.buf = {}; this.state = 'idle'; this.stats = { starts: 0, live: 0, shots: 0, liveShots: 0 }; this.lastLoad = 0; this.spec = null; this.riv = []; }
   init() {
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}      /* iOS: play even with the ringer switch on silent, and as game audio */
     if (this.ctx) { if (this.ctx.state !== 'running' && !document.hidden) { try { this.ctx.resume(); } catch (e) {} } return; }
@@ -72,6 +72,7 @@ export class GameAudio {
     this.shotLP = c.createBiquadFilter(); this.shotLP.type = 'lowpass'; this.shotLP.frequency.value = 5200; this.shotLP.Q.value = .4; this.shotLP.connect(this.engBus);     // bangs come from the tailpipe, behind and below: slightly muffled
     this.airLP = c.createBiquadFilter(); this.airLP.type = 'lowpass'; this.airLP.frequency.value = 1700; this.airLP.Q.value = .3; this.airLP.connect(this.engBus);                                    // turbo air: brighter, but still through the car
     this.sfx = c.createGain(); this.sfx.gain.value = this.vol; this.sfx.connect(this.master);
+    this.radioBus = c.createGain(); this.radioBus.gain.value = this.rvol; this.radioBus.connect(this.master);      /* the race engineer's clips: their own volume, and the engine, effects and music are lowered a little while he speaks */
     { const blen = Math.floor(c.sampleRate * 2), bir = c.createBuffer(2, blen, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = bir.getChannelData(ch); for (let i = 0; i < blen; i++) { const tt = i / c.sampleRate; d[i] = (Math.random() * 2 - 1) * Math.exp(-tt / .5) * Math.min(1, tt / .014); } }
       this.bigIn = c.createGain(); this.engBus.connect(this.bigIn); this.sfx.connect(this.bigIn); const bcv = c.createConvolver(); bcv.buffer = bir; this.bigLP = c.createBiquadFilter(); this.bigLP.type = 'lowpass'; this.bigLP.frequency.value = 4000; this.bigG = c.createGain(); this.bigG.gain.value = 0; this.bigIn.connect(bcv); bcv.connect(this.bigLP); this.bigLP.connect(this.bigG); this.bigG.connect(this.master); }      // a big, long room that only opens near grandstands and under the footbridge
     this.meterNode = c.createAnalyser(); this.meterNode.fftSize = 1024; this.master.connect(this.meterNode);
@@ -98,7 +99,9 @@ export class GameAudio {
     catch (e) { console.warn('engine audio failed to load', e); this.state = 'error'; }
   }
   setMuted(m) { this.on = !m; if (this.el) this.music(this.musicOn); if (this.master) this.master.gain.setTargetAtTime(this.on ? .8 : 0, this.ctx.currentTime, .05); }
-  setVolumes() { if (!this.ctx) return; const t = this.ctx.currentTime; this.engBus.gain.setTargetAtTime(this.evol, t, .05); this.sfx.gain.setTargetAtTime(this.vol, t, .05); }
+  setVolumes() { if (!this.ctx) return; const t = this.ctx.currentTime; this.engBus.gain.setTargetAtTime(this.evol * this.dk, t, .05); this.sfx.gain.setTargetAtTime(this.vol * this.dk, t, .05); if (this.radioBus) this.radioBus.gain.setTargetAtTime(this.rvol, t, .05); }
+  /* the radio ducks the engine, effects and music by about 6 dB: down over ~70 ms, back over ~250 ms; nothing is ever muted */
+  duck(on) { if (!this.ctx) return; const t = this.ctx.currentTime, k = on ? .5 : 1; this.dk = k; const tc = on ? .025 : .08; this.engBus.gain.setTargetAtTime(this.evol * k, t, tc); this.sfx.gain.setTargetAtTime(this.vol * k, t, tc); if (this.mg && this.musicOn && this.on) this.mg.gain.setTargetAtTime(this.mvol * k, t, tc); }
   /* build 62: the menu music goes through the audio graph (a phone's media element ignores .volume, so a fade never finished and the track never stopped), and it is paused outright when a race starts */
   hookMusic() { if (!this.ctx || !this.el || this.mg || location.protocol === 'file:') return; try { const c = this.ctx; this.mg = c.createGain(); this.mg.gain.value = this.musicOn && this.on ? this.mvol : 0; c.createMediaElementSource(this.el).connect(this.mg); this.mg.connect(c.destination); this.el.volume = 1; } catch (e) { this.mg = null; } }
   music(on, hard) {
@@ -110,31 +113,6 @@ export class GameAudio {
   }
   musicGuard(racing) { const el = this.el; if (racing && el && !el.paused) { this.musicOn = false; if (this.mg) this.mg.gain.value = 0; el.pause(); } }
   setCar(spec) { this.spec = spec; }
-  // The engineer comes over an intercom: the key opens with a squelch click, the line hisses and crackles while he talks, and it closes with a short blip. (The voice itself is the
-  // device's speech engine and cannot be filtered, so the radio character is built around it.)
-  radio(state) {
-    if (!this.ctx || this.ctx.state !== 'running') return; const c = this.ctx, t = c.currentTime, out = this.sfx || this.master;
-    if (!this._nb) { const n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < .004 ? 2.2 : 1); this._nb = b; }
-    const burst = (len, f, q, vol) => { const s = c.createBufferSource(); s.buffer = this._nb; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0008, t + len); s.connect(bp); bp.connect(g); g.connect(out); s.start(t, Math.random()); s.stop(t + len + .02); };
-    const blip = (f, len, vol) => { const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0008, t + len); const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; o.connect(lp); lp.connect(g); g.connect(out); o.start(t); o.stop(t + len + .02); };
-    if (state === 'open') { burst(.14, 2200, .8, .2); blip(1480, .06, .06); if (this._rb) return;
-      clearInterval(this._rc); this._rc = setInterval(() => { if (!this._rb || !this.ctx) return; const t2 = this.ctx.currentTime, s2 = this.ctx.createBufferSource(), b2 = this.ctx.createBiquadFilter(), g2 = this.ctx.createGain(); s2.buffer = this._nb; b2.type = 'bandpass'; b2.frequency.value = 1500 + Math.random() * 2500; b2.Q.value = 1.4; g2.gain.setValueAtTime(.05 + Math.random() * .05, t2); g2.gain.exponentialRampToValueAtTime(.0008, t2 + .03 + Math.random() * .04); s2.connect(b2); b2.connect(g2); g2.connect(this.sfx || this.master); s2.start(t2, Math.random()); s2.stop(t2 + .1); }, 140 + Math.random() * 200);      /* intercom crackle while the line is open */
-      const s = c.createBufferSource(); s.buffer = this._nb; s.loop = true; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1700; bp.Q.value = .6; const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05, t + .08); s.connect(hp); hp.connect(bp); bp.connect(g); g.connect(out); s.start(t); this._rb = { s, g }; }
-    else if (this._rb) { clearInterval(this._rc); const r = this._rb; this._rb = null; r.g.gain.cancelScheduledValues(t); r.g.gain.setValueAtTime(r.g.gain.value, t); r.g.gain.linearRampToValueAtTime(0, t + .07); r.s.stop(t + .1); burst(.12, 2000, .9, .18); blip(1180, .05, .055); }
-  }
-  // The engineer's synthesised voice, played through an intercom: band-limited to the telephone range, a mid boost, a little saturation, hard compression and a short hollow echo, with the
-  // squelch and hiss of radio() around it. `urgent` cuts off a line that is still playing; otherwise an overlapping line is dropped.
-  radioVoice(pcm, rate, urgent, E = {}) {
-    if (!this.ctx || this.ctx.state !== 'running' || !pcm || !pcm.length) return false; const c = this.ctx, out = this.sfx || this.master;
-    if (this._rv) { if (!urgent) return true; try { this._rv.stop(); } catch (e) {} this._rv = null; }
-    const buf = c.createBuffer(1, pcm.length, rate); buf.copyToChannel(pcm, 0); const src = c.createBufferSource(); src.buffer = buf;
-    const bq = (type, f, q, g) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q || .7; if (g) n.gain.value = g; return n; };
-    const hp = bq('highpass', 420, .8), hp2 = bq('highpass', 420, .8), lp = bq('lowpass', 3000, .8), lp2 = bq('lowpass', 3000, .8), pk = bq('peaking', 1700, 1.1, 8), sh = c.createWaveShaper(), cmp = c.createDynamicsCompressor(), gain = c.createGain(), dl = c.createDelay(.05), fb = c.createGain();
-    const k = E.k || 2.6, curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); } sh.curve = curve; sh.oversample = '2x';
-    cmp.threshold.value = -34; cmp.knee.value = 6; cmp.ratio.value = 14; cmp.attack.value = .002; cmp.release.value = .09; gain.gain.value = E.g || 1.15; dl.delayTime.value = .006; fb.gain.value = .22; dl.connect(fb); fb.connect(dl);
-    src.connect(hp); hp.connect(hp2); hp2.connect(lp); lp.connect(lp2); lp2.connect(pk); pk.connect(sh); sh.connect(cmp); cmp.connect(gain); cmp.connect(dl); dl.connect(gain); gain.connect(out);
-    this.radio('open'); this._rv = src; src.onended = () => { if (this._rv === src) this._rv = null; this.radio('close'); }; src.start(c.currentTime + .1); return true;
-  }
   ui(kind) {      // soft, warm interface sounds: sine and triangle tones with slow attacks through a gentle low-pass, quiet by design
     if (!this.ctx || this.state !== 'ready' || this.ctx.state !== 'running') return; const c = this.ctx, t = c.currentTime, now = performance.now(); if (now - (this._uiT || 0) < (kind === 'hover' ? 70 : 30)) return; this._uiT = now;
     const S = { hover: [[880, 0, .05, .014]], click: [[392, 0, .11, .05], [587, .015, .09, .025]], tab: [[523, 0, .12, .04], [659, .05, .14, .03]], confirm: [[523, 0, .16, .05], [659, .08, .16, .045], [784, .16, .3, .04]], back: [[494, 0, .13, .04], [370, .07, .18, .035]] }[kind] || [[440, 0, .1, .03]];

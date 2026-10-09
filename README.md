@@ -52,6 +52,13 @@ current buffer during a duel. The free Supabase plan allows 100 messages a secon
 - Settings has separate Engine, Sound effects and Music volumes. Developer mode has an audition panel
   (engine, rpm, load, shift and pop triggers, output meter).
 
+## Race radio (build 65)
+
+- The race engineer is the supplied Expressive Race Engineer voice pack, trimmed to the 93 clips this game can truthfully say (`assets/radio/<category>/<id>.mp3`, about 4 MB, plus `manifest.json` with Arabic subtitles). The old synthesised engineer voice (eSpeak) is gone.
+- `js/radio.js` plays one clip at a time with a priority queue, per-call expiry, cooldowns, interruption for critical calls and a re-check just before speaking. `js/engineer.js` watches the real simulation (cars alongside, flags, pit stops, tyres, fuel, damage, laps, finish) and decides what to say.
+- Settings: Radio chatter (Essential / Balanced / Full), Race engineer voice on/off, Radio volume. While he speaks the music, engine and effects duck slightly.
+- The pack's `track_limits_warning` and `five_second_penalty` files are empty (0 bytes), so those two events show on screen and beep but are not spoken.
+
 ## Controls
 
 | Action | Keyboard | Gamepad |
@@ -80,6 +87,8 @@ Touch buttons appear automatically on phones and tablets.
     js/post.js                bloom, sun shafts, speed blur, vignette
     js/fx.js                  particles, skid marks, dust motes, rain
     js/audio.js               synthesised sound
+    js/radio.js               race radio: clip player and queue
+    js/engineer.js            race engineer: what to say and when
     js/net.js                 Supabase rooms and leaderboard
     assets/cars.glb           the 7 cars, wheels separated
     lib/                      three.js and supabase-js, bundled so nothing loads from a CDN except the font
