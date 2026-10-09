@@ -95,5 +95,5 @@ export function buildCity(path, n, B, isFree, rnd, G) {
     make(v.facade, mats[v.style]); make(v.roof, roofM); if (v.shop) make(v.shop, shopM); if (v.glow) make(v.glow, glowM);
     if (v.mast) for (const t of list) beacons.push({ x: t.x, y: v.mast, z: t.z }); }
   if (beacons.length) { const bm = new THREE.InstancedMesh(beaconG, beaconM, beacons.length); beacons.forEach((b, i) => { dummy.position.set(b.x, b.y, b.z); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); bm.setMatrixAt(i, dummy.matrix); }); bm.frustumCulled = false; G.add(bm); }
-  return placed.length;
+  return placed;      // [{ x, z, half }]: the scenery keeps clear of these
 }

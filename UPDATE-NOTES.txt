@@ -1,4 +1,4 @@
-Tafheet build 67 - update over build 66
-Unzip over your build 66 folder (replace files), then delete this file if you like.
-DELETE this old file (no longer used):
-  js/menubg.js
+Tafheet update build 68 (on top of build 67)
+
+Copy every file in this zip over the same path in your game folder.
+No files were deleted in this build.

@@ -7,9 +7,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const TAU = Math.PI * 2;
-export const RIM_STYLES = ['Classic 5-spoke', 'Rally 10-spoke', 'Mesh', 'Twin 7-spoke', 'Turbofan', 'Steel dish', 'Deep dish 6', 'Y-spoke'];
-export const TYRE_STYLES = ['Lettering', 'White wall', 'Red line', 'Yellow line'];
-export const CAL_COLS = [0xd22b2b, 0xf2c200, 0x1c57c8, 0x1a1b1e, 0xe8e8ea];
+export const RIM_STYLES = ['Classic 5-spoke', 'Rally 10-spoke', 'Mesh', 'Twin 7-spoke', 'Turbofan', 'Steel dish', 'Deep dish 6', 'Y-spoke', 'Aero disc', 'Split 5-spoke', 'Beadlock'];
+export const TYRE_STYLES = ['Lettering', 'White wall', 'Red line', 'Yellow line', 'Blue line', 'Green line', 'Orange line'];
+const TYRE_LINE = [0, 0xf2f2ee, 0xe3262e, 0xf2c200, 0x1c57c8, 0x2fb457, 0xff6a13];
+export const CAL_COLS = [0xd22b2b, 0xf2c200, 0x1c57c8, 0x1a1b1e, 0xe8e8ea, 0xff6a13, 0x2fb457, 0x7b3fe4];
 
 // ---- lathe about the axle: points are [radius, axial]; the result has its axis along X
 function lathe(pts, seg) { const g = new THREE.LatheGeometry(pts.map(([r, a]) => new THREE.Vector2(r, a)), seg); g.rotateZ(-Math.PI / 2); return g; }
@@ -48,7 +49,7 @@ const ring = (g, n, ang0 = 0) => { const out = []; for (let k = 0; k < n; k++) o
 
 // The face of the rim for each design. front = axial position of the visible surface; all are built facing +Z and turned onto the axle afterwards.
 function faceGeos(style, rr, Wr, seg) {
-  const front = Wr * (style === 6 ? .27 : .43), dep = Wr * (style === 5 ? .09 : .17), bev = rr * .012, z0 = front - dep, parts = [];
+  const front = Wr * (style === 6 ? .27 : .43), dep = Wr * (style === 5 || style === 10 ? .09 : .17), bev = rr * .012, z0 = front - dep, parts = [];
   const add = (gs, dz = 0) => { for (const g of gs) { g.translate(0, 0, z0 + dz + bev); parts.push(g); } };
   switch (style) {
     case 0: add(ring(spoke(rr * .16, rr * .93, rr * .36, rr * .20, .16, dep, bev), 5)); break;                                               // classic five-spoke, tapering, with a slight sweep
@@ -58,6 +59,16 @@ function faceGeos(style, rr, Wr, seg) {
     case 4: add(ring(spoke(rr * .18, rr * .93, rr * .34, rr * .26, 1.15, dep * .9, bev), 12)); break;                                          // turbofan blades
     case 6: add(ring(spoke(rr * .17, rr * .93, rr * .3, rr * .27, .05, dep, bev), 6)); break;                                                  // deep dish, chunky six
     case 7: { add(ring(spoke(rr * .16, rr * .56, rr * .24, rr * .19, 0, dep, bev), 5)); add(ring(spoke(rr * .5, rr * .93, rr * .15, rr * .11, .42, dep, bev), 5)); add(ring(spoke(rr * .5, rr * .93, rr * .15, rr * .11, -.42, dep, bev), 5)); break; }   // Y-spoke
+    case 8: {                                                                                                                                   // aero disc: a near-solid dish cut with twelve swept turbine slots
+      const sh = new THREE.Shape(); sh.absarc(0, 0, rr * .93, 0, TAU, false);
+      for (let k = 0; k < 12; k++) { const a = k * TAU / 12, pts = [], n = 6; for (let i = 0; i <= n; i++) { const r = rr * (.4 + .46 * i / n), ph = a + .34 * (i / n) - .1 - .02 * i / n; pts.push([r * Math.cos(ph), r * Math.sin(ph)]); } for (let i = n; i >= 0; i--) { const r = rr * (.4 + .46 * i / n), ph = a + .34 * (i / n) + .1 + .0 * i; pts.push([r * Math.cos(ph), r * Math.sin(ph)]); }
+        const p = new THREE.Path(); pts.forEach(([x, y], i) => i ? p.lineTo(x, y) : p.moveTo(x, y)); p.closePath(); sh.holes.push(p); }
+      add([new THREE.ExtrudeGeometry(sh, { depth: dep * .8, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * .8, bevelSegments: 2, curveSegments: 20 })]); break; }
+    case 9: for (const o of [-.14, .14]) add(ring(spoke(rr * .16, rr * .93, rr * .15, rr * .12, 0, dep, bev, o), 5)); break;                       // split five-spoke: each spoke is a pair
+    case 10: {                                                                                                                                  // beadlock rally wheel: dished steel, eight lightening holes, a ring of bolts on the outer lip
+      const sh = new THREE.Shape(); sh.absarc(0, 0, rr * .93, 0, TAU, false); const hole = (x, y, r) => { const p = new THREE.Path(); p.absarc(x, y, r, 0, TAU, true); sh.holes.push(p); };
+      for (let k = 0; k < 8; k++) hole(Math.cos(k * TAU / 8 + .2) * rr * .62, Math.sin(k * TAU / 8 + .2) * rr * .62, rr * .105); hole(0, 0, rr * .1); add([new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 20 })]);
+      for (let k = 0; k < 24; k++) { const a = k * TAU / 24; parts.push(new THREE.CylinderGeometry(rr * .026, rr * .026, rr * .05, 6).rotateX(Math.PI / 2).translate(Math.cos(a) * rr * .955, Math.sin(a) * rr * .955, front + rr * .014)); } break; }
     case 5: {                                                                                                                                   // steel dish with six holes
       const sh = new THREE.Shape(); sh.absarc(0, 0, rr * .93, 0, TAU, false); const hole = (x, y, r) => { const p = new THREE.Path(); p.absarc(x, y, r, 0, TAU, true); sh.holes.push(p); };
       for (let k = 0; k < 6; k++) hole(Math.cos(k * TAU / 6) * rr * .58, Math.sin(k * TAU / 6) * rr * .58, rr * .15); hole(0, 0, rr * .12); add([new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 20 })]); break; }
@@ -97,5 +108,5 @@ export function sidewallDecals(spin, R, W, rr, style, lettering) {
   const ringAt = (r0, r1, mat) => { for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 56, 1).rotateY(s * Math.PI / 2), mat); m.position.x = s * x; m.userData.decal = 1; spin.add(m); } };
   if (style === 0) { const rout = Math.min(R * .985, (rr + sh * .62) / .88); for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.RingGeometry(rr + sh * .2, rout, 56, 1).rotateY(s * Math.PI / 2), lettering); m.position.x = s * x; m.userData.decal = 1; spin.add(m); } return; }
   const flat = c => new THREE.MeshBasicMaterial({ color: c, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide });
-  if (style === 1) ringAt(rr + sh * .2, rr + sh * .66, flat(0xf2f2ee)); else ringAt(rr + sh * .5, rr + sh * .58, flat(style === 2 ? 0xe3262e : 0xf2c200));
+  if (style === 1) ringAt(rr + sh * .2, rr + sh * .66, flat(0xf2f2ee)); else ringAt(rr + sh * .5, rr + sh * .58, flat(TYRE_LINE[style] ?? 0xf2c200));
 }

@@ -1,6 +1,7 @@
 // Audio. Engines are the bundled sample loops (five alternative engine identities, each a steady 3000 rpm loop),
 // pitched by the simulated engine speed. Tyres, wind, impacts and UI are synthesised noise and tones.
 // One AudioContext. Each engine voice is ONE looping source that is never restarted for throttle, rpm or gear changes.
+import { createCrowdSound } from './crowdsound.js';
 import { getAsset } from './assets.js';
 import ENGINE_DSP from './enginedsp.js';
 import { engineCfg } from './enginecfg.js';
@@ -182,7 +183,7 @@ export class GameAudio {
         this.lastLoad += (s.load - this.lastLoad) * .5; }
       this.lastLoadNow = s.load;
     }
-    this.wind.g.gain.setTargetAtTime(k * k * .17, t, .3); this.wind.fl.frequency.setTargetAtTime(240 + k * 560, t, .3);
+    this.wind.g.gain.setTargetAtTime(k * k * .17 * (1 + .22 * Math.sin(t * 3.1) * Math.sin(t * 1.27 + 1)), t, .12);      /* build 68: the wind does not blow steadily, it buffets */ this.wind.fl.frequency.setTargetAtTime(240 + k * 560, t, .3);
     this.roll.g.gain.setTargetAtTime(Math.min(.16, k * .3) * (1 - s.dirt), t, .15);
     // Tyres and surfaces (sample loops). Scrub rises as the tyres are loaded, before they let go. Squeal comes in when they slide:
     // higher with speed and a locked wheel, lower with wheelspin, mostly hiss in the wet. Grass, sand/gravel and kerbs have their own sounds.
@@ -202,7 +203,8 @@ export class GameAudio {
       set(T.kerb, (s.kerb || 0) * Math.min(1, s.speed / 12) * 1.6, Math.max(.4, s.speed / 13));
       this.skid.g.gain.setTargetAtTime(0, t, .1); this.dirt.g.gain.setTargetAtTime(0, t, .1); this.sq.g.gain.setTargetAtTime(0, t, .1);
     } else { this.skid.g.gain.setTargetAtTime((g * .1 + sl * .12) * sp2 * road, t, .08); this.dirt.g.gain.setTargetAtTime(s.dirt * .35, t, .1); this.sq.g.gain.setTargetAtTime(sl * dry * road * .4, t, .08); }   // until the samples have loaded
-    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * Math.max(s.wet || 0, s.surf === 'wet' ? .8 : 0) * sp2 * .09 + (s.surf === 'wet' ? .03 * sp2 : 0), t, .12);      // spray in the wet and over puddles this.brake.g.gain.setTargetAtTime((s.brake || 0) * Math.min(1, s.speed / 25) * .018, t, .05);
+    this.skidHi.g.gain.setTargetAtTime(Math.max(sl, g * .5) * Math.max(s.wet || 0, s.surf === 'wet' ? .8 : 0) * sp2 * .09 + (s.surf === 'wet' ? .03 * sp2 : 0), t, .12);      // spray in the wet and over puddles
+    this.brake.g.gain.setTargetAtTime((s.brake || 0) * Math.min(1, s.speed / 25) * .03 * (s.surf === 'road' || !s.surf ? 1 : .3), t, .05);      /* build 68: the pads on the discs (this line had been swallowed by the comment before it) */
     this.nitro.g.gain.setTargetAtTime(s.nitro ? .16 : 0, t, .1); this.rain.g.gain.setTargetAtTime((s.rain || 0) * .1, t, .5);
   }
   // The single entry point for a completed gear change. dir +1 up, -1 down.
@@ -213,6 +215,7 @@ export class GameAudio {
   }
   shift(dir, load, rpmN, pops) {
     if (!this.ctx || this.quiet) return; const t = this.ctx.currentTime; this.dipUntil = t + (dir > 0 ? .13 : .09);
+    { const sp = this.spec || {}, dog = (sp.whine ?? .4) > .6; this.thud(.05 + load * .1 + (dog ? .04 : 0)); if (dog || load > .7) this.burst('bandpass', 1900, 4, .03, .03 + load * .05, 2); }      /* build 68: the gearbox: every change thumps through the car, and a straight-cut dog box clacks */
     if (dir > 0 && load > .6 && rpmN > .78 && pops === 'crackle' && Math.random() < .35) { this.shot('bang' + (1 + (Math.random() * 3 | 0)), .42 + rpmN * .1); }      /* only the hottest tunes bang on an upshift, and not every time */   // a hard, high-rev upshift lights the exhaust: a bang, and on lively cars a crackle after it   // only on a hard, high-rpm upshift
   }
   shot(kind, vol = .5, force = false, rate = 1) {
@@ -231,8 +234,12 @@ export class GameAudio {
       setPos(v.pan, r.x, r.y ?? .6, r.z); const near = clamp(1 - r.dist / 110, 0, 1); v.set(r.rpm * (1 + (r.dop || 0)), r.load, .75 * (.25 + .75 * near), { boost: r.load > .6 ? r.load : 0 });
       v.lp.frequency.setTargetAtTime(clamp((ss ? 1500 : 900) + 3400 * Math.exp(-r.dist / 38) + r.load * 900, 700, ss ? 7000 : 5200), t, .08); });
   }
-  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); if (this.ty) for (const k in this.ty) this.ty[k].g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); for (const v of [this.voice, this.sVoice, ...this.rivV, ...(this.sRiv || [])]) if (v && v.cur) v.fadeOut(.3); }
-  ambient(dt, o) { if (this.ctx) this.crowd.g.gain.setTargetAtTime(o.on ? .028 : 0, this.ctx.currentTime, .6); }
+  silence() { if (!this.ctx) return; if (this.cs) this.cs.set({ volume: 0 }); const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); if (this.ty) for (const k in this.ty) this.ty[k].g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); for (const v of [this.voice, this.sVoice, ...this.rivV, ...(this.sRiv || [])]) if (v && v.cur) v.fadeOut(.3); }
+  ambient(dt, o) {
+    if (!this.ctx) return; this.crowd.g.gain.setTargetAtTime(0, this.ctx.currentTime, .6);
+    if (!this.cs) { try { this.cs = createCrowdSound(this.ctx, this.sfx); } catch (e) { this.cs = null; this.csFail = true; } }
+    if (this.cs) { this.cs.set({ volume: o.on ? .85 : 0, day: o.day !== false, rain: !!o.rain, announcer: true }); this.cs.update(dt, o.near || 0, o.heat || 0); }      /* build 68: a calm race-day crowd: murmur, distant cheers and claps, birds, wind and far engines */
+  }
 
   // ---- developer audition: hear any engine at any rpm and load, fire shifts and pops, read the output level
   audition(name, rpm, load) { if (!this.ctx || this.state !== 'ready') return; if (!name) { if (this.audV.cur) this.audV.fadeOut(.25); return; } if (this.audV.name !== name) this.audV.start(name, rpm / REF_RPM); this.audV.set(rpm, load, t0(this) < (this.dipUntil || 0) ? .42 : 1); }

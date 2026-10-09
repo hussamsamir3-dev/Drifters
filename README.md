@@ -52,6 +52,15 @@ current buffer during a duel. The free Supabase plan allows 100 messages a secon
 - Settings has separate Engine, Sound effects and Music volumes. Developer mode has an audition panel
   (engine, rpm, load, shift and pop triggers, output meter).
 
+## Build 68 notes
+
+- AI: the speed plan is built backwards from the end of the driver's view with a friction-circle budget (braking is limited by how much cornering a point already asks for); hairpins are taken a few percent under their static limit.
+- Showroom and garage: the car is always dead centre of the picture.
+- L toggles the headlights (the automatic night and rain lights no longer override your choice).
+- Feel: the picture breathes with power and braking, edges fringe with speed and slides, the horizon leans with g-force, wind buffets, the brake sound is back, a calm crowd ambience plays near the stands.
+- Scenery: new buildings, parked cars, trees with wind sway, flags, fans, smoke, birds, balloons and a denser crowd (see js/scenery.js).
+- Cars: six tabs of cosmetic upgrades (Aero, Body, Rally, Wheels, Livery, Finishes) fitted to each body. Cars that already carry a wing (see STOCK_WING in js/config.js) are not offered a wing.
+
 ## Build 67 notes
 
 - Engine sound: a physical model, not recordings. `js/enginedsp.js` runs in an AudioWorklet: every cylinder fires at its own crank angle (the real firing order of the engine), a pressure pulse measured in crank degrees goes down that cylinder's own header into the collector and then a real two-way exhaust pipe with an open end (the resonances you hear as boom and drone at particular revs), through a silencer. Beside it: the intake (noise gated by each intake valve), the block ringing at its own frequencies, combustion rasp, valve-gear ticks, an air-cooling fan (911), a turbo's whistle, a supercharger's whine (Delta S4). `js/enginecfg.js` holds what each of the 18 cars physically has (cylinders and firing order, header lengths, exhaust length and silencer, induction). The firing frequency is always rpm / 60 x cylinders / 2. If an AudioWorklet is not available the old recorded engines play, and Settings > Audio has an "Engine sound" switch between the two.
@@ -89,6 +98,7 @@ current buffer during a duel. The free Supabase plan allows 100 messages a secon
 | Camera | C | |
 | Pause | Esc or P | |
 | Mute | M | |
+| Headlights on / off | L | |
 
 Touch buttons appear automatically on phones and tablets.
 
@@ -109,6 +119,9 @@ Touch buttons appear automatically on phones and tablets.
     js/enginedsp.js           engine model (AudioWorklet source)
     js/enginecfg.js           what each car's engine is
     js/studio.js              the menu / garage showroom
+    js/carparts.js            the cosmetic upgrade parts (fitted to each body by a height-map scan)
+    js/scenery.js, scn_geo.js, scn_tpl.js, scn_live.js   trackside buildings, parked cars, trees, props and their animation
+    js/crowdsound.js          calm race-day crowd ambience (WebAudio)
     js/engineer.js            race engineer: what to say and when
     js/net.js                 Supabase rooms and leaderboard
     assets/cars.glb           the 7 cars, wheels separated

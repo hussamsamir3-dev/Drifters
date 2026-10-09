@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCity } from './city.js';
+import { buildScenery } from './scenery.js';
 
 export const GRASS = 0, KERB = 1, ROAD = 2, WALL = 3, PIT = 4;
 
@@ -583,8 +584,12 @@ function buildProc(track) {
     const p = path[i], off = s * (B + 5 + rnd() * 38), x = p.x + p.tz * off, z = p.z - p.tx * off;
     if (isFree(x, z, 5)) spots.push({ x, z, r: rnd() * 6.28, s: .8 + rnd() * .7, i });
   }
+  const claim = [new Uint8Array(n), new Uint8Array(n)]; track.claim = claim;      // path nodes where the scenery has taken the strip behind the barrier (the advertising boards give way)
+  let cityPlaced = null;
+  const runScenery = () => { const scn = track.scn = buildScenery({ track, path, n, B, hw, def, G, rnd, night, desert, day, coast: def.theme === 'coast', pitSide, pitL, inPit, people, cull: (m, x, z) => CULL.push({ m, x, z }), movers, uT, uCar, uCar2, CK, claim, pre: cityPlaced, anim, minx, maxx, minz, maxz, cx, cz, instanced }); return scn; };
+  let scn = null;
   if (night) {
-    buildCity(path, n, B, isFree, rnd, G);      // the night city: real buildings with real window grids (see city.js)
+    cityPlaced = buildCity(path, n, B, isFree, rnd, G);      // the night city: real buildings with real window grids (see city.js)
     const lamp = new THREE.CylinderGeometry(.12, .16, 7, 6); lamp.translate(0, 3.5, 0);
     const bulb = new THREE.SphereGeometry(.45, 8, 6); bulb.translate(0, 7.1, 0);
     const lp = []; for (let i = 0; i < n; i += 14) { const p = path[i], off = (i % 28 ? 1 : -1) * (B + 1.2); lp.push({ x: p.x + p.tz * off, z: p.z - p.tx * off }); }
@@ -593,23 +598,9 @@ function buildProc(track) {
     G.add(instanced(bulb, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2a8).multiplyScalar(3) }), lp, false));
     const cone = new THREE.ConeGeometry(3.4, 7, 14, 1, true); cone.translate(0, 3.5, 0);     // soft light pools under each lamp
     const cm = instanced(cone, new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: .07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), lp, false); cm.visible = false; G.add(cm);   // flat light cones looked like cut-outs from above; the lamps' glow stays
+    scn = runScenery();
   } else {
-    // Trees with real volume: an oak is a cluster of displaced foliage blobs, light on top and dark underneath, on a flared, barked trunk; a palm has a curved ringed trunk and a crown of drooping fronds.
-    const tcol = (g, c) => { const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let q = 0; q < n; q++) { a[q * 3] = c[0]; a[q * 3 + 1] = c[1]; a[q * 3 + 2] = c[2]; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
-    const mg = gs => mergeGeometries(gs.map(g => g.index ? g.toNonIndexed() : g), false), palm = desert || def.theme === 'coast';
-    const blob = (r, x, y, z, sy, lo, hi) => { const g = new THREE.IcosahedronGeometry(r, 2), P = g.attributes.position, C = new Float32Array(P.count * 3); for (let q = 0; q < P.count; q++) { const px = P.getX(q), py = P.getY(q), pz = P.getZ(q), nz = 1 + .2 * Math.sin(px * 3.1 + pz * 2.3) * Math.cos(py * 2.7 + px * 1.3) + .08 * Math.sin(py * 7 + pz * 5); P.setXYZ(q, px * nz, py * nz * sy, pz * nz); const k = Math.max(0, Math.min(1, (py / r + 1) / 2)) * .85 + Math.random() * .1; C[q * 3] = lo[0] + (hi[0] - lo[0]) * k; C[q * 3 + 1] = lo[1] + (hi[1] - lo[1]) * k; C[q * 3 + 2] = lo[2] + (hi[2] - lo[2]) * k; } g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.translate(x, y, z); return g; };
-    let trunk, crown;
-    if (palm) {
-      const segs = []; for (let s = 0; s < 8; s++) { const g = new THREE.CylinderGeometry(.2 - s * .008, .24 - s * .008, .78, 8); g.translate(s * .06 + (s * s) * .008, s * .76 + .39, 0); segs.push(tcol(g, s % 2 ? [.43, .32, .2] : [.52, .4, .26])); } trunk = mg(segs);
-      const fr = []; for (let f = 0; f < 11; f++) { const a = f / 11 * Math.PI * 2, g = new THREE.PlaneGeometry(.7, 3.6, 1, 8), P = g.attributes.position, C = new Float32Array(P.count * 3); for (let q = 0; q < P.count; q++) { const u = (P.getY(q) + 1.8) / 3.6; P.setZ(q, -Math.pow(u, 2) * 1.5 + (Math.abs(P.getX(q)) * .25) * -1); P.setY(q, u * 3.4); P.setX(q, P.getX(q) * (1 - u * .7)); C[q * 3] = .12 + .12 * u; C[q * 3 + 1] = .34 + .22 * u; C[q * 3 + 2] = .1 + .05 * u; } g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.rotateX(-Math.PI / 2 + .35 + (f % 2) * .18); g.rotateY(a); g.translate(.6, 6.35, 0); fr.push(g); } crown = mg(fr);
-    } else {
-      const bk = []; const tr = new THREE.CylinderGeometry(.2, .36, 2.8, 9); tr.translate(0, 1.4, 0); bk.push(tcol(tr, [.34, .24, .15])); const fl = new THREE.ConeGeometry(.55, .5, 9, 1, true); fl.translate(0, .25, 0); bk.push(tcol(fl, [.3, .21, .13])); for (const [bx, bz, ry] of [[.5, 0, 0], [-.4, .3, 2]]) { const b = new THREE.CylinderGeometry(.07, .12, 1.6, 6); b.rotateZ(.9); b.rotateY(ry); b.translate(bx, 2.7, bz); bk.push(tcol(b, [.3, .21, .13])); } trunk = mg(bk);
-      const lo = day ? [.05, .16, .04] : [.05, .14, .06], hi = day ? [.2, .44, .12] : [.1, .26, .1];
-      crown = mg([blob(2.2, 0, 4.2, 0, .85, lo, hi), blob(1.55, 1.4, 3.6, .5, .85, lo, hi), blob(1.5, -1.3, 3.8, .7, .85, lo, hi), blob(1.4, .3, 5.4, -.6, .85, lo, hi), blob(1.3, -.6, 3.5, -1.3, .85, lo, hi), blob(1.2, 1.0, 4.9, 1.1, .85, lo, hi)]);
-    }
-    const trees = spots.filter((_, i) => desert ? i % 3 === 0 : day ? i % 11 !== 5 && i % 11 !== 8 : true);
-    G.add(instanced(trunk, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), trees));
-    G.add(instanced(crown, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .92, side: THREE.DoubleSide }), trees));
+    scn = runScenery();      // houses, farms, trees, stands, car parks, race furniture and the animated props (scenery.js)
     if (desert) {
       const pyr = new THREE.ConeGeometry(1, 1, 4); pyr.rotateY(Math.PI / 4); pyr.translate(0, .5, 0);
       const pm = new THREE.MeshStandardMaterial({ color: 0xd2a45c, roughness: 1, flatShading: true });
@@ -674,7 +665,7 @@ function buildProc(track) {
   if (!def.dev) {
     const ppl = [], shirt = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c)), skin = [0xf1c9a5, 0xd9a577, 0xa8703f, 0x7a4a2b].map(c => new THREE.Color(c));
     for (let i = 0; i < n; i++) { if (i % 64 > 46) continue; for (const s of [1, -1]) { if (s === pitSide && inPit(i)) continue; for (let r = 0; r < 5; r++) { if (rnd() > .82 * CK) continue;
-      const p = path[i], off = s * (B + 2.3 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9)) ppl.push({ x, z, s: .92 + rnd() * .2, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0], i, sd: s, row: r }); } } }
+      const p = path[i], off = s * (B + 2.3 + r * 1.05 + rnd() * .3), x = p.x + p.tz * off + (rnd() - .5) * .8, z = p.z - p.tx * off + (rnd() - .5) * .8; if (isFree(x, z, .9) && (!scn || scn.free(x, z, .9))) ppl.push({ x, z, s: .92 + rnd() * .2, c: shirt[rnd() * 7 | 0], k: skin[rnd() * 4 | 0], i, sd: s, row: r }); } } }
     const body = new THREE.CapsuleGeometry(.28, .7, 3, 8); body.translate(0, .63, 0); const head = new THREE.SphereGeometry(.24, 8, 6); head.translate(0, 1.42, 0);
     // marshals in orange at every corner, flags along the fences
     const marsh = [], flags = [], fcol = [0xe3262e, 0xffc21a, 0xf3f4f6, 0x19a7ce, 0x2fb457, 0x111214].map(c => new THREE.Color(c));
@@ -701,8 +692,7 @@ function buildProc(track) {
     });
     const bales = []; for (let i = 0; i < n; i += 5) { const p = path[i]; if (Math.abs(p.k) < 1 / 70) continue; const side = p.k > 0 ? -1 : 1; if (side === pitSide && inPit(i)) continue; const off = side * (B + 1.3), x = p.x + p.tz * off, z = p.z - p.tx * off, r = Math.atan2(p.tx, p.tz); if (!isFree(x, z, .8)) continue; bales.push({ x, z, y: .55, r }, { x: x + p.tx * 1.6, z: z + p.tz * 1.6, y: .55, r }, { x: x + p.tx * .8, z: z + p.tz * .8, y: 1.6, r }); }
     const bale = new THREE.BoxGeometry(1.1, 1.05, 1.5, 2, 2, 2); G.add(instanced(bale, new THREE.MeshStandardMaterial({ color: 0xd8a441, roughness: 1, flatShading: true }), bales));
-    if (day) { const vans = spots.filter((_, i) => i % 11 === 5).map(s => ({ x: s.x, z: s.z, y: 0, r: s.r, c: shirt[rnd() * 7 | 0] })); const vg = new THREE.BoxGeometry(2.3, 2.2, 5); vg.translate(0, 1.4, 0); G.add(instanced(vg, new THREE.MeshStandardMaterial({ roughness: .6 }), vans));
-      const tents = spots.filter((_, i) => i % 11 === 8).map(s => ({ x: s.x, z: s.z, r: s.r })); const tg = new THREE.ConeGeometry(2.6, 2.6, 4); tg.translate(0, 1.3, 0); G.add(instanced(tg, new THREE.MeshStandardMaterial({ color: 0xf3efe6, roughness: 1, flatShading: true }), tents)); }
+    /* build 68: the support vans and tents now come from scenery.js (paddock transporters, marquees, car parks) */
   }
   if (def.dev) { const cones = []; for (let q = 0; q < 12; q++) cones.push({ x: 20 + q * 18, z: 24 }); for (let a = 0; a < 24; a++) cones.push({ x: 110 + Math.cos(a / 24 * 6.283) * 30, z: 65 + Math.sin(a / 24 * 6.283) * 30 });
     const cg = new THREE.ConeGeometry(.35, .9, 8); cg.translate(0, .45, 0); G.add(instanced(cg, new THREE.MeshStandardMaterial({ color: 0xff6a13, roughness: .7 }), cones)); }
@@ -718,7 +708,7 @@ function buildProc(track) {
     const adMats = AD.map(([t, bg, fg]) => { const tex = canvasTex(512, 98, k => { k.fillStyle = bg; k.fillRect(0, 0, 512, 98); k.fillStyle = fg; k.fillRect(0, 0, 512, 7); k.fillRect(0, 91, 512, 7); k.font = 'italic 900 62px Rubik, Arial Black, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle'; k.fillText(t, 256, 52); });
       return night ? new THREE.MeshBasicMaterial({ map: tex, color: 0xcccccc, side: THREE.DoubleSide }) : new THREE.MeshStandardMaterial({ map: tex, roughness: .55, side: THREE.DoubleSide }); });
     const adL = AD.map(() => []); let adN = 0;
-    for (let i = 0; i < n; i += 3) { for (const s of [1, -1]) { if (s === pitSide && inPit(i)) continue; if ((i / 3 + (s > 0 ? 1 : 0)) % 2) continue; const p = path[i], off = s * (B + 1.15), x = p.x + p.tz * off, z = p.z - p.tx * off; if (!isFree(x, z, .45)) continue; adL[adN++ % AD.length].push({ x, z, r: Math.atan2(-s * p.tz, s * p.tx) + Math.PI * 0, sx: 1, sy: 1 }); } }
+    for (let i = 0; i < n; i += 3) { for (const s of [1, -1]) { if (s === pitSide && inPit(i)) continue; if ((i / 3 + (s > 0 ? 1 : 0)) % 2) continue; if (claim[s > 0 ? 0 : 1][i]) continue; const p = path[i], off = s * (B + 1.15), x = p.x + p.tz * off, z = p.z - p.tx * off; if (!isFree(x, z, .45)) continue; adL[adN++ % AD.length].push({ x, z, r: Math.atan2(-s * p.tz, s * p.tx) + Math.PI * 0, sx: 1, sy: 1 }); } }
     adL.forEach((l, q) => { if (l.length) G.add(instanced(adGeo, adMats[q], l, false)); });
     const adPost = new THREE.BoxGeometry(.08, .55, .08); adPost.translate(0, .27, 0);
     /* 2. catch fences on the outside of fast corners: tall posts and net */
@@ -735,7 +725,7 @@ function buildProc(track) {
       const bx = new THREE.BoxGeometry(2.4, 1.3, 2.2); bx.translate(0, 10.25, 0); lg.push(colV(bx, [.82, .84, .88])); const gl = new THREE.BoxGeometry(2.5, .6, 2.3); gl.translate(0, 10.35, 0); lg.push(colV(gl, [.12, .2, .28]));
       const ra = new THREE.BoxGeometry(3.4, .08, 3.4); ra.translate(0, 10.05, 0); lg.push(colV(ra, [.5, .5, .52])); const an = new THREE.CylinderGeometry(.03, .03, 2, 4); an.translate(.8, 11.9, .6); lg.push(colV(an, [.2, .2, .2])); }
     const apx = (track.apexes || []).slice(); const step = Math.max(1, Math.floor(apx.length / 5));
-    for (let q = 0; q < apx.length && tw.length < 6; q += step) { const ap = apx[q], idx = ap.i != null ? ap.i : ap.idx; if (idx == null) continue; const p = path[idx % n], s = outsideOf(idx % n), off = s * (B + 16), x = p.x + p.tz * off, z = p.z - p.tx * off; if (isFree(x, z, 4)) tw.push({ x, z, r: Math.atan2(p.tx, p.tz) }); }
+    for (let q = 0; q < apx.length && tw.length < 6; q += step) { const ap = apx[q], idx = ap.i != null ? ap.i : ap.idx; if (idx == null) continue; const p = path[idx % n], s = outsideOf(idx % n), off = s * (B + 16), x = p.x + p.tz * off, z = p.z - p.tx * off; if (isFree(x, z, 4) && (!scn || scn.free(x, z, 5))) tw.push({ x, z, r: Math.atan2(p.tx, p.tz) }); }
     if (tw.length) G.add(instanced(mg2(lg), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55, metalness: .4 }), tw));
     /* 4. a hospitality and fan village behind the start grandstand: coloured umbrellas, food trucks, portable toilets */
     const vp = path[Math.min(n - 1, 40)], vx = vp.x + vp.tz * -pitSide * (B + 40), vz = vp.z - vp.tx * -pitSide * (B + 40);
@@ -751,10 +741,7 @@ function buildProc(track) {
         colV(new THREE.BoxGeometry(1.8, .9, .06).translate(1.12, 1.9, -.7), [.08, .08, .1]), colV(new THREE.BoxGeometry(2.0, .1, 1.1).translate(1.55, 2.5, -.7).rotateZ(-.1), [.86, .14, .14]), colV(new THREE.BoxGeometry(2.3, .3, 5.2).translate(0, .6, .2), [.12, .12, .14]),
         wh(1.0, 1.9), wh(-1.0, 1.9), wh(1.0, -1.6), wh(-1.0, -1.6)]); G.add(instanced(t, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .55 }), trucks.map(q => ({ ...q, c: tc[(q.r * 7 | 0) % 4] })), true)); }
     if (loos.length) { const t = mg2([colV(new THREE.BoxGeometry(1.1, 2.3, 1.1).translate(0, 1.15, 0), [.2, .55, .78]), colV(new THREE.BoxGeometry(1.12, .2, 1.12).translate(0, 2.25, 0), [.9, .9, .9])]); G.add(instanced(t, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .7 }), loos, true)); }
-    /* 5. a car park of ordinary cars, in rows, in a field a little way off */
-    { const pp = path[Math.floor(n * .5)], s0 = outsideOf(Math.floor(n * .5)), ox = pp.x + pp.tz * s0 * (B + 70), oz = pp.z - pp.tx * s0 * (B + 70), cars = [], cc = [0xe9e9e9, 0x1b1d22, 0xa9adb3, 0x9c1d1d, 0x1d3f7a, 0xdad6c8, 0x2b5a3a].map(c => new THREE.Color(c));
-      if (isFree(ox, oz, 26)) for (let rr = 0; rr < 4; rr++) for (let cc2 = 0; cc2 < 10; cc2++) if (rnd() < .82) cars.push({ x: ox + (cc2 - 5) * 3.2, z: oz + (rr - 1.5) * 7.5, r: Math.PI / 2 * 0 + (rnd() - .5) * .06, c: cc[rnd() * 7 | 0] });
-      if (cars.length) { const body = mg2([colV(new THREE.BoxGeometry(1.8, .62, 4.2).translate(0, .62, 0), [1, 1, 1]), colV(new THREE.BoxGeometry(1.6, .5, 2.2).translate(0, 1.1, -.2), [.55, .62, .7]), colV(new THREE.BoxGeometry(1.9, .22, 4.3).translate(0, .24, 0), [.06, .06, .07])]); G.add(instanced(body, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .35, metalness: .5 }), cars, false)); } }
+    /* 5. (the car parks are built in scenery.js, with roads, fences and a hundred parked cars) */
     /* 6. distant hills (or dunes) all the way round, hazed by the fog; the sea side stays open on coastal tracks */
     if (!night) {
       let R0 = 0; for (const p of path) R0 = Math.max(R0, Math.hypot(p.x - cx, p.z - cz)); R0 += 650;
@@ -781,13 +768,12 @@ function buildProc(track) {
   // -- grandstand beside the start straight
   const p0 = path[0], crowd = canvasTex(256, 64, (k) => { k.fillStyle = '#3a3d45'; k.fillRect(0, 0, 256, 64); for (let i = 0; i < 900; i++) { k.fillStyle = `hsl(${Math.random() * 360},70%,${45 + Math.random() * 30}%)`; k.fillRect(Math.random() * 256, Math.random() * 64, 3, 4); } }, 3, 1);
   const ss = -pitSide, stand = new THREE.Group(); stand.position.set(p0.x + p0.tz * ss * (B + 3), 0, p0.z - p0.tx * ss * (B + 3)); stand.rotation.y = Math.atan2(p0.tx, p0.tz) + (ss > 0 ? Math.PI : 0);      // the grandstand is across from the pits
-  for (let i = 0; i < 5; i++) { const st = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1 * (i + 1), 60), new THREE.MeshStandardMaterial({ map: crowd, emissive: night ? 0x555555 : 0, emissiveMap: night ? crowd : null })); st.position.set(-i * 2.2, .55 * (i + 1), 10); st.castShadow = true; stand.add(st); }
+  /* the stand itself (seat rows, roof, sponsor boards) and the people on it are built in scenery.js; this group only keeps the stand's place for the stage lights */
   G.add(stand);
   { // a full grandstand: people on every step, bouncing
     const sp = [], ry = stand.rotation.y, cs = Math.cos(ry), sn = Math.sin(ry), cols = [0xe3262e, 0x19a7ce, 0xffc21a, 0xf3f4f6, 0x2fb457, 0xff7ab0, 0x7b3fe4].map(c => new THREE.Color(c));
-    for (let i = 0; i < 5; i++) for (let lz = -19; lz < 40; lz += .8) { if (rnd() > .88 * CK) continue; const lx = -i * 2.2 + (rnd() - .5) * .9; sp.push({ x: stand.position.x + lx * cs + lz * sn, z: stand.position.z - lx * sn + lz * cs, y: 1.1 * (i + 1), s: .9 + rnd() * .2, c: cols[rnd() * 7 | 0] }); }
     const b2 = new THREE.CapsuleGeometry(.28, .6, 3, 6); b2.translate(0, .55, 0); const h2 = new THREE.SphereGeometry(.23, 7, 5); h2.translate(0, 1.28, 0);
-    sp.forEach(q => { q.beh = rnd() < .75 ? 1 : 0; q.r = ry + Math.PI / 2 + (rnd() - .5) * .4; }); people(sp);
+    void sp;
     // hot-air balloons drifting beyond the circuit
     const bc = [[0xe3262e, 0xffc21a], [0x19a7ce, 0xf3f4f6], [0x7b3fe4, 0xff7ab0], [0x2fb457, 0xffc21a]];
     if (!night) bc.forEach(([c1, c2], i) => { const g = new THREE.Group(), env = new THREE.Mesh(new THREE.SphereGeometry(9, 12, 10), new THREE.MeshStandardMaterial({ color: c1, roughness: .7, flatShading: true })); env.scale.y = 1.2; const band = new THREE.Mesh(new THREE.CylinderGeometry(8.9, 8.9, 3, 12, 1, true), new THREE.MeshStandardMaterial({ color: c2, roughness: .7 })); const bas = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2, 2.4), new THREE.MeshStandardMaterial({ color: 0x7a4326 })); bas.position.y = -14;

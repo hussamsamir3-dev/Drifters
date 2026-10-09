@@ -130,3 +130,69 @@ export function balance(spec, field) {
   const pm = c => c.pw / c.mass, n = field.length, rp = field.reduce((a, c) => a + pm(c), 0) / n, rg = field.reduce((a, c) => a + c.grip, 0) / n, lim = (v, a, b) => Math.max(a, Math.min(b, v));
   return { p: lim(Math.pow(rp / pm(spec), .85), .72, 1.35), g: lim(Math.pow(rg / spec.grip, .85), .82, 1.18) };
 }
+
+// ============================================================================
+// Garage visual upgrades. Every option is a small integer stored in save.look[carId]; 0 is always "stock / off", so old saves load unchanged.
+// The garage builds its panels from LOOK_CATS: `o` = labelled options, `sw` = a colour palette (index 0 = none). Labels are English keys for lang.js.
+// ============================================================================
+export const CARBON = 0x23262b;      // sentinel colour in a palette: "carbon fibre weave"
+export const PAL = {
+  rim: [0, 0xf3f4f6, 0x111214, 0xb87333, 0xf2c200, 0xe3262e, 0x19a7ce, 0x4a4f58, 0xc9a24a, 0xff6a13],
+  tint: [0, 0x030304, 0x0b2f52, 0x5a4410, 0x4a0d14, 0x0e3b24, 0x3a1b52],
+  glow: [0, 0x19a7ce, 0xff2bd0, 0x7dff9b, 0xffc21a, 0xe3262e, 0xffffff],
+  liv: [0xf2f2ee, 0x15171c, 0xe3262e, 0x1c57c8, 0xffc21a, 0x19a7ce, 0xff6a13, 0x2fb457],
+  ban: [0, 0x15171c, 0xf2f2ee, 0xe3262e, 0x1c57c8, 0xffc21a, 0xff6a13, 0x2fb457],
+  roofc: [0, CARBON, 0x15171c, 0xf2f2ee, 0xe3262e, 0x1c57c8, 0xffc21a, 0xff6a13],
+  tow: [0, 0xe3262e, 0x1c57c8, 0xffc21a, 0x15171c, 0xff6a13],
+};
+// Cars that already wear a rear spoiler or wing from the factory (checked on the models): they are never offered wing upgrades.
+// (the model file flags Delta, Impreza and Quattro; the others were found by inspecting the rear of each body)
+export const STOCK_WING = ['Escort', 'Fiat131', 'P911', 'Stratos', 'E30', 'R5', 'Celica', 'Delta', 'Impreza', 'Lancer', 'EscortCos', 'P205', 'RS200', 'Quattro', 'S4'];
+export const NUMS = [0, 1, 5, 7, 12, 27, 46, 77, 99];
+export const FINISHES = ['Factory', 'Gloss', 'Satin', 'Matte', 'Metallic'];
+export const LOOK_CATS = [
+  { id: 'aero', name: 'Aero', rows: [
+    { k: 'wing', t: 'Rear wing', o: ['None', 'Lip', 'GT wing', 'Race wing'], noSpoiler: true },
+    { k: 'split', t: 'Front splitter', o: ['Off', 'Blade', 'Carbon lip', 'Colour lip'] },
+    { k: 'canard', t: 'Canards', o: ['Off', 'Black', 'Carbon', 'Colour'] },
+    { k: 'skirt', t: 'Side skirts', o: ['Off', 'Black', 'Carbon', 'Colour'] },
+    { k: 'diff', t: 'Rear diffuser', o: ['Off', 'Black', 'Carbon'] },
+    { k: 'flap', t: 'Mud flaps', o: ['Off', 'Rear', 'Front + rear'] },
+  ] },
+  { id: 'body', name: 'Body', rows: [
+    { k: 'bonnet', t: 'Bonnet', o: ['Stock', 'Louvre vents', 'Carbon', 'Pins', 'Carbon + pins'] },
+    { k: 'flare', t: 'Wide arches', o: ['Off', 'Body colour', 'Black', 'Carbon'] },
+    { k: 'scoop', t: 'Roof', o: ['None', 'Scoop', 'Vent', 'Twin vents'] },
+    { k: 'ant', t: 'Antenna', o: ['None', 'Whip', 'Shark fin', 'Twin whips'] },
+    { k: 'tow', t: 'Tow hooks', sw: 'tow' },
+    { k: 'pipe', t: 'Exhaust tips', o: ['Stock', 'Chrome', 'Titanium', 'Dual carbon'] },
+  ] },
+  { id: 'rally', name: 'Rally', rows: [
+    { k: 'pods', t: 'Light pods', o: ['Off', 'Bumper', 'Roof bar', 'Both'] },
+    { k: 'lampc', t: 'Lamp colour', o: ['White', 'Amber'] },
+    { k: 'rack', t: 'Roof rack', o: ['Off', 'Rack', 'Rack + spare', 'Rack + spare + bars'] },
+    { k: 'snork', t: 'Snorkel', o: ['Off', 'Safari'] },
+    { k: 'hl', t: 'Headlight covers', o: ['Off', 'Black tape', 'Yellow tape', 'Slat guards'] },
+  ] },
+  { id: 'wheels', name: 'Wheels', rows: [
+    { k: 'rim', t: 'Rim colour', sw: 'rim' },
+    { k: 'rimS', t: 'Rim design', o: 'RIM_STYLES', cols: 3 },
+    { k: 'tyreS', t: 'Tyre sidewall', o: 'TYRE_STYLES', cols: 4 },
+    { k: 'cal', t: 'Brake calipers', sw: 'CAL_COLS' },
+    { k: 'disc', t: 'Brake discs', o: ['Cast iron', 'Black', 'Gold'] },
+    { k: 'stance', t: 'Ride height', o: ['Stock', 'Lowered', 'Raised'] },
+  ] },
+  { id: 'livery', name: 'Livery', rows: [
+    { k: 'stripe', t: 'Racing stripes', o: ['Off', 'Twin', 'Wide', 'Triple', 'Bonnet band'] },
+    { k: 'strc', t: 'Stripe colour', sw: 'liv', none: false },
+    { k: 'roofc', t: 'Roof colour', sw: 'roofc' },
+    { k: 'ban', t: 'Windscreen banner', sw: 'ban' },
+    { k: 'side', t: 'Side stripe', o: ['Off', 'Beltline', 'Double', 'Lower band'] },
+    { k: 'num', t: 'Race number', o: NUMS.map(n => n ? String(n) : 'Stock'), vals: NUMS, cols: 3 },
+  ] },
+  { id: 'finish', name: 'Finishes', rows: [
+    { k: 'fin', t: 'Paint finish', o: FINISHES },
+    { k: 'tint', t: 'Glass', sw: 'tint' },
+    { k: 'glow', t: 'Underglow', sw: 'glow' },
+  ] },
+];

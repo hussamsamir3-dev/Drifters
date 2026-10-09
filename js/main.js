@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TRACKS, THEMES, loadTrack, makeSky, resampleClosed, GRASS, PL } from './tracks.js';
-import { CLASSES, balance, TUNE } from './config.js';
+import { CLASSES, balance, TUNE, LOOK_CATS, PAL, STOCK_WING, CARBON as CARBON_HEX } from './config.js';
+import { aiCosmetics } from './carparts.js';
 import { buildCrew } from './pit.js';
 import { Marshals } from './people.js';
 import { CARS, PAINTS, RIMS, TINTS, LIVC, Car, loadCars, aiDrive, tuneOf, RIM_STYLES, TYRE_STYLES, CAL_COLS, setCarEnv } from './car.js';
@@ -41,7 +42,23 @@ if (!save.v9) { save.zoom = 1.5; save.v9 = 1; }
 { const ids = CARS.map(c => c.id); save.owned = (save.owned || []).filter(id => ids.includes(id)); for (const id of ['Mini', 'Escort']) if (!save.owned.includes(id)) save.owned.push(id); if (!ids.includes(save.car)) { save.car = 'Mini'; if (!save.v19) save.credits = (save.credits || 0) + 4000; } save.v19 = 1; }   // the car list changed: keep what still exists, hand back credits for what does not   // automatic gas is now off unless switched on in the menu
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
 const tx = s => save.lang === 'ar' && AR[s] != null ? AR[s] : s;
-const lookOf = id => { const l = save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 }); if (l.rimS === undefined) { l.rimS = (CARS.find(c => c.id === id) || {}).rimS ?? 1; l.tyreS = 0; l.cal = 0; } return l; };
+const lookOf = id => { const l = save.look[id] || (save.look[id] = { wing: 0, split: 0, rim: 0, tint: 0, glow: 0 }); if (l.rimS === undefined) { l.rimS = (CARS.find(c => c.id === id) || {}).rimS ?? 1; l.tyreS = 0; l.cal = 0; }
+  if (l.wing && STOCK_WING.includes(id)) l.wing = 0;      // old saves: a car with its own spoiler or wing cannot carry a wing upgrade
+  return l; };
+// The garage's visual-upgrade panel: one category at a time (Aero, Body, Rally, Wheels, Livery, Finish), built from LOOK_CATS in config.js.
+let lookCat = 'aero';
+function lookHtml(sp, L) {
+  const stock = !!sp.wing || STOCK_WING.includes(sp.id), pals = { rim: RIMS, tint: TINTS, glow: GLOWS, liv: LIVC, CAL_COLS, ...PAL }, lists = { RIM_STYLES, TYRE_STYLES };
+  const cat = LOOK_CATS.find(c => c.id === lookCat) || LOOK_CATS[0];
+  const swatch = c => c === CARBON_HEX ? 'repeating-linear-gradient(45deg,#1c1e22 0 3px,#4a4f57 3px 6px)' : c ? hex(c) : 'transparent';
+  return '<div class="lcats">' + LOOK_CATS.map(c => '<button data-cat="' + c.id + '" class="' + (c.id === cat.id ? 'on' : '') + '">' + tx(c.name) + '</button>').join('') + '</div>' + cat.rows.map(r => {
+    if (r.noSpoiler && stock) return '<h3>' + tx(r.t) + '</h3><p class="note">' + tx('This car has its own wing.') + '</p>';
+    const cur = L[r.k] || 0;
+    if (r.sw) { const arr = pals[r.sw]; return '<h3>' + tx(r.t) + '</h3><div class="paints">' + arr.map((c, i) => '<button data-k="' + r.k + '" data-v="' + i + '" class="' + (cur === i ? 'on' : '') + '" style="background:' + swatch(c) + '" aria-label="' + tx(r.t) + ' ' + (i + 1) + '">' + (c || r.none === false ? '' : '×') + '</button>').join('') + '</div>'; }
+    const labels = typeof r.o === 'string' ? lists[r.o] : r.o, n = labels.length, cols = r.cols || (n <= 2 ? 2 : n === 4 ? 4 : 3);
+    return '<h3>' + tx(r.t) + '</h3><div class="seg wide c' + cols + '">' + labels.map((l, i) => { const v = r.vals ? r.vals[i] : i; return '<button data-k="' + r.k + '" data-v="' + v + '" class="' + (cur === v ? 'on' : '') + '">' + tx(l) + '</button>'; }).join('') + '</div>';
+  }).join('');
+}
 const tuneSet = id => save.tune[id] || (save.tune[id] = { gear: 0, aero: 0, brake: 0, susp: 0, split: 0, diff: 0, tyre: 'medium' });
 const racing = () => !!R && !R.attract;
 const paintOf = id => save.paint[id] ?? CARS.find(c => c.id === id).color;
@@ -175,7 +192,8 @@ let garageCar = null;
 const hero0 = () => !racing() && sel.tab !== 'garage' && sel.tab !== 'tune';
 function showGarageCar() {
   if (garageCar) { garage.remove(garageCar.root); garageCar.dispose(); }
-  const spec = CARS[sel.car]; garageCar = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id), tuneSet(spec.id), true); garageCar.root.rotation.y = garageSpin; garageCar.root.scale.setScalar(1 / TUNE.toy.w); garage.add(garageCar.root);
+  const spec = CARS[sel.car]; garageCar = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id), tuneSet(spec.id), true); garageCar.render(0, { height: () => 0, def: { theme: '' } }); garageCar.root.rotation.y = garageSpin;      // one render pass: fits the wheels and cuts the wheel arches, so flares and mud flaps have real arches to follow
+  garageCar.root.scale.setScalar(1 / TUNE.toy.w); garage.add(garageCar.root);
 }
 let garageSpin = .6, tuneFocus = ''; const gDrag = { on: false, x: 0, v: 0, hold: 0 };
 addEventListener('pointerdown', e => { if (!garageCar || R || arena.on || e.target.closest('button, input, select, label, a, textarea, .card, #lookRows, #tuneRows, #nav, #startBtn')) return; gDrag.on = true; gDrag.x = e.clientX; gDrag.v = 0; });      // drag the car round with a finger or the mouse
@@ -224,6 +242,7 @@ const audio = new GameAudio(); audio.on = !save.muted;
 // calming interface sounds: a soft tick on hover, a warm pop on press, rising notes to confirm, falling notes to go back
 document.addEventListener('mouseover', e => { const b = e.target.closest && e.target.closest('button, .tile, .card, [data-tab]'); if (b && !b.disabled && b !== window.__lastHover) { window.__lastHover = b; audio.ui('hover'); } }, true);
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button, .tile, .card, [data-tab]'); if (!b) return; audio.ui(b.id === 'startBtn' || b.classList.contains('primary') ? 'confirm' : /back|close|cancel|done|resume/i.test(b.id + ' ' + b.textContent) ? 'back' : b.dataset.tab ? 'tab' : 'click'); }, true);
+function toggleLights() { const me = R && R.player; if (!me) return; me.lightsMan = true; me.setLights(!me.lightsOn, true); audio.ui('click'); toast(me.lightsOn ? 'Headlights on' : 'Headlights off'); }
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   keys[e.code] = true; audio.init();
@@ -233,6 +252,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') respawn(R.player, true);
   if (e.code === 'KeyM') setMuted(!save.muted);
   if (e.code === 'KeyH') audio.horn();
+  if (e.code === 'KeyL' && !e.repeat) toggleLights();
   if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) setPace(+e.code.slice(5) - 1);
   if (save.dev) { const me = R.player;      // developer keys
     if (e.code === 'F2') { me.repair(); me.fuel = 1; toast('DEV: repaired and refuelled'); }
@@ -337,7 +357,7 @@ async function startRace(o) {
     const names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
     for (let i = 0; i < count; i++) {
-      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), LO = aiLoadout(s, o.diff, !!riv, o.rules !== 'arcade'), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], LO.up, { wing: s.wing ? 0 : LO.wing, split: LO.split, rim: 0, ai: 1 }, Object.assign(LO.tune.tyre ? LO.tune : { tyre: ['soft', 'medium', 'medium', 'medium', 'hard'][Math.random() * 5 | 0] }, o.weather === 'rain' ? { tyre: 'rain' } : {})); livUsed.add(s.id);
+      const s = riv ? CARS.find(c => c.id === riv[i].car) : pool[i % pool.length], dupe = !riv && livUsed.has(s.id), LO = aiLoadout(s, o.diff, !!riv, o.rules !== 'arcade'), car = new Car(s, riv && riv[i].paint != null ? riv[i].paint : dupe ? PAINTS[(i * 2 + 1 + (Math.random() * 2 | 0)) % PAINTS.length] : s.color, riv ? riv[i].name : names[i], LO.up, Object.assign({ wing: s.wing ? 0 : LO.wing, split: LO.split, rim: 0, ai: 1 }, aiCosmetics(s, o.diff)), Object.assign(LO.tune.tyre ? LO.tune : { tyre: ['soft', 'medium', 'medium', 'medium', 'hard'][Math.random() * 5 | 0] }, o.weather === 'rain' ? { tyre: 'rain' } : {})); livUsed.add(s.id);
       car.loadout = LO; if (Math.abs(LO.bop - 1) > .005) { car.bopG = (car.bopG || 1) * Math.min(1.14, Math.max(.94, LO.bop)); car.tn.acc *= Math.min(1.25, Math.max(.9, LO.bop)); }      // Hard: a car that cannot reach the player's level with upgrades alone gets a balance-of-performance boost, so the field is always a real challenge
       if (!riv && o.diff >= 1) { const ar = o.rules === 'arcade'; car.tn.acc *= o.diff === 2 ? (ar ? 1.14 : 1.12) : (ar ? 1.05 : 1.04); car.tn.top = (car.tn.top || 1) * (o.diff === 2 ? (ar ? 1.045 : 1.035) : (ar ? 1.01 : 1.01)); }      /* quicker off the line and a touch more top speed than a stock car */
       R.ais.set(car, mkAI(riv ? riv[i].skill : o.rules !== 'arcade' ? base + (Math.random() - .5) * .014 : base + (4 - i) * .012 + Math.random() * .015)); car.assistK = .7; R.cars.push(car); placeOnGrid(car, i);
@@ -509,7 +529,8 @@ function rumble(ms, strong = .3, weak = .3) { if (save.haptics === false) return
 function feel(me, dt) {      // the car talks to your hands: kerbs, sliding tyres, locked wheels, the limiter, gear changes and runoff each have their own pulse
   const F = feelState; F.t -= dt; const sh = me.shiftEvt > 0; if (sh && !F.sh) rumble(10, .4, .1); F.sh = sh ? 1 : 0; if (F.t > 0 || me.speed < 6) return;
   if (me.wsurf.includes(1) && me.speed > 8) { rumble(16, .25, .6); F.t = .11; } else if (me.locked || me.lockF) { rumble(14, .5, .3); F.t = .09; } else if (me.grass > .5) { rumble(14, .2, .7); F.t = .08; }
-  else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; } }
+  else if (me.slipR > .24 && me.speed > 12) { rumble(14, .15, .45); F.t = .14; } else if (me.limiter) { rumble(10, .3, .2); F.t = .07; }
+  else if (Math.abs(me.ayS || 0) > 9 && me.speed > 15) { rumble(12, .1, .2 + Math.min(.3, (Math.abs(me.ayS) - 9) * .03)); F.t = .15; } else if ((me.axS || 0) > 6 && me.load > .8) { rumble(10, .22, .1); F.t = .14; } }      /* build 68: hard cornering loads the controller steadily, and a hard launch thumps */
 const applyDmg = () => { TUNE.dmgK = ({ off: 0, low: .12, medium: .3, high: .7 })[save.dmg || 'medium']; };
 function impact(car, power, wall) {
   if (R && car === R.player) eng.impact(car, power, wall);
@@ -905,6 +926,7 @@ function raceExtras(dt) {
   hitPulse *= Math.exp(-dt * 5); fovPunch *= Math.exp(-dt * 6);
   if (post) {
     const u = post.u; u.tilt.value = R.attract ? .7 : 0;      /* build 57: no miniature-model blur in a race */ u.time.value = R.t; u.hit.value = hitPulse; u.wet.value = R.wet; u.speed.value += ((me.nitroOn ? .9 : clamp((me.speed - 40) / 40, 0, .4)) - u.speed.value) * Math.min(1, dt * 5);
+    { const kc = Math.min(1, dt * 4), ch = clamp((me.speed - 28) / 55, 0, 1) * .55 + (me.nitroOn ? .5 : 0) + clamp(me.slipR * 1.2, 0, .5), pu = clamp((me.axS || 0) / 9, -1, 1) * clamp(me.speed / 12, 0, 1) + (me.nitroOn ? .5 : 0); u.chroma.value += (ch - u.chroma.value) * kc; u.pump.value += (pu - u.pump.value) * Math.min(1, dt * 3.5); u.vig.value += (.32 + (me.braking ? .1 * clamp(me.speed / 50, 0, 1) : 0) + .08 * u.speed.value - u.vig.value) * Math.min(1, dt * 6); }      /* build 68: speed, slides and nitro fringe the edges of the picture; power and braking make it breathe */
     if (sunDisc && sunDisc.visible) { const v = sunDisc.position.clone().project(camera); const on = v.z < 1 ? clamp(1.5 - Math.max(Math.abs(v.x), Math.abs(v.y)), 0, 1) : 0; u.sunPos.value.set(v.x * .5 + .5, v.y * .5 + .5); u.sunVis.value += (on - u.sunVis.value) * Math.min(1, dt * 4); } else u.sunVis.value = 0;
   }
 }
@@ -972,10 +994,10 @@ function updateRace(dt) {
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
     { const rt = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); near.forEach(o => { const dx = o.c.x - me.x, dz = o.c.z - me.z, dd = Math.hypot(dx, dz) || 1; o.pan = clamp((dx * rt.x + dz * rt.z) / 26, -1, 1); o.dop = clamp(-(((o.c.vx - me.vx) * dx + (o.c.vz - me.vz) * dz) / dd) / 343 * 2, -.2, .2); }); }
     audio.rivals(near.map(({ c, d, pan, dop }) => ({ pan, dop: dop * 1, x: c.x, y: c.y + .6, z: c.z, snd: c.spec.snd, id: c.spec.id, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
-  audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 }); if (!R.attract) { feel(me, dt); eng.tick(dt); sfxTick(me, dt); }
+  audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3, near: R.zoneW || 0, heat: .25 + .5 * clamp(me.speed / 60, 0, 1) }); if (!R.attract) { feel(me, dt); eng.tick(dt); sfxTick(me, dt); }
   stepDynamicTime(dt); stepFloodlights(dt, me); updateRefl();
   { const cnt = k => me.wsurf.filter(v => v === k).length, tr0 = R.track; const surfK = me.grass > .5 ? 'grass' : R.wet > .5 ? 'wet' : 'road'; R.audioSurf = surfK;
-    let zw = 0, zk = 'stand'; for (const z of tr0.audioZones || []) { const d = Math.hypot(me.x - z.x, me.z - z.z), q = clamp(1 - d / z.r, 0, 1) * z.w; if (q > zw) { zw = q; zk = z.kind; } } audio.zone(zw, zk); }
+    let zw = 0, zk = 'stand'; for (const z of tr0.audioZones || []) { const d = Math.hypot(me.x - z.x, me.z - z.z), q = clamp(1 - d / z.r, 0, 1) * z.w; if (q > zw) { zw = q; zk = z.kind; } } audio.zone(zw, zk); R.zoneW = zw; }
   { const fw = new THREE.Vector3(); camera.getWorldDirection(fw); audio.listen(me.x, me.y + 1, me.z, fw.x, fw.z); }
   audio.drive({ surf: R.audioSurf, cyl: me.spec.cyl || 4, acc: me.axS || 0, tmpK: me.tmpK, soft: me.tn.comp === 'soft' ? 1.15 : me.tn.comp === 'hard' ? .85 : 1, rpm: me.rpmR, rpmN: me.rpm, load: R.state === 'done' ? .3 : me.load, limiter: me.limiter, turbo: Math.max(me.spec.turbo, me.up.eng > 0 ? 1 : 0) * (1 + me.up.eng * .25), running: true, sand: tr.def.theme === 'desert', kerb: me.speed > 2 && me.wsurf.includes(1) ? 1 : 0, speed: me.speed, skid: skid && me.grass < .5 ? clamp(me.slipR * 1.6 + me.wspin * .7, .25, 1) : 0, grip: me.grass < .5 ? Math.max(me.useF, me.useR) : 0, lock: me.lockF ? 1 : 0, spin: Math.min(1, me.wspin + me.wspinF), wet: R.wet, dirt: me.grass * clamp(me.speed / 20, 0, 1), nitro: me.nitroOn, brake: me.braking ? 1 : 0, rain: R.wet });
   adaptQuality(dt);
@@ -1023,6 +1045,8 @@ function updateCamera(dt) {
         cam.az = clamp((cam.az || 1) + (over > 0 ? Math.min(1.5, over * 2.2) : Math.max(-.12, over * .3)) * dt, 1, 2.6); } else cam.az = Math.max(1, (cam.az || 1) - dt * .5);
       camera.setViewOffset(Wd, Hd, -cam.sx * Wd / 2, cam.sy * Hd / 2, Wd, Hd); }
     if (Math.abs(camera.fov - m.fov) > .05) { camera.fov = cam.fov = m.fov; camera.updateProjectionMatrix(); }
+    { const pv = cam.pv || (cam.pv = { x: me.vx, z: me.vz, ar: 0, af: 0 }); if (dt > 0) { const ax = (me.vx - pv.x) / dt, az = (me.vz - pv.z) / dt, kk = Math.min(1, dt * 6); pv.ar += ((-Math.cos(yaw) * ax + Math.sin(yaw) * az) - pv.ar) * kk; pv.x = me.vx; pv.z = me.vz; }
+      camera.rotateZ(clamp(pv.ar * .0016, -.035, .035) * (R.state === 'go' ? 1 : 0)); }      /* build 68: the horizon leans a little with the g-force, as your head would in the seat */
     shake *= Math.exp(-dt * 4.5); return;
   }
   let want = me.th, rate = 4.2;
@@ -1383,7 +1407,7 @@ async function refreshMenu() {
   $('musicVol').value = save.mvol * 100; $('sfxVol').value = save.svol * 100; $('engVol').value = save.evol * 100; $('radioVol').value = (save.rvol ?? .9) * 100; setTxt('hUnit', save.units === 'mph' ? 'mph' : 'km/h');
   if (gpMode) { const g = save.gp && !save.gp.done ? save.gp : null; $('gpBox').innerHTML = '<h2>' + tx('Grand Prix') + '</h2><p>' + tx('Four rounds, eight drivers, points for every finish. The third round is wet.') + '</p><ol>' + GP_TRACKS.map((id, i) => { const t = TRACKS.find(x => x.id === id); return '<li class="' + (g && i < g.round ? 'done' : g && i === g.round ? 'on' : '') + '">' + (save.lang === 'ar' ? t.ar : t.name) + '</li>'; }).join('') + '</ol>' + (g ? '<p class="meta">' + Object.entries(g.pts).sort((a, b) => b[1] - a[1]).slice(0, 4).map((e, i) => (i + 1) + '. ' + e[0] + ' ' + e[1]).join(' · ') + '</p>' : ''); }
   { const sp2 = CARS[sel.car], L = lookOf(sp2.id), sw = (k, arr) => arr.map((c, i) => '<button data-k="' + k + '" data-v="' + i + '" class="' + (L[k] === i ? 'on' : '') + '" style="background:' + (c ? hex(c) : 'transparent') + '">' + (c ? '' : '×') + '</button>').join(''), sg = (k, labels) => labels.map((l, i) => '<button data-k="' + k + '" data-v="' + i + '" class="' + (L[k] === i ? 'on' : '') + '">' + tx(l) + '</button>').join('');
-    $('lookRows').innerHTML = '<h3>' + tx('Rear wing') + '</h3>' + (garageCar && garageCar.hasWing ? '<p class="note">' + tx('This car has its own wing.') + '</p>' : '<div class="seg wide four">' + sg('wing', ['None', 'Lip', 'GT wing', 'Race wing']) + '</div>') + '<h3>' + tx('Front splitter') + '</h3><div class="seg wide two">' + sg('split', ['Off', 'On']) + '</div><h3>' + tx('Extras') + '</h3><div class="seg wide">' + ['skirt', 'scoop', 'pipe'].map((k, i) => '<button data-k="' + k + '" data-v="' + (L[k] ? 0 : 1) + '" class="' + (L[k] ? 'on' : '') + '">' + tx(['Side skirts', 'Roof scoop', 'Exhaust tips'][i]) + '</button>').join('') + '</div><h3>' + tx('Wheels') + '</h3><div class="paints">' + sw('rim', RIMS) + '</div><h3>' + tx('Rim design') + '</h3><div class="seg wide four">' + sg('rimS', RIM_STYLES) + '</div><h3>' + tx('Tyre sidewall') + '</h3><div class="seg wide four">' + sg('tyreS', TYRE_STYLES) + '</div><h3>' + tx('Brake calipers') + '</h3><div class="paints">' + sw('cal', CAL_COLS) + '</div><h3>' + tx('Glass') + '</h3><div class="paints">' + sw('tint', TINTS) + '</div><h3>' + tx('Underglow') + '</h3><div class="paints">' + sw('glow', GLOWS) + '</div>';
+    $('lookRows').innerHTML = lookHtml(sp2, L);
     const tn = tuneSet(sp2.id), TR = [['gear', 'Gearing', 'Top speed', 'Acceleration'], ['aero', 'Downforce', 'Less drag', 'More grip'], ['brake', 'Brake bias', 'Rearward', 'Forward'], ['susp', 'Balance', 'Agile', 'Stable'], ...(sp2.drive === 'awd' ? [['split', 'Torque split', 'Rear-biased', 'Front-biased']] : []), ['diff', 'Differential', 'Open', 'Locked']];
     $('tuneRows').innerHTML = TR.map(([k, n1, lo, hi]) => '<div class="trow2"><b>' + tx(n1) + '</b><span>' + tx(lo) + '</span><button data-k="' + k + '" data-d="-1">−</button><i>' + [-2, -1, 0, 1, 2].map(v => '<u class="' + (v === tn[k] ? 'on' : '') + '"></u>').join('') + '</i><button data-k="' + k + '" data-d="1">+</button><span>' + tx(hi) + '</span></div>').join('') + '<h3>' + tx('Tyre compound') + '</h3><div class="seg wide">' + ['soft', 'medium', 'hard', 'rain', 'gravel'].map(c => '<button data-c="' + c + '" class="' + (tn.tyre === c ? 'on' : '') + '">' + tx(c[0].toUpperCase() + c.slice(1)) + '</button>').join('') + '</div><p class="note">' + tx('Soft tyres grip more and wear faster; hard tyres last longer and need more heat. Rain tyres for wet roads, gravel tyres for loose ground. Watch the tyre temperature: too cold or too hot and the grip falls away. Settings apply to this car only.') + '</p>' + tuneTable(sp2, tn, upOf(sp2.id)); }
 
@@ -1446,8 +1470,8 @@ $('gfxBtn').onclick = () => { const o = ['auto', 'high', 'medium', 'low']; save.
 $('ups').onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const spec = CARS[sel.car], up = upOf(spec.id), cost = upCost(spec, up[b.dataset.k]); if (save.credits < cost) return; save.credits -= cost; up[b.dataset.k]++; persist(); tellPeer(); if (b.dataset.k === 'eng') { audio.quiet = false; audio.turboDemo(); } audio.init(); audio.wrench(); showGarageCar(); refreshMenu(); };
 const ASSIST_HELP = { medium: 'Assist medium: the car helps catch slides, but it will oversteer and understeer if you overdrive it.', off: 'Assist off: no automatic counter-steer, no throttle cut. Slides are yours to catch.', low: 'Assist low: half-strength counter-steer in a slide and a gentle throttle cut past 24° of slip.', full: 'Assist full: the car counter-steers for you in a slide and eases the throttle before it becomes a spin.' };
 function applyLang() { document.documentElement.lang = save.lang; for (const id of ['menu', 'results', 'pause']) $(id).dir = save.lang === 'ar' ? 'rtl' : 'ltr'; for (const el of document.querySelectorAll('[data-t]')) { if (!el.dataset.t) el.dataset.t = el.textContent.trim(); el.textContent = tx(el.dataset.t); } }
-const carLook = () => { persist(); tellPeer(); showGarageCar(); refreshMenu(); };
-$('lookRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; lookOf(CARS[sel.car].id)[b.dataset.k] = +b.dataset.v; carLook(); };
+const carLook = () => { persist(); tellPeer(); if (garageCar) garageCar.dress(lookOf(CARS[sel.car].id)); else showGarageCar(); refreshMenu(); };      // the part is fitted to the car on the stand at once, no rebuild
+$('lookRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.cat) { lookCat = b.dataset.cat; return refreshMenu(); } if (b.dataset.k == null) return; lookOf(CARS[sel.car].id)[b.dataset.k] = +b.dataset.v; carLook(); };
 $('gTyre').onclick = cycleComp;
 $('tuneRows').onclick = e => { const b = e.target.closest('button'); if (!b) return; tuneFocus = b.dataset.c ? 'tyre' : b.dataset.k; const tn = tuneSet(CARS[sel.car].id); if (b.dataset.c) tn.tyre = b.dataset.c; else tn[b.dataset.k] = clamp((tn[b.dataset.k] || 0) + +b.dataset.d, -2, 2); persist(); refreshMenu(); };
 $('langSeg').onclick = e => { const b = e.target.closest('button'); if (b) { save.lang = b.dataset.l; persist(); refreshMenu(); } };
@@ -1654,8 +1678,8 @@ function frame(now) {
     // In the tuning tab the car stops turning and the camera moves in on the part you are adjusting: wing, tail, front brake, suspension, tyre.
     const F = sel.tab === 'tune' ? { aero: [2.55, 3.3, 6.6, 1.0, 30], gear: [3.05, 1.0, 5.6, .45, 30], brake: [-.95, 1.2, 5.2, .45, 26], susp: [-1.57, .8, 6.6, .45, 28], tyre: [-1.15, .75, 4.6, .4, 24] }[tuneFocus] : null; if (sel.tab !== 'tune') tuneFocus = '';
     if (F) garageSpin += wrap(F[0] - garageSpin) * Math.min(1, dt * 4); else if (!gDrag.on) { garageSpin += gDrag.v; gDrag.v *= .93; gDrag.hold -= dt; if (gDrag.hold <= 0) garageSpin += dt * (hero0() ? .22 : .35); } garageCar.root.rotation.y = garageSpin;
-    const narrow = innerWidth < 820, rs = save.lang === 'ar' ? -1 : 1, gc = arena.gc || (arena.gc = { y: 3, d: 11.5, ly: -.4, f: 38 }), hero = !F && sel.tab !== 'garage' && sel.tab !== 'tune', ht = studio.t, tg = F ? { y: F[1], d: F[2], ly: F[3], f: F[4] } : hero ? { y: 2.2 + .35 * Math.sin(ht * .13), d: (narrow ? 13.5 : 10.6) + .7 * Math.sin(ht * .09), ly: narrow ? 1.6 : .15, f: 33 + 2 * Math.sin(ht * .07) } : { y: 3, d: narrow ? 13 : 11.5, ly: narrow ? 1.8 : -.4, f: 38 }, kk = Math.min(1, dt * 4); for (const q in tg) gc[q] += (tg[q] - gc[q]) * kk;
-    camera.fov = gc.f; camera.updateProjectionMatrix(); camera.position.set(hero ? Math.sin(ht * .11) * 1.6 - (narrow ? 0 : .3 * rs) : (narrow ? 0 : -1.6 * rs * gc.d / 11.5), gc.y, gc.d); camera.lookAt(hero ? (narrow ? 0 : -.045 * gc.d * rs) : narrow ? 0 : -2.9 * rs * gc.d / 11.5, gc.ly, 0);
+    const narrow = innerWidth < 820, rs = save.lang === 'ar' ? -1 : 1, gc = arena.gc || (arena.gc = { y: 3, d: 11.5, ly: -.4, f: 38 }), hero = !F && sel.tab !== 'garage' && sel.tab !== 'tune', ht = studio.t, tg = F ? { y: F[1], d: F[2], ly: F[3], f: F[4] } : hero ? { y: 2.2 + .35 * Math.sin(ht * .13), d: (narrow ? 13.5 : 10.6) + .7 * Math.sin(ht * .09), ly: narrow ? .35 : .65, f: 33 + 2 * Math.sin(ht * .07) } : { y: 3, d: narrow ? 13 : 11.5, ly: narrow ? .35 : .65, f: 38 }, kk = Math.min(1, dt * 4); for (const q in tg) gc[q] += (tg[q] - gc[q]) * kk;
+    camera.fov = gc.f; camera.updateProjectionMatrix(); camera.position.set(hero ? Math.sin(ht * .11) * 1.4 : 0, gc.y, gc.d); camera.lookAt(0, gc.ly, 0);      /* build 68: the car is always dead centre of the picture, in the menu and in the garage, on every screen shape */
     sun.position.set(hero ? 9 * Math.cos(ht * .21) : 6, 12, hero ? 9 * Math.sin(ht * .21) + 3 : 8); sun.target.position.set(0, 0, 0); studio.update(dt, garageSpin);
   }
   draw(dt);

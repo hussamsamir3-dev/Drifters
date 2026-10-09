@@ -687,3 +687,15 @@ body.touch #gl,body.touch #menuBg{touch-action:none}
 @media (max-height:520px){.l-main{gap:16px;flex-wrap:nowrap}.l-gauge{width:clamp(130px,42vh,220px)}.l-tip{display:none}.l-logo b{font-size:clamp(26px,9vh,48px)}.l-logo span{font-size:clamp(16px,5vh,26px)}.ldr-race .l-logo{transform:skewX(-8deg) scale(.42)}.l-cv{width:min(300px,38vw,52vh)}}
 @media (max-width:640px) and (orientation:portrait){.l-main{flex-direction:column;gap:10px}.ldr-race .l-logo{position:static;transform:skewX(-8deg) scale(.7)}.l-gauge{width:clamp(150px,40vw,220px)}}
 @media (prefers-reduced-motion:reduce){.l-bg i,.l-road i,.l-go{animation:none}}
+
+/* garage visual upgrades: category chips, then one panel of options at a time */
+.lcats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}
+.lcats button{min-width:0;padding:8px 6px;border-radius:999px !important;border:1px solid rgba(255,255,255,.16) !important;background:rgba(255,255,255,.06) !important;color:#dfe3ea !important;font-weight:700;font-size:13px;letter-spacing:.03em;white-space:nowrap}
+.lcats button.on{background:#f3f4f6 !important;color:#14151a !important;border-color:#fff !important}
+#lookRows .seg.wide.c2{grid-template-columns:repeat(2,1fr)}
+#lookRows .seg.wide.c3{grid-template-columns:repeat(3,1fr)}
+#lookRows .seg.wide.c4{grid-template-columns:repeat(4,1fr)}
+#lookRows .seg.wide button{padding:9px 4px;white-space:normal;line-height:1.15;min-height:38px;overflow-wrap:anywhere}
+#lookRows .paints button{flex:0 0 auto}
+@media (max-width:480px){#lookRows .seg.wide.c4{grid-template-columns:repeat(2,1fr)}.lcats button{padding:7px 8px;font-size:12.5px}}
+@media (max-height:470px){.lcats{grid-template-columns:repeat(6,1fr);gap:4px}.lcats button{padding:6px 2px;font-size:11.5px}}

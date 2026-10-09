@@ -7,16 +7,16 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const FX = {
-  uniforms: { tDiffuse: { value: null }, sunPos: { value: new THREE.Vector2(.5, .5) }, sunVis: { value: 0 }, rays: { value: .085 }, speed: { value: 0 }, hit: { value: 0 }, vig: { value: .32 }, wet: { value: 0 }, tilt: { value: 0 }, grade: { value: 1 }, time: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, sunPos: { value: new THREE.Vector2(.5, .5) }, sunVis: { value: 0 }, rays: { value: .085 }, speed: { value: 0 }, hit: { value: 0 }, vig: { value: .32 }, wet: { value: 0 }, tilt: { value: 0 }, grade: { value: 1 }, time: { value: 0 }, chroma: { value: 0 }, pump: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 sunPos; uniform float sunVis, rays, speed, hit, vig, wet, tilt, grade, time; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec2 sunPos; uniform float sunVis, rays, speed, hit, vig, wet, tilt, grade, time, chroma, pump; varying vec2 vUv;
     void main(){
-      vec2 uv=vUv;
+      vec2 uv=vUv; uv=.5+(uv-.5)*(1.-pump*.028);      /* build 68: the picture breathes with the car: a touch wider under power, tighter under the brakes */
       if(wet>.05){ float edge=smoothstep(.3,.5,max(abs(uv.x-.5),abs(uv.y-.5)*1.05)); if(edge>.01){ vec2 g=uv*vec2(22.,13.); float hc=fract(sin(floor(g.x)*91.7)*4375.5); g.y+=time*(.02+hc*.05); vec2 id=floor(g), f=fract(g)-.5; float h=fract(sin(dot(id,vec2(127.1,311.7)))*43758.5);
         if(h>.62){ vec2 o=(vec2(fract(h*17.),fract(h*31.))-.5)*.5; float d=length((f-o)*vec2(1.,.75)); uv+=(f-o)*smoothstep(.07+.09*h,0.,d)*wet*edge*.16; } } }   // a few small drops near the screen edges only; the middle stays clear
       vec2 c=uv-.5; vec3 col;
-      if(hit>.01){ vec2 o=c*hit*.014; col=vec3(texture2D(tDiffuse,uv+o).r, texture2D(tDiffuse,uv).g, texture2D(tDiffuse,uv-o).b); }
+      if(hit+chroma>.01){ vec2 o=c*(hit*.014+chroma*.0075*length(c)*2.); col=vec3(texture2D(tDiffuse,uv+o).r, texture2D(tDiffuse,uv).g, texture2D(tDiffuse,uv-o).b); }
       else col=texture2D(tDiffuse,uv).rgb;
       if(speed>.01){ float m=smoothstep(.12,.62,length(c)); vec3 a=col; for(int i=1;i<8;i++) a+=texture2D(tDiffuse,uv-c*speed*.045*m*float(i)/8.).rgb; col=a/8.; }
       if(sunVis>.01){ vec2 d=(sunPos-uv)/22.; vec2 p=uv; float w=1.; vec3 g=vec3(0.); for(int i=0;i<22;i++){ p+=d; g+=max(texture2D(tDiffuse,p).rgb-vec3(1.15),0.)*w; w*=.93; } col+=min(g*rays*sunVis*.05, vec3(1.6)); }
