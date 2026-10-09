@@ -52,6 +52,17 @@ current buffer during a duel. The free Supabase plan allows 100 messages a secon
 - Settings has separate Engine, Sound effects and Music volumes. Developer mode has an audition panel
   (engine, rpm, load, shift and pop triggers, output meter).
 
+## Build 66 notes
+
+- Straights: control points are whole metres, which made straights wobble. `cleanPts` in `js/tracks.js` snaps runs of points that lie on one line onto their best-fit line and relaxes the gentle bends, so straights are dead straight (kerbs, barriers, pit lane and pit boxes follow).
+- Kerbs: constant-width strips with a short angled cut at each end, a little longer on long corners.
+- Pit boxes: the painted box and the yellow pad were rotated mirror-wise (right only on axis-aligned lanes); they now follow the lane exactly. The pit wall turns see-through while you are in the lane so the crew is never hidden.
+- AI: Hard is quicker (grip, power, top speed), makes far fewer mistakes, reacts faster and is pulled back into the fight harder when you lead.
+- Radio: 30% quieter at every slider position.
+- Headlights: the light pool exists from the start, so switching lights on no longer makes three.js rebuild every shader.
+- Menu: no backdrop blur, the light 2D scene on every graphics level, the garage drawn at 30 fps, at most 1x resolution, without post-processing.
+- Loading: `js/loader.js`. The first start prefetches the model, engine sounds and radio clips, warms the graphics and waits for one tap (which also unlocks sound); each race shows its circuit being drawn as it loads.
+
 ## Race radio (build 65)
 
 - The race engineer is the supplied Expressive Race Engineer voice pack, trimmed to the 93 clips this game can truthfully say (`assets/radio/<category>/<id>.mp3`, about 4 MB, plus `manifest.json` with Arabic subtitles). The old synthesised engineer voice (eSpeak) is gone.
@@ -88,6 +99,7 @@ Touch buttons appear automatically on phones and tablets.
     js/fx.js                  particles, skid marks, dust motes, rain
     js/audio.js               synthesised sound
     js/radio.js               race radio: clip player and queue
+    js/loader.js              loading screens
     js/engineer.js            race engineer: what to say and when
     js/net.js                 Supabase rooms and leaderboard
     assets/cars.glb           the 7 cars, wheels separated

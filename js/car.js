@@ -29,9 +29,9 @@ const LAMP = {};
 const DUST = [new THREE.Color(0x5a4630), new THREE.Color(0xc9a66b)];
 let protos = null;
 
-export async function loadCars() {
+export async function loadCars(onProgress) {
   // The eighteen rally cars live in one file. Every car is a group: a textured body (glass split out) and four separate wheel objects.
-  const gltf = await new GLTFLoader().parseAsync(await getAsset('cars.glb'), '');
+  const gltf = await new GLTFLoader().parseAsync(await getAsset('cars.glb', onProgress), '');
   protos = {}; for (const g of gltf.scene.children) protos[g.name] = g;
   for (const s of CARS) { const p = protos[s.id]; s.model = s.id; s.body = 'k'; s.wing = p && p.userData.wing ? 1 : 0; }
 }
@@ -942,12 +942,12 @@ export function aiDrive(car, track, ai, cars, dt) {
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
-  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .03 : .09) + Math.random() * (ai.diff === 2 ? .035 : .1), consist: [.955, .974, .994][ai.diff ?? 1] + Math.random() * .014, brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
+  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .02 : .09) + Math.random() * (ai.diff === 2 ? .02 : .1), consist: [.955, .974, .9975][ai.diff ?? 1] + Math.random() * (ai.diff === 2 ? .002 : .014), brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
   const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) ** 2 * ([.83, .88, .95][ai.diff ?? 1]) * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) * ([.83, .88, .985][ai.diff ?? 1]) * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
   for (let i = 0; i < 70; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;

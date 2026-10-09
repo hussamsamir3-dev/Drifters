@@ -55,6 +55,8 @@ class EngineVoice {
   }
 }
 
+const RADIO_TRIM = .7;      /* build 66: the radio is 30% quieter at every slider position */
+export const audioFiles = () => [...Object.values(ENGINE_SETS).flatMap(s => s.loops.map(l => l.file)), ...Object.values(SHOTS), ...Object.values(TYRES)].map(f => 'audio/' + f);
 export class GameAudio {
   constructor() { this.on = true; this.ctx = null; this.vol = .7; this.evol = .7; this.mvol = .5; this.rvol = .9; this.dk = 1; this.buf = {}; this.state = 'idle'; this.stats = { starts: 0, live: 0, shots: 0, liveShots: 0 }; this.lastLoad = 0; this.spec = null; this.riv = []; }
   init() {
@@ -72,7 +74,7 @@ export class GameAudio {
     this.shotLP = c.createBiquadFilter(); this.shotLP.type = 'lowpass'; this.shotLP.frequency.value = 5200; this.shotLP.Q.value = .4; this.shotLP.connect(this.engBus);     // bangs come from the tailpipe, behind and below: slightly muffled
     this.airLP = c.createBiquadFilter(); this.airLP.type = 'lowpass'; this.airLP.frequency.value = 1700; this.airLP.Q.value = .3; this.airLP.connect(this.engBus);                                    // turbo air: brighter, but still through the car
     this.sfx = c.createGain(); this.sfx.gain.value = this.vol; this.sfx.connect(this.master);
-    this.radioBus = c.createGain(); this.radioBus.gain.value = this.rvol; this.radioBus.connect(this.master);      /* the race engineer's clips: their own volume, and the engine, effects and music are lowered a little while he speaks */
+    this.radioBus = c.createGain(); this.radioBus.gain.value = this.rvol * RADIO_TRIM; this.radioBus.connect(this.master);      /* the race engineer's clips: their own volume, and the engine, effects and music are lowered a little while he speaks */
     { const blen = Math.floor(c.sampleRate * 2), bir = c.createBuffer(2, blen, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = bir.getChannelData(ch); for (let i = 0; i < blen; i++) { const tt = i / c.sampleRate; d[i] = (Math.random() * 2 - 1) * Math.exp(-tt / .5) * Math.min(1, tt / .014); } }
       this.bigIn = c.createGain(); this.engBus.connect(this.bigIn); this.sfx.connect(this.bigIn); const bcv = c.createConvolver(); bcv.buffer = bir; this.bigLP = c.createBiquadFilter(); this.bigLP.type = 'lowpass'; this.bigLP.frequency.value = 4000; this.bigG = c.createGain(); this.bigG.gain.value = 0; this.bigIn.connect(bcv); bcv.connect(this.bigLP); this.bigLP.connect(this.bigG); this.bigG.connect(this.master); }      // a big, long room that only opens near grandstands and under the footbridge
     this.meterNode = c.createAnalyser(); this.meterNode.fftSize = 1024; this.master.connect(this.meterNode);
@@ -99,7 +101,7 @@ export class GameAudio {
     catch (e) { console.warn('engine audio failed to load', e); this.state = 'error'; }
   }
   setMuted(m) { this.on = !m; if (this.el) this.music(this.musicOn); if (this.master) this.master.gain.setTargetAtTime(this.on ? .8 : 0, this.ctx.currentTime, .05); }
-  setVolumes() { if (!this.ctx) return; const t = this.ctx.currentTime; this.engBus.gain.setTargetAtTime(this.evol * this.dk, t, .05); this.sfx.gain.setTargetAtTime(this.vol * this.dk, t, .05); if (this.radioBus) this.radioBus.gain.setTargetAtTime(this.rvol, t, .05); }
+  setVolumes() { if (!this.ctx) return; const t = this.ctx.currentTime; this.engBus.gain.setTargetAtTime(this.evol * this.dk, t, .05); this.sfx.gain.setTargetAtTime(this.vol * this.dk, t, .05); if (this.radioBus) this.radioBus.gain.setTargetAtTime(this.rvol * RADIO_TRIM, t, .05); }
   /* the radio ducks the engine, effects and music by about 6 dB: down over ~70 ms, back over ~250 ms; nothing is ever muted */
   duck(on) { if (!this.ctx) return; const t = this.ctx.currentTime, k = on ? .5 : 1; this.dk = k; const tc = on ? .025 : .08; this.engBus.gain.setTargetAtTime(this.evol * k, t, tc); this.sfx.gain.setTargetAtTime(this.vol * k, t, tc); if (this.mg && this.musicOn && this.on) this.mg.gain.setTargetAtTime(this.mvol * k, t, tc); }
   /* build 62: the menu music goes through the audio graph (a phone's media element ignores .volume, so a fade never finished and the track never stopped), and it is paused outright when a race starts */

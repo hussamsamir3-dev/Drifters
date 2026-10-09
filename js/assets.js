@@ -8,7 +8,14 @@ function fromScript(name) {
     const s = document.createElement('script'); s.src = 'assets/' + name + '.js'; s.onload = done; s.onerror = () => rej(new Error('Missing assets/' + name + '.js')); document.head.appendChild(s);
   });
 }
+// Files fetched ahead of time (behind the loading screen) wait here until the game asks for them.
+const pre = new Map();
+export async function prefetch(names, onEach, conc = 4) {
+  const q = names.filter(n => !pre.has(n)); let i = 0, done = 0;
+  await Promise.all(Array.from({ length: Math.min(conc, q.length) }, async () => { while (i < q.length) { const n = q[i++]; try { pre.set(n, await getAsset(n)); } catch (e) { /* the game will try again, and report it, when it needs the file */ } onEach && onEach(++done, q.length); } }));
+}
 export async function getAsset(name, onProgress) {
+  if (pre.has(name)) { const b = pre.get(name); pre.delete(name); onProgress && onProgress(1); return b; }
   if (local) return fromScript(name);
   const r = await fetch('assets/' + name); if (!r.ok) throw new Error('Could not load assets/' + name + ' (' + r.status + ')');
   const total = +r.headers.get('content-length') || 0;

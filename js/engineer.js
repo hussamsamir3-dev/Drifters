@@ -7,7 +7,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrap = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
 // the calls that must be ready the moment they are needed: loaded as soon as a race is set up
-const WARM = ['radio_check', 'radio_confirmed', 'grid_ready', 'start_go', 'car_left', 'car_right', 'both_sides', 'three_wide', 'clear_left', 'clear_right', 'all_clear', 'still_left', 'still_right',
+export const WARM = ['radio_check', 'radio_confirmed', 'grid_ready', 'start_go', 'car_left', 'car_right', 'both_sides', 'three_wide', 'clear_left', 'clear_right', 'all_clear', 'still_left', 'still_right',
   'stopped_ahead', 'crash_ahead', 'wrong_way', 'closing_fast', 'slippery', 'contact_light', 'contact_heavy', 'safety_car', 'restart_go', 'blue', 
   'pit_limiter', 'pit_stop', 'pit_release', 'fuel_critical', 'engine_hot', 'car_unsafe'];
 

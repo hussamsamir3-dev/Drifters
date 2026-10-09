@@ -5,7 +5,7 @@ export class MenuBg {
   start() { if (this.on) return; this.on = true; this.cv.hidden = false; this.build(); }
   stop() { if (!this.on) return; this.on = false; this.cv.hidden = true; }
   build() {
-    const W = this.W = Math.min(1100, Math.max(480, Math.round(innerWidth * .62))), H = this.H = Math.round(W * innerHeight / innerWidth); if (this.cv.width === W && this.cv.height === H && this.ground) return;
+    const W = this.W = Math.min(760, Math.max(420, Math.round(innerWidth * .62))), H = this.H = Math.round(W * innerHeight / innerWidth); if (this.cv.width === W && this.cv.height === H && this.ground) return;
     this.cv.width = W; this.cv.height = H; this.ctx = this.cv.getContext('2d');
     const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
     // the dirt: brown earth, darker damp patches, a few puddles, old ruts
@@ -32,7 +32,7 @@ export class MenuBg {
     return c;
   }
   tick(now) {
-    if (!this.on || now - this.last < 33) return; const dt = Math.min(.05, (now - this.last) / 1000); this.last = now; if (this.cv.width !== Math.min(1100, Math.max(480, Math.round(innerWidth * .62)))) this.build();
+    if (!this.on || now - this.last < 40) return; const dt = Math.min(.05, (now - this.last) / 1000); this.last = now; if (this.cv.width !== Math.min(760, Math.max(420, Math.round(innerWidth * .62)))) this.build();
     const c = this.ctx, W = this.W, H = this.H, S = this.S, t = now / 1000, tc = this.tctx;
     tc.globalCompositeOperation = 'destination-out'; tc.fillStyle = 'rgba(0,0,0,.012)'; tc.fillRect(0, 0, W, H); tc.globalCompositeOperation = 'source-over';       // old tyre marks slowly fade
     c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over';

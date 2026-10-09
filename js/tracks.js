@@ -77,8 +77,44 @@ function catmull(p0, p1, p2, p3, t) {
   return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
 }
 // closed Catmull-Rom through pts, resampled at even spacing
+/* Control points are whole metres, so a straight made of them wobbles by up to half a metre from point to point. Runs of points that lie on one line are snapped onto their best-fit line,
+   and the gentle bends in between are relaxed, so straights are dead straight and curves are smooth (build 66). */
+function cleanPts(src) {
+  const n = src.length; if (n < 12) return src;
+  const P = src.map(p => [p[0], p[1]]), at = i => P[((i % n) + n) % n], TOL = 1.05, MINLEN = 40, inRun = new Array(n).fill(false);
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  for (let s = 0; s < n; s++) {
+    if (inRun[s]) continue;
+    let e = s + 1, ok = e;
+    for (; e - s < n - 3; e++) {
+      const a = at(s), b = at(e + 1), L = dist(a, b) || 1, dx = (b[0] - a[0]) / L, dz = (b[1] - a[1]) / L; let good = true;
+      for (let q = s + 1; q <= e; q++) { const p = at(q), d = Math.abs((p[0] - a[0]) * dz - (p[1] - a[1]) * dx); if (d > TOL) { good = false; break; } }
+      if (good) for (let q = s; q <= e; q++) { const p = at(q), r = at(q + 1), sl = dist(p, r) || 1, c = ((r[0] - p[0]) * dx + (r[1] - p[1]) * dz) / sl; if (c < .965) { good = false; break; } }
+      if (!good) break; ok = e + 1;
+    }
+    if (ok - s < 4 || dist(at(s), at(ok)) < MINLEN) continue;
+    // best-fit line through the run (principal axis)
+    let mx = 0, mz = 0, c = 0; for (let q = s; q <= ok; q++) { mx += at(q)[0]; mz += at(q)[1]; c++; } mx /= c; mz /= c;
+    let sxx = 0, szz = 0, sxz = 0; for (let q = s; q <= ok; q++) { const dx = at(q)[0] - mx, dz = at(q)[1] - mz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
+    const ang = .5 * Math.atan2(2 * sxz, sxx - szz); let ux = Math.cos(ang), uz = Math.sin(ang); const a0 = at(s), b0 = at(ok); if ((b0[0] - a0[0]) * ux + (b0[1] - a0[1]) * uz < 0) { ux = -ux; uz = -uz; }
+    for (let q = s; q <= ok; q++) { const p = at(q), t = (p[0] - mx) * ux + (p[1] - mz) * uz; p[0] = mx + ux * t; p[1] = mz + uz * t; if (q > s && q < ok) inRun[((q % n) + n) % n] = true; }
+    s = ok - 1;
+  }
+  // relax what is left (not the straights, not tight corners): removes the whole-metre noise from the gentle bends
+  for (let pass = 0; pass < 3; pass++) {
+    const Q = P.map(p => [p[0], p[1]]);
+    for (let i = 0; i < n; i++) {
+      if (inRun[i]) continue; const a = P[(i + n - 1) % n], b = P[i], c = P[(i + 1) % n];
+      const u1 = Math.atan2(b[0] - a[0], b[1] - a[1]), u2 = Math.atan2(c[0] - b[0], c[1] - b[1]); let d = u2 - u1; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+      if (Math.abs(d) > .5) continue;      /* tight corner: leave exactly as traced */
+      Q[i][0] = b[0] + .5 * ((a[0] + c[0]) / 2 - b[0]); Q[i][1] = b[1] + .5 * ((a[1] + c[1]) / 2 - b[1]);
+    }
+    for (let i = 0; i < n; i++) { P[i][0] = Q[i][0]; P[i][1] = Q[i][1]; }
+  }
+  return P;
+}
 export function resampleClosed(pts, spacing) {
-  const n = pts.length, dense = [];
+  pts = cleanPts(pts); const n = pts.length, dense = [];
   for (let i = 0; i < n; i++) {
     const a = pts[(i + n - 1) % n], b = pts[i], c = pts[(i + 1) % n], d = pts[(i + 2) % n];
     const K = Math.max(24, Math.ceil(Math.hypot(c[0] - b[0], c[1] - b[1]) / .5)); for (let k = 0; k < K; k++) { const t = k / K; dense.push([catmull(a[0], b[0], c[0], d[0], t), catmull(a[1], b[1], c[1], d[1], t)]); }
@@ -212,7 +248,7 @@ function findApexes(path, n, hw) {
   for (const r of runs) { let ang = 0; for (let q = r.s; q <= r.end; q++) ang += ksm[(start + q) % n] * sp; const len = r.end - r.s + 1; if (ang < .26 || len * sp < 14) continue;      // under about 15 degrees is a bend, not a corner: every real corner has its kerb
     let bq = r.s, bv = -1e9; for (let q = r.s - 6; q <= r.end + 6; q++) { const v = r.sgn * ref[at(start + q)]; if (v > bv + 1e-6) { bv = v; bq = q; } }      // closest approach of the ideal line to the inside edge
     const shift = ang > 1.2 ? .14 : ang > .7 ? .07 : 0, aq = Math.max(r.s + 1, Math.min(r.end - 2, bq + Math.round(shift * len))), ai = at(start + aq);
-    let kb = Math.max(8, Math.min(28, Math.round(len * .38))), ka = Math.max(6, Math.min(18, Math.round(len * .28)));
+    let kb = Math.max(8, Math.min(34, Math.round(len * .46))), ka = Math.max(6, Math.min(22, Math.round(len * .34)));
     while (kb > 6 && r.sgn * ref[at(ai - kb)] < hw - 6.2) kb--; while (ka > 4 && r.sgn * ref[at(ai + ka)] < hw - 6.2) ka--;      // not where the line is nowhere near the edge
     out.push({ i: ai, side: r.sgn, len, ang, a: at(start + r.s), b: at(start + r.end), kb, ka });
     /* corner-exit kerb: on the OUTSIDE of the road, where the line unwinds and runs out to the edge (as on every real circuit's medium and fast corners) */
@@ -406,9 +442,9 @@ function buildProc(track) {
   // kerbs only where a driver uses them: on the inside of each corner, around its apex (never along the outside or down the straights)
   const apexes = findApexes(path, n, hw), kerbRuns = []; track.apexes = apexes; track.kerbRuns = kerbRuns; track.refLine = apexes.ref;
   for (const a of apexes) { const nodes = [], wd = [];
-    if (a.exit) { const W = 1.3; for (let q = 0; q < a.cnt; q++) { const u = Math.min(q, a.cnt - 1 - q) / 5, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push((a.i0 + q) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd, exit: true }); continue; }
+    if (a.exit) { const W = 1.3; for (let q = 0; q < a.cnt; q++) { const u = Math.min(q, a.cnt - 1 - q) / 2.2, s = u >= 1 ? 1 : u;      /* a real kerb is a constant-width strip with a short angled cut at each end, not a leaf */ nodes.push((a.i0 + q) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd, exit: true }); continue; }
     const W = 1.5 + .7 * Math.min(1, a.ang / 1.6);      /* sharper corners get a wider kerb */
-    for (let q = -a.kb; q <= a.ka; q++) { const u = Math.min(q + a.kb, a.ka - q) / 6, s = u >= 1 ? 1 : u * u * (3 - 2 * u); nodes.push(((a.i + q) % n + n) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd }); }      // each kerb tapers to nothing at both ends
+    for (let q = -a.kb; q <= a.ka; q++) { const u = Math.min(q + a.kb, a.ka - q) / 2.2, s = u >= 1 ? 1 : u; nodes.push(((a.i + q) % n + n) % n); wd.push(W * s); } kerbRuns.push({ side: a.side, nodes, w: wd }); }      // each kerb tapers to nothing at both ends
 
   // -- physics grid, rasterised with a 2D canvas: R = road, G = inside the barriers, B = kerb band
   const cell = 0.5, pad = Math.max(30, B + 8), x0 = minx - pad, z0 = minz - pad, w = Math.ceil((maxx - minx + pad * 2) / cell), h = Math.ceil((maxz - minz + pad * 2) / cell);
@@ -607,11 +643,11 @@ function buildProc(track) {
     line(PL.FAST, PL.FAST + .22, 0xf3f4f6, 0, m - 1, 6);                        // white: the fast lane is on the wall side of this line, the working lane in front of the garages
     line(PL.LW - .4, PL.LW - .15, 0xf3f4f6, 0, m - 1, 6);
     // the pit wall: concrete, 1.2 m, solid in the physics grid; it starts where the lane has fully separated and stops where the exit taper begins
-    { const cm = mat({ color: 0xcfd1d4, roughness: .85, side: THREE.DoubleSide }), tm = mat({ color: 0x9fa2a8, roughness: .8, side: THREE.DoubleSide });
+    { const cm = mat({ color: 0xcfd1d4, roughness: .85, side: THREE.DoubleSide, transparent: true }), tm = mat({ color: 0x9fa2a8, roughness: .8, side: THREE.DoubleSide, transparent: true });      /* transparent from the start so it can fade while the crew works without a shader rebuild */
       const inner = rng(qa, qb, q => ed(q, -L[q].w / 2)), outer = rng(qa, qb, q => ed(q, -L[q].w / 2 - PL.WALL));
       for (const A of [inner, outer]) { const w1 = new THREE.Mesh(wallXZ(A, 0, 1.2, 1 / 6), cm); w1.castShadow = !night; w1.receiveShadow = true; G.add(w1); }
       const top = new THREE.Mesh(stripXZ(inner, outer, 1.2, 1), tm); top.receiveShadow = true; G.add(top);
-      const band = new THREE.Mesh(stripXZ(rng(qa, qb, q => ed(q, -L[q].w / 2 - PL.WALL * .1)), rng(qa, qb, q => ed(q, -L[q].w / 2 - PL.WALL * .9)), 1.21, 1), mat({ color: 0xe8e8ea, roughness: .7, ...po(2), side: THREE.DoubleSide })); G.add(band);
+      const bandM = mat({ color: 0xe8e8ea, roughness: .7, ...po(2), side: THREE.DoubleSide, transparent: true }), band = new THREE.Mesh(stripXZ(rng(qa, qb, q => ed(q, -L[q].w / 2 - PL.WALL * .1)), rng(qa, qb, q => ed(q, -L[q].w / 2 - PL.WALL * .9)), 1.21, 1), bandM); G.add(band); track.pitWallMats = [cm, tm, bandM];
       for (const q of [qa, qb]) { const l = L[q], cap = new THREE.Mesh(new THREE.BoxGeometry(PL.WALL + .5, 1.3, .5), mat({ color: 0xe3262e, roughness: .6 })); const c0 = ed(q, -l.w / 2 - PL.WALL / 2); cap.position.set(c0[0] + l.tx * (q === qa ? -.25 : .25), .65, c0[1] + l.tz * (q === qa ? -.25 : .25)); cap.rotation.y = Math.atan2(l.nx, l.nz) + Math.PI / 2; G.add(cap); } }       // red end caps: the wall's ends are where the lane splits off and rejoins
     // garages: a long low building in front of the boxes, with a roller door for every bay
     { const bay = canvasTex(256, 128, (k, W, H) => { k.fillStyle = '#d9d4c7'; k.fillRect(0, 0, W, H); k.fillStyle = '#b9b4a8'; k.fillRect(0, 0, W, 10); k.fillStyle = '#3a3d44'; k.fillRect(30, 28, 196, 100); for (let y = 32; y < 128; y += 8) { k.fillStyle = y % 16 ? '#2c2f35' : '#40444c'; k.fillRect(30, y, 196, 4); } k.fillStyle = '#e3262e'; k.fillRect(30, 18, 196, 6); }, 1, 1);
@@ -631,7 +667,7 @@ function buildProc(track) {
     pitL.boxes.forEach((bx, j) => {
       const bt = canvasTex(128, 256, (k) => { k.clearRect(0, 0, 128, 256); k.strokeStyle = '#fff'; k.lineWidth = 8; k.strokeRect(6, 6, 116, 244); k.fillStyle = 'rgba(255,255,255,.9)'; k.font = '900 70px Rubik, Arial Black, sans-serif'; k.textAlign = 'center'; k.fillText(String(j + 1), 64, 150); });
       const bm = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6.8), new THREE.MeshBasicMaterial({ map: bt, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }));
-      bm.rotation.set(-Math.PI / 2, 0, Math.PI - bx.th); bm.position.set(bx.x, .06, bx.z); G.add(bm);
+      bm.rotation.set(-Math.PI / 2, 0, Math.PI + bx.th); bm.position.set(bx.x, .06, bx.z); G.add(bm);
     });
   }
   // -- trackside life: spectators, sponsor boards, hay bales, support vans
