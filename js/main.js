@@ -9,7 +9,7 @@ import { Marshals } from './people.js';
 import { CARS, PAINTS, RIMS, TINTS, LIVC, Car, loadCars, aiDrive, tuneOf, RIM_STYLES, TYRE_STYLES, CAL_COLS, setCarEnv } from './car.js';
 import { AR } from './lang.js';
 import { makeEngineer, WARM } from './engineer.js';
-import { MenuBg } from './menubg.js';
+import { buildStudio } from './studio.js';
 import { Particles, Skids, Ambient, Debris, Props, LIGHTS, Sparks } from './fx.js';
 import { GLOWS } from './car.js';
 import { Post } from './post.js';
@@ -170,16 +170,12 @@ function applyTheme(th) {
 
 // ---------------- garage (menu backdrop) ----------------
 const garage = new THREE.Group(); scene.add(garage);
-{
-  const floor = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.8, .25, 48), new THREE.MeshStandardMaterial({ color: 0x23252b, metalness: .5, roughness: .6 }));
-  floor.position.y = -.125; floor.receiveShadow = true; garage.add(floor);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(4.75, .06, 8, 64), new THREE.MeshBasicMaterial({ color: 0xffc21a })); ring.rotation.x = Math.PI / 2; ring.position.y = .01; garage.add(ring);
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 32), new THREE.MeshStandardMaterial({ color: 0x17181c, roughness: .9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -.25; ground.receiveShadow = true; garage.add(ground);
-}
+const studio = buildStudio(gfx !== 'low'); garage.add(studio.g);      /* build 67: the showroom stage */
 let garageCar = null;
+const hero0 = () => !racing() && sel.tab !== 'garage' && sel.tab !== 'tune';
 function showGarageCar() {
   if (garageCar) { garage.remove(garageCar.root); garageCar.dispose(); }
-  const spec = CARS[sel.car]; garageCar = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id), tuneSet(spec.id), true); garageCar.root.rotation.y = garageSpin; garageCar.root.scale.setScalar(1 / TUNE.toy.w); garage.add(garageCar.root); carThumb();
+  const spec = CARS[sel.car]; garageCar = new Car(spec, paintOf(spec.id), '', upOf(spec.id), lookOf(spec.id), tuneSet(spec.id), true); garageCar.root.rotation.y = garageSpin; garageCar.root.scale.setScalar(1 / TUNE.toy.w); garage.add(garageCar.root);
 }
 let garageSpin = .6, tuneFocus = ''; const gDrag = { on: false, x: 0, v: 0, hold: 0 };
 addEventListener('pointerdown', e => { if (!garageCar || R || arena.on || e.target.closest('button, input, select, label, a, textarea, .card, #lookRows, #tuneRows, #nav, #startBtn')) return; gDrag.on = true; gDrag.x = e.clientX; gDrag.v = 0; });      // drag the car round with a finger or the mouse
@@ -286,6 +282,7 @@ addEventListener('contextmenu', e => { if (isTouch) e.preventDefault(); });
   addEventListener('dblclick', e => e.preventDefault(), { passive: false });
   addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
   addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0', '_'].includes(e.key)) e.preventDefault(); }, { passive: false }); }
+const setEngMode = m => { save.engMode = m; audio.engMode = m; persist(); $('engModeBtn').textContent = tx(m === 'sample' ? 'Engine sound: recorded' : 'Engine sound: new model'); };
 function setMuted(m) { save.muted = m; persist(); audio.setMuted(m); $('muteBtn').textContent = m ? 'Sound off' : 'Sound on'; }
 
 // ---------------- small UI helpers ----------------
@@ -332,10 +329,10 @@ async function startRace(o) {
   R.fx = { smoke: new Particles(scene, 4200), glow: new Particles(scene, 1200, true), skids: new Skids(scene), sparks: new Sparks(scene) }; applyDmg(); R.ambient = new Ambient(scene); R.debris = new Debris(scene); R.props = new Props(scene); R.people = { update() {}, dispose() {}, hit() {}, setCars() {} };      /* build 57: no figures inside the race area; the crowd stands outside the barriers (tracks.js) */ for (const q of track.propSpots || []) if (q.type === 'bale') R.props.add(q.type, q.x, q.z, track.height(q.x, q.z) + (q.lift || 0), q.r || 0, q.stack || 0);
   const spec = CARS.find(c => c.id === save.car), up = upOf(spec.id), me = R.player = new Car(spec, paintOf(spec.id), save.name, up, lookOf(spec.id), tuneSet(spec.id)); me.assistK = TUNE.assist[save.assist] ?? .7; me.driftMode = o.mode === 'drift'; if (me.driftMode) me.assistK = .22;      // drift: a counter-steer aid stays on, so the car holds a big angle instead of spinning me.tc = save.tc; me.abs = save.abs; me.steerK = save.sens; me.isPlayer = true; me.driftable = true; me.dmgScale = 1 - .18 * up.armor;
   const lane = Math.max(1.5, (def.width ? def.width / 2 : 6.2) - 2.6);
-  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 2.4)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1, diff: o.diff ?? 1 });
+  const lineMax = Math.max(lane, (def.width ? def.width * .6 : 7.4) - (TUNE.lineMargin ?? 3)), mkAI = (skill) => ({ skill, wide: lane * .7, lane: (Math.random() - .5) * lane, max: lineMax, care: o.rules === 'arcade' ? .7 : 1.3, off: 0, inp: { steer: 0, throttle: 0, brake: 0, hand: false, nitro: false }, boost: 1, diff: o.diff ?? 1 });
   R.ais.set(me, mkAI(.95));     // used when the player's car goes on autopilot after the flag
   if (o.mode === 'race') {
-    const base = [.84, 1.08, 1.19][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), pl0 = CARS.find(c => c.id === save.car) || spec, ps0 = perfScore(pl0, upOf(pl0.id), tuneSet(pl0.id)), stock = { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' }, noUp0 = { eng: 0, tyre: 0, nitro: 0, armor: 0 };
+    const base = [.84, 1.09, 1.2][o.diff], pool = (o.rules !== 'arcade' ? CARS.filter(c => c.klass === spec.klass) : CARS.filter(c => c.id !== spec.id)).sort(() => Math.random() - .5), pl0 = CARS.find(c => c.id === save.car) || spec, ps0 = perfScore(pl0, upOf(pl0.id), tuneSet(pl0.id)), stock = { gear: 0, aero: 0, brake: 0, susp: 0, tyre: 'medium' }, noUp0 = { eng: 0, tyre: 0, nitro: 0, armor: 0 };
     if (o.rules === 'arcade' && !o.rivals && o.diff >= 1) pool.sort((a, b) => (perfScore(b, noUp0, stock) >= ps0 * .8 ? 1 : 0) - (perfScore(a, noUp0, stock) >= ps0 * .8 ? 1 : 0) || Math.random() - .5);      /* build 57: Medium and Hard AIs are picked from cars that can reach your level, so the grid is never full of slow cars */
     const names = [...NAMES].sort(() => Math.random() - .5);
     const riv = o.rivals, count = riv ? riv.length : (o.nRivals || 5), livUsed = new Set([save.car]);      // each car keeps its own real livery unless another on the grid already wears it
@@ -931,7 +928,7 @@ function updateRace(dt) {
   for (const [car, ai] of R.ais) {
     if (car.out || (car === me && R.state !== 'done' && R.state !== 'over' && !R.demo)) continue;
     if (car !== me && live) { const left = R.laps - Math.max(0, car.lap), short = car.fuelK > 0 && car.fpl && car.fuel < car.fpl * Math.min(left, 3) * 1.05 && left > 1, ahead = R.cars.some(o => o !== car && !o.out && o.prog > car.prog && (o.prog - car.prog) * tr.spacing < Math.max(18, car.speed * 1.2)); car.pace = short || car.tyre < .35 ? 0 : ahead && car.tyre > .5 ? 2 : 1; }   // AI manages its pace like a driver: saves when fuel or tyres are short, pushes when a car is within reach
-    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; { const me2 = R.player, gapS = me2 && !car.isRemote && car !== me2 && me2.lap >= 0 ? ((me2.prog || 0) - (car.prog || 0)) * tr.spacing / Math.max(14, me2.speed) : 0, cap = R.pro ? (R.diffLevel === 2 ? .12 : R.diffLevel === 1 ? .045 : 0) : R.diffLevel === 2 ? .14 : R.diffLevel === 1 ? .08 : 0; ai.cu = 1 + clamp((gapS - (R.diffLevel === 2 ? .5 : 1.2)) * (R.diffLevel === 2 ? .03 : .018), 0, cap); ai.boost = 1 + (ai.cu - 1) * 3; }      // catch-up: when you pull away, the cars behind find a little more pace (up to about 6% on Hard), so the lead never becomes a walkover
+    car.held = !live || R.t < (car.holdT || 0); ai.rt = R.t; { const me2 = R.player, gapS = me2 && !car.isRemote && car !== me2 && me2.lap >= 0 ? ((me2.prog || 0) - (car.prog || 0)) * tr.spacing / Math.max(14, me2.speed) : 0, cap = R.pro ? (R.diffLevel === 2 ? .13 : R.diffLevel === 1 ? .05 : 0) : R.diffLevel === 2 ? .14 : R.diffLevel === 1 ? .08 : 0; ai.cu = 1 + clamp((gapS - (R.diffLevel === 2 ? .35 : 1.2)) * (R.diffLevel === 2 ? .036 : .018), 0, cap); ai.boost = 1 + (ai.cu - 1) * 3; }      // catch-up: when you pull away, the cars behind find a little more pace (up to about 6% on Hard), so the lead never becomes a walkover
       aiDrive(car, tr, ai, R.sc ? R.cars.concat([R.sc.car]) : R.cars, dt);      // the safety car is a car like any other: the field slows behind it
     if (car !== me) ai.boost = R.rules === 'arcade' ? ((me.prog - car.prog) * tr.spacing > 50 ? 1.08 : (me.prog - car.prog) * tr.spacing < -70 && R.diffLevel === 0 ? .93 : 1) : 1;      /* build 57: only Easy slows down when it is ahead */   // Arcade keeps the pack together; Professional never touches the cars
     if (car !== me && live) aiPit(car, ai, dt);
@@ -974,7 +971,7 @@ function updateRace(dt) {
   if (me.shiftEvt) { shake = Math.min(1.2, shake + .04 + me.load * .09); audio.shift(me.shiftEvt, Math.min(1, me.load * (me.shiftT > 0 ? 5 : 1)), me.rpm, me.spec.pops); me.shiftEvt = 0; }                      // one event per completed gear change
   { const near = R.cars.filter(c => c !== me && !c.out).map(c => ({ c, d: Math.hypot(c.x - me.x, c.z - me.z) })).sort((a, b) => a.d - b.d).slice(0, 3);
     { const rt = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); near.forEach(o => { const dx = o.c.x - me.x, dz = o.c.z - me.z, dd = Math.hypot(dx, dz) || 1; o.pan = clamp((dx * rt.x + dz * rt.z) / 26, -1, 1); o.dop = clamp(-(((o.c.vx - me.vx) * dx + (o.c.vz - me.vz) * dz) / dd) / 343 * 2, -.2, .2); }); }
-    audio.rivals(near.map(({ c, d, pan, dop }) => ({ pan, dop: dop * 1, x: c.x, y: c.y + .6, z: c.z, snd: c.spec.snd, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
+    audio.rivals(near.map(({ c, d, pan, dop }) => ({ pan, dop: dop * 1, x: c.x, y: c.y + .6, z: c.z, snd: c.spec.snd, id: c.spec.id, dist: d, rpm: c.isRemote ? c.spec.idle + Math.min(1, c.speed / c.spec.top) * (c.spec.red - c.spec.idle) * .8 : c.rpmR, load: c.isRemote ? .5 : c.load || 0 }))); }
   audio.ambient(dt, { on: !R.attract, day: !tr.theme.night, rain: R.wet > .3 }); if (!R.attract) { feel(me, dt); eng.tick(dt); sfxTick(me, dt); }
   stepDynamicTime(dt); stepFloodlights(dt, me); updateRefl();
   { const cnt = k => me.wsurf.filter(v => v === k).length, tr0 = R.track; const surfK = me.grass > .5 ? 'grass' : R.wet > .5 ? 'wet' : 'road'; R.audioSurf = surfK;
@@ -1203,7 +1200,7 @@ const GP_TRACKS = ['nile', 'luxor', 'hurghada', 'aswan', 'midnight'], GP_PTS = [
 function newGP() { const pool = CARS.filter(c => c.id !== save.car).sort(() => Math.random() - .5), names = [...NAMES].sort(() => Math.random() - .5), base = [.80, .89, .97][sel.diff]; save.gp = { round: 0, pts: {}, done: false, rivals: pool.slice(0, 7).map((c, i) => ({ name: names[i], car: c.id, skill: base + (6 - i) * .01, paint: PAINTS[(i * 3 + 2) % PAINTS.length] })) }; persist(); }
 const gpOpts = () => ({ mode: 'race', gp: true, track: GP_TRACKS[save.gp.round], laps: 3, diff: sel.diff, rivals: save.gp.rivals, rules: save.rules, weather: save.gp.round === 2 ? 'rain' : 'clear', nRivals: 7 });
 let menuView = '';
-const menuBg = new MenuBg($('menuBg'));
+const menuBg = { on: false, start() {}, stop() {}, tick() {} };      /* build 67: the 2D menu scene is gone; the menu shows the 3D showroom */
 // ---------------- menu showcase: the real cars, real physics and real lights on a small dirt arena ----------------
 // Three game cars drift circles on loose dirt, driven through the same tyre model as a race. There is no circuit, no crowd and
 // no scenery to draw, so it costs a fraction of a race. On Low graphics the 2D backdrop is used instead.
@@ -1361,7 +1358,7 @@ function setMenuView() {
   if (want === 'show' && menuView === 'show' && (showBusy || (R && R.attract))) return;      /* the showcase keeps running while laps, rivals, weather and the like are changed */
   if (R) { raceToken++; endRace(); }
   if (want === 'garage') { menuBg.stop(); arenaStop(); if (menuView !== 'garage') { applyTheme(null); garage.visible = true; } menuView = 'garage'; }
-  else { menuView = 'show'; arenaStop(); menuBg.start(); }      /* build 66: the light 2D scene on every graphics level; the 3D arena behind the menu cost a lot and nobody can drive it */
+  else { if (menuView !== 'show') { applyTheme(null); garage.visible = true; } menuView = 'show'; arenaStop(); }      /* build 67: the menu shows the selected car in the showroom */
 }
 const sel = { rivals: save.rivals ?? 5, wx: 'random', tab: 'quick', ev: 0, ch: 0, mode: 'race', track: 0, laps: save.laps ?? 3, diff: 1, car: Math.max(0, CARS.findIndex(c => c.id === save.car)) };
 const menuPaths = {};
@@ -1406,7 +1403,7 @@ async function refreshMenu() {
   $('diff').style.visibility = ['race', 'gp', 'elim', 'endu'].includes(sel.mode) ? 'visible' : 'hidden';
   $('trkName').textContent = save.lang === 'ar' ? def.ar : def.name; $('trkBlurb').textContent = tx(def.blurb); $('laps').textContent = sel.laps;
   $('trkBest').textContent = sel.mode === 'drift' ? (save.bestDrift[def.id] ? 'Record ' + save.bestDrift[def.id].toLocaleString() + ' pts' : '') : (save.best[def.id] ? 'Best ' + fmt(save.best[def.id]) : 'No lap set');
-  $('carName').textContent = save.lang === 'ar' ? spec.ar : spec.name; $('carBlurb').textContent = spec.cls + (save.lang === 'ar' ? '' : '. ' + spec.blurb); $('carPic').style.display = sel.tab === 'garage' || sel.tab === 'tune' ? 'none' : ''; $('carSpec').textContent = tx(spec.klass) + ' ' + tx('class') + ' · ' + spec.hp + ' hp · ' + spec.mass.toLocaleString() + ' kg · ' + spec.engine + ' · 0–100 ' + (spec.sprint || '–') + ' s · ' + (save.units === 'mph' ? Math.round((spec.kmh || spec.top * 3.6) / 1.609) + ' mph' : (spec.kmh || Math.round(spec.top * 3.6)) + ' km/h');
+  $('carName').textContent = save.lang === 'ar' ? spec.ar : spec.name; $('carBlurb').textContent = spec.cls + (save.lang === 'ar' ? '' : '. ' + spec.blurb); $('carPic').style.display = 'none';      /* build 67: the car itself stands in the showroom, so the small picture is not needed */ $('carSpec').textContent = tx(spec.klass) + ' ' + tx('class') + ' · ' + spec.hp + ' hp · ' + spec.mass.toLocaleString() + ' kg · ' + spec.engine + ' · 0–100 ' + (spec.sprint || '–') + ' s · ' + (save.units === 'mph' ? Math.round((spec.kmh || spec.top * 3.6) / 1.609) + ' mph' : (spec.kmh || Math.round(spec.top * 3.6)) + ' km/h');
   $('stSpeed').style.width = (spec.top - 40) / 30 * 100 + '%'; $('stAcc').style.width = (spec.acc - 6) / 7 * 100 + '%';
   $('stGrip').style.width = (spec.grip - .9) / .55 * 100 + '%'; $('stDrift').style.width = clamp((1.06 - spec.rear) * 4 + spec.loose * .6, .1, 1) * 100 + '%';
   $('paints').innerHTML = [spec.color, ...PAINTS].map(p => `<button style="background:${hex(p)}" data-p="${p}" class="${paintOf(spec.id) === p ? 'on' : ''}" aria-label="Paint ${hex(p)}"></button>`).join('');
@@ -1570,6 +1567,7 @@ $('diff').onclick = e => { const b = e.target.closest('button'); if (b) { sel.di
 $('paints').onclick = e => { const b = e.target.closest('button'); if (b) { save.paint[CARS[sel.car].id] = +b.dataset.p; persist(); carChanged(); } };
 $('buyBtn').onclick = () => { const s = CARS[sel.car]; if (save.credits >= s.price && !save.owned.includes(s.id)) { save.credits -= s.price; save.owned.push(s.id); audio.init(); audio.beep(880, .3); toast(s.name + ' unlocked'); carChanged(); } };
 $('name').onchange = e => { save.name = (e.target.value.trim() || save.name).slice(0, 16); persist(); tellPeer(); refreshMenu(); };
+$('engModeBtn').onclick = () => { audio.init(); setEngMode(save.engMode === 'sample' ? 'synth' : 'sample'); };
 $('muteBtn').onclick = () => { audio.init(); setMuted(!save.muted); audio.music(!racing()); };
 for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, () => { const fresh = !audio.ctx; audio.init(); if (!racing() && (fresh || !audio.el || (audio.el.paused && audio.musicOn !== false))) audio.music(true); }, { capture: true, passive: true });      /* a phone only lets sound start (or restart after an interruption) from a touch end or a click, so every one of them tries */
 $('startBtn').onclick = () => {
@@ -1655,15 +1653,15 @@ function frame(now) {
   else if (garageCar) {
     // In the tuning tab the car stops turning and the camera moves in on the part you are adjusting: wing, tail, front brake, suspension, tyre.
     const F = sel.tab === 'tune' ? { aero: [2.55, 3.3, 6.6, 1.0, 30], gear: [3.05, 1.0, 5.6, .45, 30], brake: [-.95, 1.2, 5.2, .45, 26], susp: [-1.57, .8, 6.6, .45, 28], tyre: [-1.15, .75, 4.6, .4, 24] }[tuneFocus] : null; if (sel.tab !== 'tune') tuneFocus = '';
-    if (F) garageSpin += wrap(F[0] - garageSpin) * Math.min(1, dt * 4); else if (!gDrag.on) { garageSpin += gDrag.v; gDrag.v *= .93; gDrag.hold -= dt; if (gDrag.hold <= 0) garageSpin += dt * .35; } garageCar.root.rotation.y = garageSpin;
-    const narrow = innerWidth < 820, rs = save.lang === 'ar' ? -1 : 1, gc = arena.gc || (arena.gc = { y: 3, d: 11.5, ly: -.4, f: 38 }), tg = F ? { y: F[1], d: F[2], ly: F[3], f: F[4] } : { y: 3, d: narrow ? 13 : 11.5, ly: narrow ? 1.8 : -.4, f: 38 }, kk = Math.min(1, dt * 4); for (const q in tg) gc[q] += (tg[q] - gc[q]) * kk;
-    camera.fov = gc.f; camera.updateProjectionMatrix(); camera.position.set(narrow ? 0 : -1.6 * rs * gc.d / 11.5, gc.y, gc.d); camera.lookAt(narrow ? 0 : -2.9 * rs * gc.d / 11.5, gc.ly, 0);
-    sun.position.set(6, 12, 8); sun.target.position.set(0, 0, 0);
+    if (F) garageSpin += wrap(F[0] - garageSpin) * Math.min(1, dt * 4); else if (!gDrag.on) { garageSpin += gDrag.v; gDrag.v *= .93; gDrag.hold -= dt; if (gDrag.hold <= 0) garageSpin += dt * (hero0() ? .22 : .35); } garageCar.root.rotation.y = garageSpin;
+    const narrow = innerWidth < 820, rs = save.lang === 'ar' ? -1 : 1, gc = arena.gc || (arena.gc = { y: 3, d: 11.5, ly: -.4, f: 38 }), hero = !F && sel.tab !== 'garage' && sel.tab !== 'tune', ht = studio.t, tg = F ? { y: F[1], d: F[2], ly: F[3], f: F[4] } : hero ? { y: 2.2 + .35 * Math.sin(ht * .13), d: (narrow ? 13.5 : 10.6) + .7 * Math.sin(ht * .09), ly: narrow ? 1.6 : .15, f: 33 + 2 * Math.sin(ht * .07) } : { y: 3, d: narrow ? 13 : 11.5, ly: narrow ? 1.8 : -.4, f: 38 }, kk = Math.min(1, dt * 4); for (const q in tg) gc[q] += (tg[q] - gc[q]) * kk;
+    camera.fov = gc.f; camera.updateProjectionMatrix(); camera.position.set(hero ? Math.sin(ht * .11) * 1.6 - (narrow ? 0 : .3 * rs) : (narrow ? 0 : -1.6 * rs * gc.d / 11.5), gc.y, gc.d); camera.lookAt(hero ? (narrow ? 0 : -.045 * gc.d * rs) : narrow ? 0 : -2.9 * rs * gc.d / 11.5, gc.ly, 0);
+    sun.position.set(hero ? 9 * Math.cos(ht * .21) : 6, 12, hero ? 9 * Math.sin(ht * .21) + 3 : 8); sun.target.position.set(0, 0, 0); studio.update(dt, garageSpin);
   }
-  if (menuBg.on) menuBg.tick(now); else draw(dt);      // while the 2D menu scene is up, nothing is rendered in 3D
+  draw(dt);
 }
 (async function boot() {
-  applyTheme(null); audio.mvol = save.mvol; audio.vol = save.svol; audio.evol = save.evol; audio.rvol = save.rvol ?? .9; setMuted(save.muted);
+  applyTheme(null); audio.mvol = save.mvol; audio.vol = save.svol; audio.evol = save.evol; audio.rvol = save.rvol ?? .9; setMuted(save.muted); setEngMode(save.engMode || 'synth');
   sel.ev = firstOpen(); sel.ch = EVENTS[sel.ev].ci;
   /* build 66: everything the first race needs is fetched and warmed behind the loading screen, then one tap starts the game (that tap also unlocks sound on a phone) */
   const BL = new Loader($('boot')), quick = !!navigator.webdriver && !/[?&]gate/.test(location.search); BL.tip.textContent = tx(TIPS[Math.random() * TIPS.length | 0]); BL.set(.03, tx('Starting the engines'));

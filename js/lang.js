@@ -77,7 +77,7 @@ export const AR = {
   'Lights out': 'انطلق',
   'Essential': 'الأساسي فقط',
   'Balanced': 'متوازن',
-  'Radio volume': 'صوت الراديو',
+  'Radio volume': 'صوت الراديو', 'Engine sound: new model': 'صوت المحرك: النموذج الجديد', 'Engine sound: recorded': 'صوت المحرك: تسجيلات',
   'Car damage': 'أضرار السيارة',
   'Gameplay': 'اللعب',
   'Low': 'منخفض',

@@ -1,3 +1,4 @@
-Tafheet build 65 update (over build 64)
-1. Unzip over your build-64 folder, replacing files.
-2. DELETE the folder  voice/  (the old eSpeak engineer voice, no longer used).
+Tafheet build 67 - update over build 66
+Unzip over your build 66 folder (replace files), then delete this file if you like.
+DELETE this old file (no longer used):
+  js/menubg.js

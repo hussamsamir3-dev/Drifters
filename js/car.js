@@ -942,13 +942,17 @@ export function aiDrive(car, track, ai, cars, dt) {
   const err = wrap(Math.atan2(tx - car.x, tz - car.z) - car.th);
   // A driver, not a rail: steering lags by a reaction time; each part of the lap has a remembered pace that drops after a slide or an
   // off and creeps back up when the corner was easy; and now and then, more often with a car on its tail, it brakes a touch late.
-  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .02 : .09) + Math.random() * (ai.diff === 2 ? .02 : .1), consist: [.955, .974, .9975][ai.diff ?? 1] + Math.random() * (ai.diff === 2 ? .002 : .014), brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0 });
+  const B = ai.brain || (ai.brain = { react: (ai.diff === 2 ? .02 : .09) + Math.random() * (ai.diff === 2 ? .02 : .1), consist: [.955, .974, .9975][ai.diff ?? 1] + Math.random() * (ai.diff === 2 ? .002 : .014), brave: 1 + Math.random() * .06, mem: new Float32Array(48).fill(1), ef: 0, lapse: 0, was: 0, trim: 1, dec: null });
   const slip = B.lapse > 0 ? B.kind : -1; B.ef += (err - B.ef) * Math.min(1, dt / (B.react * (slip === 4 ? 3.5 : 1))); const ef = Math.abs(err) > .6 ? err : B.ef, bk = car.idx * 48 / n | 0, cornering = Math.abs(tgt.k) > .008;
   if (cornering && !car.held) { if (car.grass > .3 || Math.abs(car.beta) > .3) B.mem[bk] = Math.max(.84, B.mem[bk] - .45 * dt); else if (car.useF < .85 && car.useR < .85) B.mem[bk] = Math.min(1.06 * B.brave, B.mem[bk] + .014 * dt); }
   const entering = Math.abs(setup) > .35 ? 1 : 0; if (entering && !B.was) { let chased = false; for (const o of cars) { if (o === car || o.out) continue; const f = (o.x - car.x) * Math.sin(car.th) + (o.z - car.z) * Math.cos(car.th); if (f < -2 && f > -11 && Math.abs((o.x - car.x) * Math.cos(car.th) - (o.z - car.z) * Math.sin(car.th)) < 4) chased = true; } if (Math.random() > Math.pow(B.consist, (1 + (track.wet || 0)) * (2 - car.tyre))) { B.lapse = 1.1 + Math.random() * .9; B.kind = Math.random() * 5 | 0; B.bias = Math.random() < .5 ? 2.5 : -2.5; } }   // more likely when chased, in the wet, on worn tyres B.was = entering; B.lapse = Math.max(0, B.lapse - dt);
+  if (ai.inp.brake > .9 && sp > 14 && (car.useF || 0) < 1.05 && !car.held) { const d0 = -car.axS; if (d0 > 3) B.dec = B.dec == null ? d0 : B.dec + (d0 - B.dec) * Math.min(1, dt * .8); }
+  B.trim = Math.min(1, B.trim + .018 * dt);      /* the speed this driver trusts creeps back up after it has been cut */
   // fastest speed that still lets us slow down for every corner in sight
-  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) * ([.83, .88, .985][ai.diff ?? 1]) * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = 11.4 * ai.skill;
-  for (let i = 0; i < 70; i++) {
+  let v = car.spec.top; const mu = car.spec.grip * car.bopG * (.72 + .28 * car.tyre) * ai.skill * ai.skill * (ai.cu || 1) * B.trim * B.trim * ([.83, .88, .985][ai.diff ?? 1]) * TUNE.gripScale * (1 - .26 * (track.wet || 0) * (car.wetTyres ? .3 : 1)) * (1 - .3 * Math.max(car.parts.wheels[0], car.parts.wheels[1])) * 9.81, dec = Math.min(11.4 * ai.skill, B.dec == null ? 99 : Math.max(6.5, B.dec * .93));      /* build 67: the braking the plan counts on is the braking this car has actually shown */
+  /* build 67: how far ahead the plan looks. 70 points is only 140 m, but a car doing 220 km/h needs 200 m to stop for a hairpin: it was simply not told about the corner in time. The plan now sees as far as it will take to brake, and a little more. */
+  const nLook = clamp(Math.ceil((sp * sp / (2 * Math.max(6, dec)) + 50) / track.spacing), 70, 300);
+  for (let i = 0; i < nLook; i++) {
     const q = p[(car.idx + i) % n], vc = Math.sqrt(mu * car.tmpK / Math.max(Math.abs(RL.k[(car.idx + i) % n]), .0015)) * 1.02 * B.mem[((car.idx + i) % n) * 48 / n | 0] * (slip === 0 ? 1.08 : 1), lim = Math.sqrt(vc * vc + 2 * dec * i * track.spacing);
     if (lim < v) v = lim;
   }
@@ -956,10 +960,15 @@ export function aiDrive(car, track, ai, cars, dt) {
   if (ai.dive > 0 && (ai.diff ?? 1) === 2) v *= 1.035;      /* the late brake of the dive */
   v = Math.min(v, vFollow, v0cap); const rsc = clamp((18 - (ai.rt ?? 99)) / 10, 0, 1); if (rsc > 0 && Math.abs(tgt.k) > .003) v *= 1 - .1 * rsc;      /* the opening seconds: a little less speed into corners while the pack is bunched (the launch itself is full throttle) */
   if (ai.contactT > 0) v = Math.min(v, Math.max(9, sp * .86));
+  { const d = ai.dbg || (ai.dbg = {}); d.v = v; d.err = err; d.kl = tgt.k; }
   const inp = ai.inp; const dErr = B.pe == null || dt <= 0 ? 0 : clamp(wrap(err - B.pe) / dt, -3, 3); B.pe = err; inp.steer = clamp((ef + .09 * dErr) * 2.4 / (1 + sp * .008), -1, 1);      /* steer for where the car is going, not only where it is: a little damping on the error and a gain that falls with speed, so the car settles on the line instead of hunting about it */
   inp.throttle = sp < v ? (Math.abs(err) > .5 ? .5 : 1) : 0; inp.brake = sp > v + 1.5 ? clamp((sp - v) / 6, .2, 1) : 0;
   if (sp > 15 && Math.abs(tgt.k) > .004) { const mu2 = Math.max(car.useF || 0, car.useR || 0); if (mu2 > .9) inp.throttle *= clamp(1 - (mu2 - .9) * 2.2, .25, 1); }      /* at the limit of the tyres the throttle comes off smoothly, so the car neither pushes wide nor spins */
   if (sp > 8 && Math.abs(car.beta) > .1) inp.throttle *= Math.abs(car.beta) > .25 ? .15 : .5;   // feather the throttle when the tail steps out
+  /* build 67: understeer. A front axle past its peak grip (a slip angle beyond about 8 degrees, or all of its force used) cannot turn the car any more, and more steering only makes it plough on to the grass.
+     A driver feels the nose go light, eases the steering a little so the tyres bite again, comes off the power and brakes gently to put weight on the front, and trusts that speed a little less from then on. */
+  if (sp > 9 && !car.held && cornering) { const over = Math.max(Math.abs(car.aF || 0) / .144 - .84, (car.useF || 0) - .9);
+    if (over > 0) { inp.steer *= clamp(1 - over * 1.5, .5, 1); inp.throttle *= clamp(1 - over * 6, 0, 1); if (inp.brake > .3) inp.brake *= clamp(1 - over * 1.8, .35, 1); else if (sp > 13) inp.brake = Math.max(inp.brake, clamp(over * 2.2, 0, .45));      /* braking and turning share one grip: when the nose is pushing, ease the brake off so the front can steer */ B.trim = Math.max(ai.diff === 2 ? .86 : .8, B.trim - .35 * dt * Math.min(1, over * 2)); } }
   inp.hand = false; inp.nitro = ai.skill > .9 && Math.abs(tgt.k) < .004 && Math.abs(err) < .08 && car.nitro > .5;
   if (Math.abs(err) > 1.9 && sp < 12 && !car.held) { inp.steer = err > 0 ? 1 : -1; inp.throttle = .6; inp.brake = 0; }           // facing the wrong way: spin it round
   { const held = car.held && sp < 2, want = held ? 0 : inp.steer, rate = (sp < 6 ? 1.1 : sp < 20 ? 2.4 : 3.6) * dt, prev = ai.sPrev ?? 0; inp.steer = ai.sPrev = prev + clamp(want - prev, -rate, rate); }      /* wheels: straight while the lights count, then a limited turn rate like a real steering arm and hands */

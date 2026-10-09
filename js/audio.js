@@ -2,6 +2,8 @@
 // pitched by the simulated engine speed. Tyres, wind, impacts and UI are synthesised noise and tones.
 // One AudioContext. Each engine voice is ONE looping source that is never restarted for throttle, rpm or gear changes.
 import { getAsset } from './assets.js';
+import ENGINE_DSP from './enginedsp.js';
+import { engineCfg } from './enginecfg.js';
 
 const REF_RPM = 3000;
 // Loader is layered on purpose: an engine is a list of loops with the rpm they were made at. Today each has one loop;
@@ -55,6 +57,28 @@ class EngineVoice {
   }
 }
 
+
+/* build 67: the engine model. One AudioWorklet node per voice runs the physical model in enginedsp.txt; this wrapper has the same face as EngineVoice
+   (start / set / fadeOut / cur / name / pan / lp), so the player's car, the rivals and the garage all use it the same way. */
+class SynthVoice {
+  constructor(au, spatial) { this.au = au; const c = au.ctx; this.spatial = !!spatial; this.level = c.createGain(); this.level.gain.value = 0; this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 9500; this.lp.Q.value = .4; this.level.connect(this.lp);
+    if (spatial) { const p = this.pan = c.createPanner(); p.panningModel = COARSE ? 'equalpower' : 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 9; p.rolloffFactor = 1.15; p.maxDistance = 400; setPos(p, 0, -999, 0); } else this.pan = c.createStereoPanner();
+    this.lp.connect(this.pan); this.pan.connect(au.engBus); this.cur = null; this.name = ''; this.node = null; this.sent = ''; }
+  start(id) {
+    const au = this.au, c = au.ctx; if (!au.synthOK) return false; if (!this.node) { this.node = new AudioWorkletNode(c, 'tafheet-engine', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] }); this.node.connect(this.level); this.node.onprocessorerror = () => { au.synthOK = false; }; }
+    if (this.sent !== id) { this.node.port.postMessage({ cfg: engineCfg(id) }); this.sent = id; } else this.node.port.postMessage({ on: 1 });
+    clearTimeout(this.offT); const t = c.currentTime; this.level.gain.cancelScheduledValues(t); this.level.gain.setValueAtTime(this.level.gain.value, t); this.level.gain.linearRampToValueAtTime(1, t + .25);
+    this.cur = { id }; this.name = id; au.stats.starts++; return true;
+  }
+  fadeOut(sec = .25) { if (!this.cur) return; const t = this.au.ctx.currentTime; this.level.gain.cancelScheduledValues(t); this.level.gain.setValueAtTime(this.level.gain.value, t); this.level.gain.linearRampToValueAtTime(0, t + sec); const n = this.node; this.offT = setTimeout(() => { if (n && !this.cur) n.port.postMessage({ off: 1 }); }, (sec + .1) * 1000); this.cur = null; this.name = ''; }
+  auxSet() {}
+  set(rpm, load, vol, x) {
+    if (!this.cur) return; if (!(rpm >= 0)) rpm = 900; load = clamp(+load || 0, 0, 1); vol = +vol || 0; x = x || {};
+    this.node.port.postMessage({ p: { rpm, load, boost: x.boost || 0, lim: !!x.lim, shift: !!x.shift } });
+    this.level.gain.setTargetAtTime(vol * .9, this.au.ctx.currentTime, .06);
+  }
+}
+
 const RADIO_TRIM = .7;      /* build 66: the radio is 30% quieter at every slider position */
 export const audioFiles = () => [...Object.values(ENGINE_SETS).flatMap(s => s.loops.map(l => l.file)), ...Object.values(SHOTS), ...Object.values(TYRES)].map(f => 'audio/' + f);
 export class GameAudio {
@@ -87,11 +111,19 @@ export class GameAudio {
     this.spool = bed('bandpass', 2600, 2.2, this.engBus);                     // turbo: filtered air noise, never a pure tone
     c.onstatechange = () => { this.lastState = c.state; if (c.state !== 'running') this.needUnlock = true; else this.needUnlock = false; };
     if (this.el) this.hookMusic();
-    this.voice = new EngineVoice(this); this.rivV = [0, 1, 2, 3].map(() => new EngineVoice(this, true)); this.audV = new EngineVoice(this);
+    this.voice = new EngineVoice(this); this.rivV = [0, 1, 2, 3].map(() => new EngineVoice(this, true)); this.audV = new EngineVoice(this); this.loadSynth();
     document.addEventListener('visibilitychange', () => { if (!this.ctx) return; if (document.hidden) this.ctx.suspend(); else { try { this.ctx.resume(); } catch (e) {} this.lastLoad = 0; } });
     for (const ev of ['pageshow', 'focus']) addEventListener(ev, () => { if (this.ctx && this.ctx.state !== 'running' && !document.hidden) { try { this.ctx.resume(); } catch (e) {} } });   // on return the next frame simply sets current rpm and load; nothing missed is replayed
     this.load();
   }
+  /* the engine model: loaded as an AudioWorklet from a Blob, so it works from a file as well as from a server. If anything about it fails, the recorded engines are used and the car is never silent. */
+  async loadSynth() {
+    try { if (!this.ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') throw new Error('no AudioWorklet');
+      const url = URL.createObjectURL(new Blob([ENGINE_DSP], { type: 'text/javascript' })); try { await this.ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+      this.sVoice = new SynthVoice(this); this.sRiv = [0, 1, 2, 3].slice(0, COARSE ? 2 : 4).map(() => new SynthVoice(this, true)); this.synthOK = true; }
+    catch (e) { this.synthOK = false; console.warn('engine model unavailable, using the recorded engines:', e && e.message); }
+  }
+  get useSynth() { return !!this.synthOK && this.engMode !== 'sample'; }
   async load() {
     this.state = 'loading';
     try { const files = [...Object.values(ENGINE_SETS).flatMap(s => s.loops.map(l => l.file)), ...Object.values(SHOTS), ...Object.values(TYRES)];
@@ -131,11 +163,12 @@ export class GameAudio {
     for (const key of ['rpm', 'rpmN', 'load', 'speed', 'skid', 'grip', 'dirt', 'wet', 'brake', 'rain']) if (!Number.isFinite(s[key])) s[key] = key === 'rpm' ? 900 : 0;      // never let a NaN (the very first frame of a race) into the audio graph
     const t = this.ctx.currentTime, k = Math.min(1, s.speed / 60), sp = this.spec; this.lastRpmN = s.rpmN;
     if (this.state === 'ready' && sp) {
-      if (s.running === false) { if (this.voice.cur) this.voice.fadeOut(.5); }
-      else { if (this.voice.name !== this.snd(sp.snd)) this.voice.start(this.snd(sp.snd), s.rpm / REF_RPM);
-        let vol = 1; if (t < (this.dipUntil || 0)) vol = .72;                                              // gear change: drive is cut, the note drops back, then returns
-        if (s.limiter) vol *= .8;                                           // rev limiter: a soft stutter while the cut is active
-        this.voice.set(s.rpm, s.load, vol); this.voice.auxSet(s.rpm, s.load, vol, s.cyl, s.acc || 0);
+      const syn = this.useSynth, V = syn ? this.sVoice : this.voice, W = syn ? this.voice : this.sVoice; if (W && W.cur) W.fadeOut(.3);
+      if (s.running === false) { if (V.cur) V.fadeOut(.5); }
+      else { const key = syn ? sp.id : this.snd(sp.snd); if (V.name !== key) V.start(key, s.rpm / REF_RPM);
+        let vol = 1; if (!syn && t < (this.dipUntil || 0)) vol = .72;                                              // gear change: drive is cut, the note drops back, then returns
+        if (s.limiter && !syn) vol *= .8;                                           // rev limiter: a soft stutter while the cut is active
+        V.set(s.rpm, s.load, vol, { boost: this.boost || 0, lim: s.limiter, shift: t < (this.dipUntil || 0) }); V.auxSet(s.rpm, s.load, vol, s.cyl, s.acc || 0);
         if (s.load - (this.prevLoad ?? s.load) > .22 && t - (this.kickT || 0) > .25 && s.speed > 1) { this.kickT = t; const kv = clamp(s.load - this.prevLoad, 0, .8); this.burst('lowpass', 220 + s.rpmN * 400, .8, .16, .1 + kv * .28, .9, this.engBus); this.tone(52 + s.rpmN * 30, .17, .1 + kv * .22, 'sine', .7); }      /* the throttle is stabbed: the exhaust barks and the car thumps */
         this.prevLoad = s.load;
         // Turbo. Boost builds with load and revs and lags behind the throttle like a real compressor. The spool is a whistle whose pitch
@@ -192,12 +225,13 @@ export class GameAudio {
   }
   // other cars: up to three voices, louder as they come closer, started and released gradually
   rivals(list) {      /* up to four other engines, each made at the place of its car, with the Doppler shift of its own speed and the air taking the top off it with distance */
-    if (!this.ctx || this.quiet || this.state !== 'ready') return; const t = this.ctx.currentTime;
-    this.rivV.forEach((v, i) => { const r = list[i]; if (!r || r.dist > 110) { if (v.cur) v.fadeOut(.4); return; } if (v.name !== this.snd(r.snd)) v.start(this.snd(r.snd), r.rpm / REF_RPM);
-      setPos(v.pan, r.x, r.y ?? .6, r.z); const near = clamp(1 - r.dist / 110, 0, 1); v.set(r.rpm * (1 + (r.dop || 0)), r.load, .75 * (.25 + .75 * near));
-      v.lp.frequency.setTargetAtTime(clamp(900 + 3400 * Math.exp(-r.dist / 38) + r.load * 900, 700, 5200), t, .08); });
+    if (!this.ctx || this.quiet || this.state !== 'ready') return; const t = this.ctx.currentTime, syn = this.useSynth;
+    this.rivV.forEach((sv, i) => { const r = list[i], ss = syn && this.sRiv[i], v = ss || sv, o = ss ? sv : this.sRiv && this.sRiv[i]; if (o && o.cur) o.fadeOut(.3);
+      if (!r || r.dist > 110) { if (v.cur) v.fadeOut(.4); return; } const key = ss ? r.id : this.snd(r.snd); if (v.name !== key) v.start(key, r.rpm / REF_RPM);
+      setPos(v.pan, r.x, r.y ?? .6, r.z); const near = clamp(1 - r.dist / 110, 0, 1); v.set(r.rpm * (1 + (r.dop || 0)), r.load, .75 * (.25 + .75 * near), { boost: r.load > .6 ? r.load : 0 });
+      v.lp.frequency.setTargetAtTime(clamp((ss ? 1500 : 900) + 3400 * Math.exp(-r.dist / 38) + r.load * 900, 700, ss ? 7000 : 5200), t, .08); });
   }
-  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); if (this.ty) for (const k in this.ty) this.ty[k].g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); if (this.voice.cur) this.voice.fadeOut(.3); for (const v of this.rivV) if (v.cur) v.fadeOut(.3); }
+  silence() { if (!this.ctx) return; const t = this.ctx.currentTime; if (this.sq) this.sq.g.gain.setTargetAtTime(0, t, .1); if (this.ty) for (const k in this.ty) this.ty[k].g.gain.setTargetAtTime(0, t, .1); for (const b of [this.wind, this.roll, this.skid, this.skidHi, this.dirt, this.nitro, this.brake, this.rain, this.crowd, this.spool]) b.g.gain.setTargetAtTime(0, t, .12); for (const v of [this.voice, this.sVoice, ...this.rivV, ...(this.sRiv || [])]) if (v && v.cur) v.fadeOut(.3); }
   ambient(dt, o) { if (this.ctx) this.crowd.g.gain.setTargetAtTime(o.on ? .028 : 0, this.ctx.currentTime, .6); }
 
   // ---- developer audition: hear any engine at any rpm and load, fire shifts and pops, read the output level
