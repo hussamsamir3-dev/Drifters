@@ -1,0 +1,131 @@
+/* Build 75: a consistent session menu and separate lap-delta / live-pace instruments. */
+:root{--violet:#ffca75;--circuit:#95e7b6;--red:#ed6f65;--dim:#9caab9}
+#menu,#menu[data-view=home]{display:grid;grid-template-columns:minmax(410px,38vw) 1fr;grid-template-rows:76px minmax(0,1fr) 30px;padding:0;overflow:hidden;background:linear-gradient(90deg,#101923f5 0%,#101923ed 34%,#10192360 60%,#10192312 100%),linear-gradient(0deg,#0c141feb,transparent 46%)}
+#menu .top,#menu[data-view=home] .top{display:flex;grid-column:1/-1;grid-row:1;height:auto;min-height:0;justify-content:initial;gap:20px;padding:12px 30px;background:#0c141de6;border-bottom:1px solid #ffffff12;flex-wrap:nowrap;z-index:8}
+#menu .logo,#menu[data-view=home] .logo{display:flex;border-color:#ffca75;min-width:110px}
+#menu .logo b{font:850 italic 21px system-ui;letter-spacing:.08em}
+#menu .logo span{font-size:11px}
+#menu .top .tabs,#menu[data-view=home] .top .tabs{display:flex;overflow:auto;gap:2px;margin:0;flex:1;scrollbar-width:none}
+#menu .top .tabs button{padding:12px 12px;min-height:44px;font:650 11px system-ui;letter-spacing:.035em;text-transform:none;flex:none;color:#9caab9;background:transparent;border-bottom:2px solid transparent}
+#menu .top .tabs button.on{color:#ffe0b2;border-bottom-color:#ffca75;background:#ffca750a}
+#menu .top .credits{font:700 14px system-ui}.top .credits small{font-size:8px}
+#menu .top .level{margin:0;font-size:13px}#menu .top .level>div{width:40px}
+#menu .sim-hero,#menu .home-back{display:none!important}
+#menu .left,#menu[data-view=home] .left,#menu[dir=rtl][data-view=home] .left{position:static;grid-column:1;grid-row:2;display:flex;flex-direction:column;width:auto;height:auto;min-height:0;padding:24px 30px 18px!important;overflow:hidden;gap:16px;background:transparent;z-index:3;border:0}
+#menu .lscroll{display:flex;flex-direction:column;flex:1;min-height:0;height:auto;overflow-y:auto;overflow-x:hidden;gap:20px;padding:0 10px 16px 0;mask-image:none;-webkit-mask-image:none;scrollbar-width:thin;scrollbar-color:#354452 transparent;touch-action:pan-y}
+#menu .lscroll>[hidden],#menu [hidden]{display:none!important}
+#menu #tabHome{padding:2px 0 0}
+#menu .home-title small{font:650 9px system-ui;letter-spacing:.18em;color:#9baaba}
+#menu .home-title h1{font:850 46px/.98 system-ui;margin:20px 0 17px!important;letter-spacing:-.055em;color:#fff;text-shadow:none}
+#menu .home-title h1 em{color:#ffca75;font-style:normal}
+#menu .home-title p{font:400 12px/1.6 system-ui;color:#a3b0bd;max-width:310px;margin-bottom:25px}
+#menu .home-nav{display:grid;gap:9px}
+#menu .home-nav button{position:relative;display:grid;grid-template-columns:24px 1fr 24px;column-gap:12px;align-items:center;min-height:81px;padding:16px!important;text-align:start;background:#192430d9;border:1px solid #ffffff14;border-radius:8px;color:#eff4f8;transition:background .15s,border-color .15s;transform:none;font:700 17px/1.1 system-ui}
+#menu .home-nav button i{grid-row:1/3;font:600 10px system-ui;color:#7b8c9d;align-self:start;padding-top:2px}
+#menu .home-nav button small{display:block;font:400 10px/1.5 system-ui;margin:7px 0 0;color:#9cabb9;grid-column:2;opacity:1}
+#menu .home-nav button>b{grid-column:3;grid-row:1/3;font-size:21px;color:#8393a4;font-weight:400}
+#menu .home-nav button.home-feature{border-color:#ffca7545;background:linear-gradient(115deg,#ffca751a,#1b2831cc)}
+#menu .home-nav button.home-feature>b{color:#ffca75}
+#menu .home-nav button:hover,#menu .home-nav button:focus-visible{background:#293745;border-color:#ffca7570;transform:none;color:#fff;outline:2px solid #ffca75;outline-offset:2px}
+#menu .home-tools{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:14px}
+#menu .home-tools button{padding:12px 9px;text-align:start;border:1px solid #ffffff12;background:#111c2790;border-radius:6px;color:#b5c1cd;font:550 11px system-ui;min-height:40px}
+#menu .home-tools button:hover{color:#ffca75;border-color:#ffca7540}
+#menu .home-profile{display:flex;margin-top:24px;font-size:10px;justify-content:space-between;gap:12px}.home-profile span b{color:#ffca75}
+#menu .home-help{font:400 10px/1.6 system-ui;color:#6f8295;max-width:100%}
+#menu .session-head{margin:0!important;padding:0 0 18px;border-bottom:1px solid #ffffff13}
+#menu .session-head small{font-size:9px;letter-spacing:.15em;color:#72869b}
+#menu .session-head h2{font:750 30px system-ui;letter-spacing:-.04em;margin:6px 0}
+#menu .session-head p{font:450 12px system-ui;color:#96a9bd}
+#menu h3.sec,#menu .track-heading{font:650 10px system-ui;letter-spacing:.12em;color:#92a6ba;margin:0 0 9px}
+#menu .track-heading{margin-bottom:-12px}
+#menu:not([data-view=quick]):not([data-view=online]) .track-heading,#menu[data-gp=true] .track-heading{display:none}
+#menu #tabQuick>h3:not(:first-child){margin-top:20px}
+#menu .seg button{font:550 11px/1.3 system-ui;border:1px solid #ffffff14;background:#1a2734;color:#b4c2cf;border-radius:6px;padding:11px 7px;min-height:40px;transform:none}
+#menu .seg button.on,#menu #modeSeg button.on{background:#f3dfbd;color:#19232c;border-color:#f3dfbd}
+#menu #modeSeg{display:grid;grid-template-columns:repeat(3,1fr)}
+#menu .mode-description{font:400 11px/1.6 system-ui;color:#97aabc;margin:10px 0}
+#menu .race-preset{margin-top:13px}#menu .race-preset button{border-color:#ffca7528;border-radius:6px;background:#ffca7507;padding:12px;font-size:10px}
+#menu .daily-drawer{margin-top:16px;border-top:1px solid #ffffff12;padding-top:12px}
+#menu .daily-drawer summary,#menu .sim-setup>summary{font:650 11px system-ui;color:#c2cdda;cursor:pointer;list-style:revert;padding:5px 0}
+#menu .track{border-radius:8px;background:#1a2734b0;border:1px solid #ffffff17;padding:14px 7px}
+#menu .track h2{font:700 19px system-ui;color:#eef3f8}#menu .track p{font:400 11px/1.5 system-ui;margin:4px 0;color:#95a7b9}#menu #trkMap{width:93px;height:70px}
+#menu .arrow{min-width:34px;width:34px;height:44px;font-size:27px;border-radius:5px;color:#ccd8e3;background:#ffffff06}
+#menu .stepper{border-radius:6px;background:#1a2632;border:1px solid #ffffff12;padding:8px;font-size:11px}
+#menu .stepper button{border-radius:4px;width:32px;height:32px}
+#menu #optsRow .seg button{font-size:10px;padding:9px 5px}
+#menu .sim-setup{border:1px solid #ffffff14;border-radius:7px;padding:10px 14px;background:#17222d99}
+#menu .sim-setup[open]>summary{margin-bottom:17px}#menu .sim-setup .sim-slider{margin:13px 0 19px}
+#menu .sim-slider input,#menu .setup-control input{accent-color:#ffca75}
+#menu .start,#menu #startBtn{position:static!important;flex:none;width:100%;padding:16px 20px;font:750 13px system-ui;letter-spacing:.06em;color:#14202b;background:#ffca75;border:1px solid #ffca75;border-radius:7px;clip-path:none;transform:none;box-shadow:none!important;margin:0;min-height:48px;z-index:6}
+#menu .start:hover{background:#ffdfa7}#menu .start:disabled{opacity:.45}
+#menu .garage,#menu[data-view=home] .garage,#menu[dir=rtl] .garage{position:static;grid-column:2;grid-row:2;align-self:end;justify-self:end;width:min(640px,94%);max-width:none;padding:0 34px 30px!important;margin:0;gap:13px;z-index:2}
+#menu .carpick{padding:16px 0;border-top:1px solid #ffffff21;gap:18px;text-align:start}
+#menu .carpick h2{font:750 27px system-ui;color:#f4f7fa;letter-spacing:-.04em}
+#menu .carpick p{font:400 10px/1.6 system-ui;color:#a1b2c4;margin:7px 0 0}
+#menu .garage .stats{padding-top:2px}#menu .garage .stats i{background:#ffca75}#menu .stats dd{overflow:hidden}
+#menu #tabGarage,#menu #tabTune,#menu #tabSettings{margin:0!important}
+#menu .setup-group summary{color:#cbd7e2;font-size:13px}#menu .setup-control>span{color:#c4d0dc;font-size:12px}#menu .setup-control output{color:#ffca75;font-size:12px}#menu .setup-control small{font-size:10px;color:#8fa2b4}
+#menu .setup-presets button{border-radius:5px;background:#223140;color:#d4dee7;border-color:#ffffff18;padding:12px 5px}
+#menu .setup-preview{left:calc(38vw + 30px);top:100px;color:#ffca75;font-size:10px;letter-spacing:.1em}
+#menu .mod-performance{background:#15212c;border-color:#ffffff18;font-size:11px}
+#menu[data-view=settings],#menu[data-view=trophies]{grid-template-columns:minmax(460px,60vw) 1fr}
+#menu .settings .sgrp{border-radius:8px;background:#172430b8;padding:18px;border:1px solid #ffffff15}
+#menu .tile{border-radius:6px;background:#20303f;border-color:#ffffff15;min-height:40px;font-size:11px}
+#menu .credit{grid-column:1/-1;grid-row:3;position:static;padding:8px 30px;font:400 8px system-ui;letter-spacing:.02em;color:#53697e;background:#0b131de0;z-index:5}
+#menu button:focus-visible,#menu input:focus-visible,#menu summary:focus-visible{outline:2px solid #ffca75;outline-offset:3px}
+#hud .delta-console{position:fixed;left:50%;top:22px;transform:translateX(-50%);width:280px;padding:12px 16px;border-radius:8px;border:1px solid #ffffff20;background:#111c28ed;box-shadow:0 4px 20px #0004;text-shadow:none}
+#hud #deltaRef{font:650 9px system-ui;min-height:22px;color:#b9c8d7;letter-spacing:.08em}
+#hud .reference-time{font-size:9px;margin-top:6px}#hud .reference-time b{font-size:12px}
+#hud .delta-label,#hud .live-pace-label{display:flex;justify-content:space-between;font:650 8px system-ui;letter-spacing:.1em;color:#71879f;margin-top:10px}
+#hud .delta-label span,#hud .live-pace-label small{font:500 8px system-ui;letter-spacing:.04em}
+#hud .delta-value{justify-content:space-between;align-items:center}#hud #hDelta,body[data-drive=arcade] #hud #hDelta{font:750 39px/1 system-ui;margin:6px 0 9px;letter-spacing:-.04em}
+#hud .delta-value small{display:none}#hud .delta-gap{height:4px;margin-bottom:0}
+#hud .live-pace-label{margin-top:12px}#hud .pace-caption{margin:5px 0 8px}#hud #hTrend{font-size:10px;color:#afc0d1}#hud #hRate{font-size:11px;color:#dbe6f0}
+#hud .delta-meter{height:12px;background:#ffffff0c}#hud .delta-meter:before{background:repeating-linear-gradient(90deg,transparent 0,transparent calc(5% - 1px),#111c28 calc(5% - 1px),#111c28 5%)}
+#hud .pace-scale{font-size:7px;margin:5px 0 9px}#hud .prediction{font-size:8px}#hud .prediction b{font-size:14px}
+#hud .sector-strip{margin:10px 0 0;gap:5px}#hud .sector-strip span{font-size:8px;padding:6px 2px}
+#hud .ht{width:205px}#hud #hLapValid{max-width:240px;white-space:normal;text-align:end;line-height:1.25}
+@media(max-width:1100px){#menu,#menu[data-view=home]{grid-template-columns:390px 1fr}#menu .top{padding:10px 20px;gap:12px}#menu .top .tabs button{padding:12px 8px;font-size:10px}#menu .top .credits small,#menu .top .level{display:none}#menu .left,#menu[data-view=home] .left{padding:20px!important}#menu .home-title h1{font-size:38px}#menu .garage,#menu[data-view=home] .garage{padding:0 22px 22px!important}#menu .setup-preview{left:415px}}
+@media(max-height:700px) and (min-width:801px){#menu,#menu[data-view=home]{grid-template-rows:62px minmax(0,1fr) 24px}#menu .home-title h1{font-size:36px!important;margin:8px 0 10px!important}#menu .home-title p{margin-bottom:16px;font-size:11px}#menu .home-nav button{min-height:68px;padding:12px!important;font-size:15px}#menu .home-profile{margin-top:15px}#menu .home-help{display:none}#menu .credit{padding-top:5px}#menu .top .tabs button{padding:9px 9px}}
+@media(max-width:800px){#menu,#menu[data-view=home],#menu[data-view=settings],#menu[data-view=trophies]{display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr auto;overflow-y:auto;background:linear-gradient(0deg,#0e1926f5,#101923d9);touch-action:pan-y}#menu .top,#menu[data-view=home] .top{position:sticky;top:0;padding:9px 14px;gap:10px;flex-wrap:wrap;background:#0c151ff5}#menu .top .logo{min-width:80px}#menu .logo b{font-size:16px}#menu .logo span{display:none}#menu .top .tabs,#menu[data-view=home] .top .tabs{order:3;flex-basis:100%;justify-content:space-between}#menu .top .tabs button{min-height:34px;padding:9px 8px;font-size:10px}#menu .top .credits{margin-inline-start:auto}#menu .left,#menu[data-view=home] .left,#menu[dir=rtl][data-view=home] .left{grid-column:1;grid-row:2;padding:20px!important;overflow:visible;min-height:0;max-height:none}#menu .lscroll{overflow:visible;flex:none;padding:0;gap:18px}#menu #startBtn{position:sticky!important;bottom:12px;margin:4px 0 10px;box-shadow:0 0 0 10px #101923!important}#menu .garage,#menu[data-view=home] .garage,#menu[dir=rtl] .garage{grid-column:1;grid-row:3;width:100%;max-width:550px;justify-self:center;padding:15px 20px 30px!important;background:#111d2ade}#menu .credit{grid-row:4;padding:10px 20px}#menu[data-view=settings] .credit,#menu[data-view=trophies] .credit{grid-row:3}#menu .home-title h1{font-size:40px!important}#menu .home-nav small,#menu .home-profile{display:block}#menu .home-profile{display:flex}#menu .home-nav button{min-height:78px}#menu .home-help{display:block}#menu .setup-preview{display:none!important}#menu .carpick h2{font-size:23px}
+#hud .delta-console{position:static;transform:none;left:auto;top:auto;width:auto;padding:10px 12px}#hud .ht{width:190px;right:12px}#hud #hDelta,body[data-drive=arcade] #hud #hDelta{font-size:30px}#hud .reference-time{font-size:8px}#hud .sector-strip span{font-size:7px}#hud .delta-label,#hud .live-pace-label{font-size:7px;margin-top:7px}#hud #hTrend{font-size:9px}#hud .prediction b{font-size:12px}}
+@media(max-height:500px) and (min-width:550px){#menu,#menu[data-view=home]{display:grid;grid-template-columns:46% 1fr;grid-template-rows:50px minmax(0,1fr) 0;overflow:hidden}#menu .top,#menu[data-view=home] .top{grid-column:1/-1;flex-wrap:nowrap;position:static;padding:5px 16px}#menu .top .tabs,#menu[data-view=home] .top .tabs{order:0;flex-basis:auto;justify-content:initial}#menu .top .tabs button{font-size:9px;padding:8px 6px}#menu .top .credits{font-size:11px}#menu .left,#menu[data-view=home] .left,#menu[dir=rtl][data-view=home] .left{grid-column:1;grid-row:2;position:static;width:auto;height:auto;overflow:hidden;min-height:0;padding:12px 16px!important}#menu .lscroll{overflow-y:auto;flex:1;height:auto;gap:14px;min-height:0;padding-bottom:5px}#menu #startBtn{position:static!important;bottom:auto;padding:10px;margin:0;min-height:38px;box-shadow:none!important}#menu .home-title small{font-size:7px}#menu .home-title h1{font-size:26px!important;margin:8px 0 10px!important}#menu .home-title p{display:none}#menu .home-nav button{min-height:58px;font-size:14px;padding:10px!important}#menu .home-nav button small{font-size:8px;margin-top:5px}#menu .home-tools{margin-top:9px;gap:4px}#menu .home-tools button{font-size:9px;padding:8px;min-height:32px}#menu .home-profile,#menu .home-help{display:none}#menu .garage,#menu[data-view=home] .garage,#menu[dir=rtl] .garage{grid-column:2;grid-row:2;position:static;width:100%;align-self:end;padding:0 20px 16px!important;background:transparent}#menu .credit{display:none}#menu .carpick h2{font-size:20px}#menu .carpick p{font-size:9px}#menu .garage .stats{display:none}#menu[data-view=settings],#menu[data-view=trophies]{grid-template-columns:72% 1fr}
+#hud .delta-console{position:static;transform:none;left:auto;top:auto;width:auto;padding:8px 10px}#hud .ht{width:180px;top:10px}#hud #hDelta,body[data-drive=arcade] #hud #hDelta{font-size:25px;margin:4px 0 6px}#hud .delta-label{margin-top:5px}#hud .live-pace-label{display:none}#hud .reference-time{margin-top:3px}#hud .pace-caption{margin-top:7px}#hud .prediction{display:none}#hud .sector-strip{margin-top:6px}#hud .pace-scale{margin-bottom:5px}#hud #hTrend{font-size:8px}}
+@media(max-width:500px){#menu .top .tabs button{padding:9px 5px;font-size:9px}#hud .ht,body.touch #hud .ht{width:153px;top:106px}#hud #hDelta,body[data-drive=arcade] #hud #hDelta{font-size:25px}#hud .sector-strip{gap:2px}#hud .sector-strip span{font-size:6px}#hud .reference-time b{font-size:10px}#hud #deltaRef{font-size:8px}#hud #hTrend{font-size:8px}#hud .prediction{display:none}#hud .delta-console{padding:9px}#hud .hp{top:106px}}
+
+/* Keep DOM order consistent: session, circuit, grid, advanced settings. */
+#menu .lscroll>*{order:0!important;flex-shrink:0}
+#menu #startBtn{background:#ffca75!important;color:#14202b!important;border-color:#ffca75!important;border-radius:7px!important}
+#menu .seg button.on,#menu #modeSeg button.on{background:#f3dfbd!important;color:#19232c!important;border-color:#f3dfbd!important}
+#hud .hp #order li.me,body[data-drive=arcade] #hud .hp #order li.me{background:#f3dfbd;color:#19232c}
+@media(min-width:801px) and (min-height:501px){
+#hud .delta-console{top:60px;width:380px;display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:5px;padding:11px 15px}
+#hud #deltaRef{grid-column:1;grid-row:1;font-size:8px;min-height:18px}
+#hud .reference-time{grid-column:2;grid-row:1;margin:0;align-items:center;font-size:8px}
+#hud .delta-label{grid-column:1;grid-row:2;margin:3px 0 0}
+#hud .delta-value{grid-column:1;grid-row:3}#hud #hDelta,body[data-drive=arcade] #hud #hDelta{font-size:34px;margin:0}
+#hud .delta-gap{grid-column:1;grid-row:4;height:4px;align-self:center}
+#hud .live-pace-label{grid-column:2;grid-row:2;margin:3px 0 0}
+#hud .pace-caption{grid-column:2;grid-row:3;margin:0;align-items:center}#hud #hTrend{font-size:9px}#hud #hRate{font-size:10px}
+#hud .delta-meter{grid-column:2;grid-row:4;height:10px}
+#hud .pace-scale{grid-column:2;grid-row:5;margin:0;font-size:6px}
+#hud .prediction{grid-column:1;grid-row:5;font-size:6px}#hud .prediction b{font-size:11px}
+#hud .sector-strip{grid-column:1/-1;grid-row:6;margin:4px 0 0}#hud .sector-strip span{font-size:8px;padding:5px}
+#radio{top:auto;bottom:170px}#msg.show{top:225px}
+}
+/* Remove legacy glossy button styling from the session/workshop controls. */
+#menu .seg button,#menu .tile,#menu .chip{background:#1a2734!important;color:#b4c2cf!important;border:1px solid #ffffff14!important;border-radius:6px!important;box-shadow:none!important;text-shadow:none!important;font-weight:550!important;transform:none!important}
+#menu .seg button.on,#menu .tile.on,#menu #modeSeg button.on{background:#f3dfbd!important;color:#19232c!important;border-color:#f3dfbd!important;font-weight:700!important}
+#menu .arrow{background:#ffffff06!important;border:0!important;border-radius:5px!important;box-shadow:none!important}
+#menu .stepper button{background:#ffffff09!important;border:0!important;border-radius:4px!important;box-shadow:none!important}
+@media(max-width:800px) and (min-height:501px),(max-width:549px){
+#menu,#menu[data-view=home],#menu[data-view=settings],#menu[data-view=trophies]{grid-template-rows:auto auto auto auto;align-content:start}
+}
+@media(max-width:800px) and (min-height:501px),(max-width:549px){
+#menu,#menu[data-view=home],#menu[data-view=settings],#menu[data-view=trophies]{display:flex;flex-direction:column;overflow-y:auto}
+#menu .top,#menu[data-view=home] .top{flex:none}
+#menu .left,#menu[data-view=home] .left,#menu[dir=rtl][data-view=home] .left{flex:none;min-height:auto;height:auto;overflow:visible}
+#menu .lscroll{flex:none;height:auto;overflow:visible}
+#menu .garage,#menu[data-view=home] .garage,#menu[dir=rtl] .garage{flex:none;align-self:center;max-width:550px}
+#menu .credit{flex:none}
+}

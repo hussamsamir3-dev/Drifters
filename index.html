@@ -3,17 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Tafheet ~ تفحيط | EGYSeal</title>
-<meta name="theme-color" content="#17181c">
+<title>Tafheet Motorsport | Build 81</title>
+<meta name="theme-color" content="#0c1017">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Tafheet"><meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;1,700;1,900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=68">
+<link rel="stylesheet" href="style.css?v=81">
+<link rel="stylesheet" href="motorsport.css?v=81">
+<link rel="stylesheet" href="circuit.css?v=81">
+<link rel="stylesheet" href="race71.css?v=81">
+<link rel="stylesheet" href="premium75.css?v=81">
+<link rel="stylesheet" href="hud76.css?v=81">
+<link rel="stylesheet" href="hud77.css?v=81">
+<link rel="stylesheet" href="hud79.css?v=81">
 <script type="importmap">{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }</script>
 </head>
 <body>
 <div id="boot" class="screen ldr ldr-boot"><div class="l-bg" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="l-road" aria-hidden="true"><i></i></div><div class="l-main"><div class="l-logo"><b>TAFHEET</b><span>تفحيط</span></div><div class="l-gauge"><svg class="l-tach" viewBox="0 0 200 200" aria-hidden="true"><circle class="t-ring" cx="100" cy="100" r="92"/><circle class="t-trk" cx="100" cy="100" r="78" pathLength="100" stroke-dasharray="75 100" transform="rotate(135 100 100)"/><circle class="t-red" cx="100" cy="100" r="78" pathLength="100" stroke-dasharray="15 100" stroke-dashoffset="-60" transform="rotate(135 100 100)"/><circle class="l-arc" cx="100" cy="100" r="78" pathLength="100" stroke-dasharray="0 100" transform="rotate(135 100 100)"/><line class="t-tk m" x1="53.3" y1="146.7" x2="49.1" y2="150.9"/><text class="t-n" x="61.8" y="141.7">0</text><line class="t-tk" x1="45.0" y1="143.3" x2="43.5" y2="144.6"/><line class="t-tk" x1="40.3" y1="136.6" x2="38.6" y2="137.6"/><line class="t-tk" x1="36.4" y1="129.3" x2="34.6" y2="130.1"/><line class="t-tk" x1="33.4" y1="121.6" x2="31.5" y2="122.2"/><line class="t-tk m" x1="35.3" y1="112.9" x2="29.4" y2="114.0"/><text class="t-n" x="47.0" y="114.0">1</text><line class="t-tk" x1="30.2" y1="105.5" x2="28.2" y2="105.6"/><line class="t-tk" x1="30.1" y1="97.3" x2="28.1" y2="97.2"/><line class="t-tk" x1="30.9" y1="89.0" x2="28.9" y2="88.7"/><line class="t-tk" x1="32.6" y1="81.0" x2="30.7" y2="80.5"/><line class="t-tk m" x1="39.0" y1="74.7" x2="33.5" y2="72.4"/><text class="t-n" x="50.1" y="82.8">2</text><line class="t-tk" x1="38.9" y1="65.8" x2="37.2" y2="64.8"/><line class="t-tk" x1="43.4" y1="58.9" x2="41.8" y2="57.7"/><line class="t-tk" x1="48.6" y1="52.5" x2="47.1" y2="51.1"/><line class="t-tk" x1="54.5" y1="46.8" x2="53.2" y2="45.3"/><line class="t-tk m" x1="63.3" y1="45.1" x2="60.0" y2="40.1"/><text class="t-n" x="70.0" y="58.6">3</text><line class="t-tk" x1="68.2" y1="37.6" x2="67.3" y2="35.8"/><line class="t-tk" x1="75.8" y1="34.3" x2="75.1" y2="32.5"/><line class="t-tk" x1="83.7" y1="31.9" x2="83.2" y2="30.0"/><line class="t-tk" x1="91.8" y1="30.5" x2="91.5" y2="28.5"/><line class="t-tk m" x1="100.0" y1="34.0" x2="100.0" y2="28.0"/><text class="t-n" x="100.0" y="49.5">4</text><line class="t-tk" x1="108.2" y1="30.5" x2="108.5" y2="28.5"/><line class="t-tk" x1="116.3" y1="31.9" x2="116.8" y2="30.0"/><line class="t-tk" x1="124.2" y1="34.3" x2="124.9" y2="32.5"/><line class="t-tk" x1="131.8" y1="37.6" x2="132.7" y2="35.8"/><line class="t-tk m" x1="136.7" y1="45.1" x2="140.0" y2="40.1"/><text class="t-n" x="130.0" y="58.6">5</text><line class="t-tk" x1="145.5" y1="46.8" x2="146.8" y2="45.3"/><line class="t-tk" x1="151.4" y1="52.5" x2="152.9" y2="51.1"/><line class="t-tk" x1="156.6" y1="58.9" x2="158.2" y2="57.7"/><line class="t-tk" x1="161.1" y1="65.8" x2="162.8" y2="64.8"/><line class="t-tk m" x1="161.0" y1="74.7" x2="166.5" y2="72.4"/><text class="t-n" x="149.9" y="82.8">6</text><line class="t-tk" x1="167.4" y1="81.0" x2="169.3" y2="80.5"/><line class="t-tk" x1="169.1" y1="89.0" x2="171.1" y2="88.7"/><line class="t-tk" x1="169.9" y1="97.3" x2="171.9" y2="97.2"/><line class="t-tk r" x1="169.8" y1="105.5" x2="171.8" y2="105.6"/><line class="t-tk m r" x1="164.7" y1="112.9" x2="170.6" y2="114.0"/><text class="t-n r" x="153.0" y="114.0">7</text><line class="t-tk r" x1="166.6" y1="121.6" x2="168.5" y2="122.2"/><line class="t-tk r" x1="163.6" y1="129.3" x2="165.4" y2="130.1"/><line class="t-tk r" x1="159.7" y1="136.6" x2="161.4" y2="137.6"/><line class="t-tk r" x1="155.0" y1="143.3" x2="156.5" y2="144.6"/><line class="t-tk m r" x1="146.7" y1="146.7" x2="150.9" y2="150.9"/><text class="t-n r" x="138.2" y="141.7">8</text></svg><div class="l-needle"></div><div class="l-hub"></div><div class="l-pct"><b>0</b><small>%</small></div></div></div><div class="l-foot"><div class="l-track"><div class="l-bar"><i></i></div><svg class="l-car" viewBox="0 0 120 40" aria-hidden="true"><path class="fl" d="M0 22 L-18 18 L-6 22 L-20 26 Z"/><path class="bd" d="M6 28 C6 22 14 20 26 19 L40 10 C44 7 52 6 62 6 L76 7 C84 8 90 14 94 18 L108 20 C114 21 116 24 116 28 L116 30 L6 30 Z"/><path class="gl" d="M44 11 L58 8 L74 9 L86 17 L36 18 Z"/><path class="sp" d="M8 17 L24 15 L24 19 L8 21 Z"/><circle class="wh" cx="30" cy="31" r="8"/><circle class="wh" cx="90" cy="31" r="8"/><circle class="hb" cx="30" cy="31" r="3"/><circle class="hb" cx="90" cy="31" r="3"/></svg><span class="l-flag"></span></div><p class="l-stat"></p><p class="l-tip"></p><button class="l-go" hidden><span>TAP TO START</span></button></div></div>
+<div id="replayControls" hidden><b>LAST SESSION / REPLAY</b><button id="replayToggle">Pause</button><button id="replayRate">1×</button><input id="replaySeek" type="range" min="0" max="100" step=".1" value="0" aria-label="Replay position"><span id="replayTime"></span><button id="replayClose">Main menu</button></div>
 <div id="letterbox"></div>
 <canvas id="gl"></canvas>
 <canvas id="menuBg" hidden></canvas>
@@ -23,23 +29,40 @@
   <header class="top">
     <div class="logo"><span lang="ar" dir="rtl">تفحيط</span><b>Tafheet</b></div>
     <nav class="tabs" id="tabs">
-      <button data-tab="quick" data-t>Play</button><button data-tab="garage" data-t>Garage</button><button data-tab="tune" data-t>Tuning</button>
+      <button data-tab="home" data-t>Home</button><button data-tab="quick" data-t>Play</button><button data-tab="garage" data-t>Garage</button><button data-tab="tune" data-t>Tuning</button>
       <button data-tab="online" data-t>Online</button><button data-tab="trophies" data-t>Trophies</button><button data-tab="settings" data-t>Settings</button>
     </nav>
     <div class="level" title="Driver level"><b id="lvl">1</b><div><i id="xpBar"></i></div></div>
     <div class="credits" title="Credits"><span id="credits">0</span> <small data-t>credits</small></div>
   </header>
 
+  <button id="homeBack" class="home-back" hidden>‹ <span data-t>MAIN MENU</span></button>
+<div class="sim-hero" aria-hidden="true"><div class="sim-eyebrow">EGYSEAL / CIRCUIT SERIES</div><h1>THE RACING<br><em>PLAYGROUND.</em></h1><div class="sim-divider"></div><p data-t>Precision. Strategy. Competition.</p><div class="sim-brief"><span id="simClass"></span><span id="simRules"></span></div></div>
   <section class="left">
     <div class="lscroll">
-    <div id="tabCareer" hidden><button id="chPrev"></button><button id="chNext"></button><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p><ol id="events"></ol></div>
+    <div class="session-head"><small data-t>SESSION CONTROL</small><h2 id="simSession">Race</h2><p id="simTrack"></p></div>
+    <div id="tabHome">
+      <div class="home-title"><small>EGYSEAL · MOTORSPORT</small><h1>YOUR NEXT<br><em>GREAT RACE.</em></h1><p data-t>Pick a session. Find your rhythm. Fight for the podium.</p></div>
+      <div class="home-nav">
+        <button data-home="race" id="enterFree" class="home-feature"><i>01</i><span data-t>Race weekend</span><small data-t>Choose a circuit and challenge the grid.</small><b>↗</b></button>
+        <button data-home="gp"><i>02</i><span data-t>Grand Prix</span><small data-t>Four rounds. One champion.</small><b>↗</b></button>
+        <button data-home="trial"><i>03</i><span data-t>Time attack</span><small data-t>Build a clean lap. Chase your ghost.</small><b>↗</b></button>
+      </div>
+      <div class="home-tools"><button data-home="garage" data-t>Garage</button><button data-home="tune" data-t>Setup workshop</button><button data-home="replay" data-t>Replays</button><button data-home="trophies" data-t>Trophies</button></div>
+      <div class="home-profile"><b id="homeDriver"></b><span><b id="masteryCount">0</b> <span data-t>mastery medals</span></span></div>
+      <p class="home-help" data-t>Master every circuit with a clean lap, a podium and a hard-fought win.</p>
+    </div>
+<div id="tabCareer" hidden><button id="chPrev"></button><button id="chNext"></button><small id="chNum"></small><h2 id="chName"></h2><p id="chText"></p><ol id="events"></ol></div>
     <div id="tabQuick">
-      <h3 class="sec" data-t>Game mode</h3>
+      <h3 class="sec" data-t>01 / Session</h3>
       <div class="seg wide" id="modeSeg"><button data-mode="race" data-t>Race</button><button data-mode="gp" data-t>Grand Prix</button><button data-mode="elim" data-t>Knockout</button><button data-mode="endu" data-t>Endurance</button><button data-mode="trial" data-t>Time trial</button><button data-mode="drift" data-t>Drift</button></div>
-      <h3 class="sec" data-t>Rules</h3>
-      <div class="seg wide two" id="rulesSeg"><button data-r="circuit" data-t>Professional</button><button data-r="arcade" data-t>Arcade</button></div>
+      <h3 class="sec" data-t>Driving style</h3>
+      <div class="seg wide two" id="rulesSeg"><button data-r="circuit" data-t>Simulation</button><button data-r="arcade" data-t>Arcade</button></div><p id="modeDescription" class="mode-description"></p>
+      <div class="race-preset"><button id="racePreset" type="button"><b data-t>Simulation preset</b><span data-t>120% AI · 5 laps · low assists</span><i>↗</i></button></div>
+      <details class="daily-drawer"><summary data-t>Daily rewards & challenges</summary>
       <h3 class="sec" data-t>Today</h3>
       <div class="dailies"><button id="boxBtn" class="daily box"><small data-t>Daily box</small><b data-t>A car, an upgrade, XP or credits</b><span id="boxInfo"></span></button><button id="daily" class="daily"><small data-t>Daily challenge</small><b id="dailyName"></b><span id="dailyInfo"></span></button></div>
+      </details>
       <div id="gpBox" class="card gp" hidden></div>
     </div>
     <div id="tabGarage" hidden>
@@ -54,12 +77,13 @@
       <section class="sgrp"><h3 class="sec" data-t>Profile</h3><label><span data-t>Driver name</span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label><label><span data-t>Language</span><div class="seg" id="langSeg"><button data-l="en">English</button><button data-l="ar">العربية</button></div></label></section>
       <section class="sgrp"><h3 class="sec" data-t>Driving assists</h3><div class="tiles"><button id="assistBtn" class="tile">Assist</button><button id="tcBtn" class="tile">TC</button><button id="absBtn" class="tile">ABS</button><button id="sensBtn" class="tile">Steering</button></div></section>
       <section class="sgrp"><h3 class="sec" data-t>Gameplay</h3><label><span data-t>Car damage</span><div class="seg" id="dmgSeg"><button data-k="off" data-t>Off</button><button data-k="low" data-t>Low</button><button data-k="medium" data-t>Medium</button><button data-k="high" data-t>High</button></div></label></section>
-      <section class="sgrp"><h3 class="sec" data-t>Display</h3><label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1" data-t>Close</button><button data-z="1.5" data-t>Normal</button><button data-z="2.25" data-t>Far</button><button data-z="3" data-t>Very far</button></div></label><label><span data-t>Time of day</span><div class="seg" id="todSeg"><button data-d="default" data-t>Track</button><button data-d="dawn" data-t>Dawn</button><button data-d="noon" data-t>Noon</button><button data-d="golden" data-t>Golden</button><button data-d="dusk" data-t>Dusk</button><button data-d="night" data-t>Night</button><button data-d="cycle" data-t>Dynamic</button></div></label><label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label><div class="tiles"><button id="gfxBtn" class="tile">Graphics</button><button id="touchEditBtn" class="tile" data-t>Edit touch controls</button><button id="hapBtn" class="tile" data-t>Haptics</button><button id="radioBtn" class="tile" data-t>Race engineer voice</button><button id="voiceBtn" class="tile">Radio chatter</button><button id="gasBtn" class="tile" hidden>Auto gas</button></div></section>
-      <section class="sgrp"><h3 class="sec" data-t>Audio</h3><label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label><label><span data-t>Engine</span><input type="range" id="engVol" min="0" max="100"></label><label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label><label><span data-t>Radio volume</span><input type="range" id="radioVol" min="0" max="100"></label><div class="tiles"><button id="engModeBtn" class="tile">Engine sound: new model</button><button id="muteBtn" class="tile">Sound on</button></div></section>
+      <section class="sgrp"><h3 class="sec" data-t>Display</h3><label><span data-t>Camera distance</span><div class="seg" id="zoomSeg"><button data-z="1" data-t>Close</button><button data-z="1.5" data-t>Normal</button><button data-z="2.25" data-t>Far</button><button data-z="3" data-t>Very far</button></div></label><label><span data-t>Time of day</span><div class="seg" id="todSeg"><button data-d="default" data-t>Track</button><button data-d="dawn" data-t>Dawn</button><button data-d="noon" data-t>Noon</button><button data-d="golden" data-t>Golden</button><button data-d="dusk" data-t>Dusk</button><button data-d="night" data-t>Night</button><button data-d="cycle" data-t>Dynamic</button></div></label><label><span data-t>Speed units</span><div class="seg" id="unitSeg"><button data-u="kmh">km/h</button><button data-u="mph">mph</button></div></label><div class="tiles"><button id="gfxBtn" class="tile">Graphics</button><button id="miniBtn" class="tile">Minimap</button><button id="touchEditBtn" class="tile" data-t>Edit touch controls</button><button id="hapBtn" class="tile" data-t>Haptics</button><button id="radioBtn" class="tile" data-t>Race engineer voice</button><button id="voiceBtn" class="tile">Radio chatter</button><button id="gasBtn" class="tile" hidden>Auto gas</button></div></section>
+      <section class="sgrp"><h3 class="sec" data-t>Audio</h3><label><span data-t>Music</span><input type="range" id="musicVol" min="0" max="100"></label><label><span data-t>Engine</span><input type="range" id="engVol" min="0" max="100"></label><label><span data-t>Sound effects</span><input type="range" id="sfxVol" min="0" max="100"></label><label><span data-t>Radio volume</span><input type="range" id="radioVol" min="0" max="100"></label><div class="tiles"><span class="engine-pack-note" data-t>18 individual engine loops · RPM matched</span><button id="muteBtn" class="tile">Sound on</button></div></section>
       <section class="sgrp"><h3 class="sec" data-t>Data</h3><div class="tiles"><button id="resetBtn" class="tile danger" data-t>Reset progress</button><button id="devBtn" class="tile">Developer</button></div></section>
-      <div id="devBox" class="row chips dev" hidden><button class="chip" data-a="cars">Unlock all cars</button><button class="chip" data-a="cash">+50,000 credits</button><button class="chip" data-a="ups">Max all upgrades</button><button class="chip" data-a="box">Reset daily box</button><button class="chip" data-a="god" id="devGod">No damage</button><button class="chip" data-a="scale" id="devScale">Game speed</button><button class="chip" data-a="tele">Telemetry</button><button class="chip danger" data-a="off">Leave developer mode</button><p class="note">In a race: F2 repair + refuel · F3 rain · F4 front impact · F6 empty tank · F7 skip to lap end · T telemetry</p><div class="aud"><select id="auEng"></select><label>RPM <input type="range" id="auRpm" min="700" max="9500" value="3000"></label><label>Load <input type="range" id="auLoad" min="0" max="100" value="30"></label><button class="chip" id="auUp" type="button">Upshift</button><button class="chip" id="auPop" type="button">Pop</button><button class="chip" id="auCrk" type="button">Crackle</button><small id="auMeter"></small></div></div>
+      <div id="devBox" class="row chips dev" hidden><button class="chip" data-a="cars">Unlock all cars</button><button class="chip" data-a="cash">+50,000 credits</button><button class="chip" data-a="ups">Max all upgrades</button><button class="chip" data-a="box">Reset daily box</button><button class="chip" data-a="god" id="devGod">No damage</button><button class="chip" data-a="scale" id="devScale">Game speed</button><button class="chip" data-a="tele">Telemetry</button><button class="chip" data-a="phys">Physics overlay (H)</button><button class="chip danger" data-a="off">Leave developer mode</button><p class="note">In a race: H physics overlay · F2 repair + refuel · F3 rain · F4 front impact · F6 empty tank · F7 skip to lap end · T telemetry</p><div class="aud"><select id="auEng"></select><label>RPM <input type="range" id="auRpm" min="700" max="9500" value="3000"></label><label>Load <input type="range" id="auLoad" min="0" max="100" value="30"></label><button class="chip" id="auUp" type="button">Upshift</button><button class="chip" id="auPop" type="button">Pop</button><button class="chip" id="auCrk" type="button">Crackle</button><small id="auMeter"></small></div></div>
     </div>
 
+    <div class="track-heading" data-t>02 / Circuit</div>
     <div class="card track">
       <button class="arrow" id="trkPrev" aria-label="Previous track">‹</button>
       <div class="mid">
@@ -69,13 +93,20 @@
       <button class="arrow" id="trkNext" aria-label="Next track">›</button>
     </div>
     <div class="opts2" id="optsRow">
-      <h3 class="sec" data-t>Race setup</h3>
+      <h3 class="sec" data-t>03 / Grid & conditions</h3>
       <div class="stepper"><span data-t>Laps</span><button id="lapMinus">−</button><b id="laps">3</b><button id="lapPlus">+</button></div>
       <div class="stepper"><span data-t>Rivals</span><button id="rivMinus">−</button><b id="rivals">5</b><button id="rivPlus">+</button></div>
       <div class="cell"><small data-t>Difficulty</small><div class="seg" id="diff"><button data-d="0" data-t>Easy</button><button data-d="1" class="on" data-t>Medium</button><button data-d="2" data-t>Hard</button></div></div>
       <div class="cell"><small data-t>Weather</small><div class="seg" id="wxSeg"><button data-w="clear" data-t>Dry</button><button data-w="random" data-t>Changeable</button><button data-w="rain" data-t>Rain</button></div></div>
     </div>
 
+    <details id="simSetup" class="sim-setup"><summary data-t>Advanced race settings</summary>
+      <div class="sim-slider"><label for="aiStrength"><span data-t>AI pace</span><b id="aiStrengthVal">96%</b></label><input id="aiStrength" type="range" min="70" max="120" value="96"><small data-t>Higher pace uses more of the same tyre grip.</small></div>
+      <div class="sim-slider"><label for="aiAggression"><span data-t>AI aggression</span><b id="aiAggressionVal">45%</b></label><input id="aiAggression" type="range" min="0" max="100" value="45"><small data-t>Controls passing commitment and following distance.</small></div>
+      <h3 class="sec" data-t hidden>Handling</h3><div class="seg wide two" id="handlingSeg" hidden><button data-h="sim" data-t>Simulation</button><button data-h="sport" data-t>Sport</button></div>
+      <h3 class="sec" data-t>Starting grid</h3><div class="seg wide" id="gridSeg"><button data-g="last" data-t>Last place</button><button data-g="random" data-t>Random</button><button data-g="pole" data-t>Pole position</button></div>
+      <h3 class="sec" data-t>Pit strategy</h3><div class="seg wide two" id="pitRuleSeg"><button data-p="optional" data-t>Optional stop</button><button data-p="mandatory" data-t>Mandatory stop</button></div><p class="note" id="pitRuleNote"></p>
+    </details>
     <div id="onlineBox" class="card online" hidden>
       <div id="onlineJoin">
         <button id="createRoom" class="btn" data-t>Create room</button>
@@ -94,6 +125,7 @@
     <button id="startBtn" class="start">Start race</button>
   </section>
 
+  <div id="setupPreview" class="setup-preview">Live setup preview</div>
   <section class="garage">
     <canvas id="carPic" width="800" height="450" aria-label="Selected car"></canvas>
     <div class="carpick">
@@ -109,7 +141,7 @@
       <dt data-t>Drift</dt><dd><i id="stDrift"></i></dd>
     </dl>
   </section>
-  <footer class="credit">Cars: "1965-2002 Rally Cars" by supercarmodels (CC BY 4.0) · EGYSeal · build 68</footer>
+  <footer class="credit">Cars: "1965-2002 Rally Cars" by supercarmodels (CC BY 4.0) · EGYSeal · build 81</footer>
 </div>
 
 <!-- ============ LOADING ============ -->
@@ -127,26 +159,32 @@
     <div class="big"><b id="hLapN">1</b><span><small data-t>Lap</small><i id="hLapOf">/3</i></span></div>
     <div class="trow"><span data-t>Best</span><b id="hBest">—</b></div>
     <div class="trow"><span data-t>Lap</span><b id="hTime">0:00.00</b></div>
-    <div class="trow"><span data-t>Delta</span><b id="hDelta"></b></div>
+    <div class="delta-console" aria-label="Lap delta and live pace">
+      <div class="delta-line"><button id="deltaRef" title="Switch personal best / session best / last valid lap">DELTA</button><b id="hDelta">—</b></div>
+      <div class="pace-line"><span>PACE</span><div class="delta-meter" aria-label="Green gains time; red loses time"><i id="deltaFill"></i></div><b id="hRate">—</b></div>
+      <div class="timing-detail" hidden><span id="hRef">PERSONAL BEST</span><b id="hRefTime">—</b><i id="deltaGap"></i><span id="hTrend"></span><b id="hPred">—</b><span id="sector0"></span><span id="sector1"></span><span id="sector2"></span></div>
+    </div>
     <div id="paceBars" hidden></div>
     <div class="trow sec"><b id="hSec"></b></div>
     <div class="trow" id="hPingRow" hidden><span>Ping</span><b id="hPing">…</b></div>
   </div>
-  <div class="hg">
-    <div class="ring" id="gBody"><b id="hBody">100</b><small data-t>Car</small></div>
-    <div class="ring" id="gFuel"><b id="hFuel">100</b><small data-t>Fuel</small></div>
-    <div class="ring" id="gTyre"><b id="hTyre">100</b><small id="hTyreLbl">Tyres</small></div>
+  <div class="hg"><span class="telemetry-label">TAFHEET / LIVE TELEMETRY</span>
+    <div class="ring" id="gBody" role="meter" aria-label="Car condition"><svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22C5 17 3 14 3 10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 4-2 7-9 12Z"/></svg><b id="hBody">100</b><small>Car condition</small></div>
+    <div class="ring" id="gFuel" role="meter" aria-label="Fuel remaining"><svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 22V3h10v19M2 22h14M6 6h6v6H6zM14 10h3v8a2 2 0 0 0 4 0v-8l-4-4M18 7v4h3"/></svg><b id="hFuel">100</b><small>Fuel remaining</small></div>
+    <div class="ring" id="gTyre" role="meter" aria-label="Tyre condition"><svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="m6 5 4 5m4 0 4-5m-3 8 5 3m-9-1-1 6m-1-8-6 3"/></svg><b id="hTyre">100</b><small id="hTyreLbl">Tyre condition</small></div>
     <div class="tt" id="gTT" title="Tyre temperature: blue cold, green ideal, yellow near overheating, red overheated"><span><i id="tt0" class="c1"><b id="ttv0">0</b></i><i id="tt1" class="c1"><b id="ttv1">0</b></i></span><span><i id="tt2" class="c1"><b id="ttv2">0</b></i><i id="tt3" class="c1"><b id="ttv3">0</b></i></span></div>
     <div class="parts" title="Engine, gearbox, wheels"><i id="pE">ENG</i><i id="pG">GBX</i><span><i id="pW0"></i><i id="pW1"></i><i id="pW2"></i><i id="pW3"></i></span><small id="hFuelL"></small></div>
-    <button id="hPace" class="p1" title="Pace: keys 1 2 3">Race</button>
+    <button id="hPace" class="p1" title="Engine strategy: Save / Race / Push. Keys 1 2 3">Race</button>
+    <div id="hStrategy"></div><div id="hPressure" class="pressure"></div><div id="hElectronics" class="electronics"></div><div id="hLapValid" class="lap-valid"></div>
     <div class="spd"><b id="hSpeed">0</b><span id="hUnit">km/h</span><em id="hGear">1</em></div>
   </div>
   <div class="hx" id="hArc" hidden>
     <div class="nitro"><i id="hNitro"></i></div>
     <div class="drift" id="hDrift"><span>Drift</span><b id="hDriftPts">0</b><em id="hCombo"></em></div>
   </div>
+  <canvas id="raceRadar" width="120" height="140" aria-label="Nearby car radar"></canvas>
   <canvas id="mini" width="300" height="300"></canvas>
-  <div id="radio"><b>Amm Saber</b><span></span></div>
+  <div id="radio"><b>RACE ENGINEER</b><span></span></div>
   <div id="hEvent"></div><i id="hFlag"></i>
   <div id="hTow"></div>
   <pre id="tele" hidden></pre>
@@ -157,7 +195,8 @@
     <button data-k="nitro" class="t n"><b>N₂O</b></button><button data-k="hand" class="t h"><b>DRIFT</b></button>
     <button data-k="brake" class="t b"><b>BRAKE</b></button><button data-k="gas" class="t g"><b>GAS</b></button>
   </div>
-  <button id="pauseBtn" class="chip">Pause</button>
+  <button id="pauseBtn" class="chip" aria-label="Pause race" title="Pause race">Ⅱ</button>
+  <button id="hudDetailBtn" class="chip" aria-label="Show detailed telemetry" aria-pressed="false" title="Detailed telemetry">+</button>
 </div>
 <!-- ============ TOUCH CONTROLS EDITOR ============ -->
 <div id="touchEdit" hidden>
@@ -170,10 +209,17 @@
 <!-- ============ PAUSE / RESULTS ============ -->
 <div id="pause" class="screen center dim" hidden>
   <h2 data-t>Paused</h2>
+  <div class="row zoomrow"><button class="btn ghost" id="miniPauseBtn">Minimap</button><button class="btn ghost" id="tuneBtn">Tuning sliders</button></div>
   <div class="row zoomrow"><span data-t>Camera distance</span><button class="btn ghost" id="zoomIn" aria-label="Closer">−</button><b id="zoomVal">100%</b><button class="btn ghost" id="zoomOut" aria-label="Further">+</button></div>
   <button class="start" id="resumeBtn" data-t>Resume</button>
   <button class="btn" id="restartBtn" data-t>Restart</button>
   <button class="btn ghost" id="quitBtn" data-t>Back to menu</button>
+</div>
+<div id="tune" class="screen dim" hidden>
+  <div class="tuneHead"><h2>Tuning</h2><span class="tuneHint">Move a slider: it applies to every car at once (the AI re-measures its grip). When it feels right, press Copy numbers and send me the text.</span>
+    <button class="btn" id="tuneCopy">Copy numbers</button><button class="btn ghost" id="tuneReset">Reset all</button><button class="btn ghost" id="tuneClose">Close</button></div>
+  <textarea id="tuneOut" readonly spellcheck="false"></textarea>
+  <div id="tuneBody"></div>
 </div>
 <div id="results" class="screen center dim" hidden>
   <div id="resStars" class="stars"></div>
@@ -204,7 +250,7 @@ addEventListener('error',function(e){ if(!window.__booted) fatal(e.message||('co
 addEventListener('unhandledrejection',function(e){ if(!window.__booted) fatal((e.reason&&e.reason.message)||String(e.reason)); });
 // Opened by double-click (file://): browsers refuse ES modules there, so load the pre-built single-file copy.
 (function(){var s=document.createElement('script');
-  if(location.protocol==='file:'){s.src='game.bundle.js?v=68';}else{s.type='module';s.src='js/main.js?v=68';}
+  if(location.protocol==='file:'){s.src='game.bundle.js?v=81';}else{s.type='module';s.src='js/main.js?v=81';}
   document.body.appendChild(s);})();
 </script>
 </body>

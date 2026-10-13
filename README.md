@@ -1,169 +1,95 @@
-# Tafheet ~ تفحيط
+# Tafheet Circuit Series — Build 81
 
-A browser racing / drift game. Plain HTML + JavaScript (three.js), no build step.
+Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
 
-## Run it locally
+## This update (Builds 79–81)
 
-Double-click `index.html`. That is enough.
+- **Performance.** Draw distance now follows the screen: the ground footprint of the camera view is measured every frame and only scenery inside it (plus a 30 m margin) is drawn or shadowed, so nothing off-screen costs GPU time and nothing can appear late. Barriers are built in ~100 m lengths instead of one ring. Physics is capped at six sub-steps a frame so a slow frame can no longer snowball. Dynamic resolution runs on every tier (not only Auto), the desktop pixel-ratio cap is 1.25, and Auto reads the graphics card: integrated and mobile chips start on Medium. Draw calls in the sampled Monza frame fell from 262 to 156 and shaded triangles from ~1.0 M to ~0.26 M.
+- **Camera.** Every camera quantity (aim, zoom, framing) is a critically damped spring with its own velocity. The aim leads into the car's direction of travel and the road ahead; the hard edge-of-frame pin is replaced by a sprung framing offset. No stepping, no jerks at any frame rate.
+- **HUD (revision 4).** The three gauges sit on their own translucent discs with no panel behind them, 15% larger, with a small speed/gear line above; the camera is steeper (about 64° down) and framed closer, with the car low in the picture and the view leading into the direction of travel, as in the reference.
+- **Pit stops (revision 4).** The service readout floats above the car as three gauges whose arcs fill as the crew works. Every crew close enough to be seen is fully animated: waiting mechanics shift their weight, put a hand on a hip, fold their arms, scratch a helmet, turn to talk to a neighbour and take the odd step.
+- **Crowd (revision 4).** Chunkier, larger toy-scale spectators that match the cars, bright kit colours, and about a third more of them.
+- **HUD.** A larger instrument cluster (condition, fuel, tyres with compound) with a live speed and gear readout, on a glass panel. The minimap is centred on you, turns with the car, zooms with speed (tight at low speed, wide at full speed), shows the road, kerbs, pit lane and start line, every car as an arrow, and a whole-circuit inset with the field's positions.
+- **Pit entry.** The lane is full width almost from the moment it leaves the track, like a real pit entry: a wide funnel beside the circuit behind the painted entry line, peeling away over a longer taper; the track-side edge never crosses onto the circuit. Minimum lane lengths are longer.
+- **Handling: a four-wheel force model for every car (Build 81, `js/handling.js`).** Player and AI cars on a circuit run the same vehicle physics: a planar rigid body with its position, world velocity, heading and yaw rate as independent states, four wheel contact points with their own wheel angular velocities, stepped at the fixed 120 Hz rate (accumulator, catch-up capped at six sub-steps, render interpolation, no per-car allocation in the loop). The structure is a JavaScript translation of the wheel-force architecture described in the analysis of Circuit Superstars' managed assembly that was supplied with the request. Nothing snaps the velocity to the heading and nothing delays the position: the body rotates first because the steering is a force couple, and the trajectory follows because the tyres' lateral friction then redirects the momentum.
+  - *Build 81 revision 4 — read against the reference assemblies:* the user supplied the reference game's managed assemblies; the logic (not the code) of its vehicle controller and AI was read from the IL and this implementation was corrected to it where it differed: the wheel's rolling target follows the ground speed (the full ground speed when the wheel travels sideways); the ground couples the wheel to it with at most the remaining forward grip, the residual drive/brake torque and a damping term add on top, a braking wheel stops at zero when moving forward, and the spin is bounded — so wheel spin needs far more drive than grip, as in the reference; the player's steer input is the raw axis in the reference (any ramp lives in its input assets), and an optional screen-space mode steers towards where the stick points (sign·√|sin(angle)|) — our speed fade stays as a labelled adaptation because the reference's steering strength per car is not in the assemblies. The AI control layer was rebuilt in the reference's structure (see `AI_CS` in `js/ai.js`): steering is a PD on a target angle that blends the direction to the lookahead point with the line's tangent there, measured against both the car's heading and its direction of travel (blended by speed) and corrected by how sideways the car is; the target speed falls with the angle to a farther lookahead (|sin|^sensitivity between top speed and a low speed) and is scaled by difficulty; the throttle is a PD on the speed error (negative = brake); overtake and side radars shift the target sideways; a car facing away from its target backs up with opposite lock until the error is small; lower difficulties add slow noise to steering and throttle, fading in after the start. Our racing line, lanes, passing and defending, the curvature speed plan (kept as a ceiling so braking points stay physical), stuck recovery and pit logic remain. Not adopted: the reference's per-car force multiplier for AI cars (every car here keeps the same physics), its raycast suspension and 3D rigidbody.
+  - *Build 81 revision 5 — controllable drift, rubbered-in line, smarter AI:* the tyres are softer (`sideFriction` 6.5) with a much stiffer rear (`balanceGainR`) and a softer front, so steering rotates the body ahead of its path into a real, proportional drift (about 6–8° of body slip at full lock, 16° on the throttle with traction control off) that cannot become a spin: a slide cap (`maxSlip` ≈ 24°, `slipDamp`) damps rotation past it, an auto counter-steer (`autoCounter`) feeds the slide back into the couple as the stick returns to centre so the car straightens on its own in about 0.3 s, and a scrub-recovery term (`scrubRecover`) gives back most of the speed a drift would cost (full lock on throttle at 100 km/h now gains speed; a 0.5 s tap at 170 km/h loses nothing). The throttle/side-grip coupling is weaker (`fsInfluence` 1.0) so turning no longer chokes acceleration. Grass keeps more steering and side grip (`SURFACES`) so an excursion stays controllable, but slows the car hard. Reversing is steered kinematically with a lower speed limit (the slip-angle model is trailer-unstable backwards). A rubbered-in racing line is laid on every corner (`addRubberLine`, `js/main.js`): a soft dark band and two tyre tracks along the best line, tapering out onto the straights, so the grip the field leaves behind shows the line through the turns. The AI's steering gains and the angle-to-speed sensitivity were tuned on the new tyres (`AI_CS`) and its corner-speed margin raised (`aiReserve` .96): it laps Luxor in 49 s against a scripted human's 55 s, Monza/Mini 76 s, Silverstone/911 88 s, no off-track, and 8-car fields on all 17 circuits run clean.
+  - *Build 81 revision 6 — turn-rate governor and tuning sliders:* the car's rate of turn at full steering is now a stated design parameter (`turnRateOn` 30°/s with the throttle down, `turnRateOff` 50°/s lifted, easing off with speed via `turnRateV0`/`turnRateRef`; below ~36 km/h the throttle no longer reduces it so a hairpin can be powered out of). The couple is scaled against the car's own measured full-input yaw at the current speed, so the numbers hold for every car (measured: 28/54°/s at 40 km/h, 25/45 at 80, 20/29 at 140). The AI plans on the lifted rate and lifts the throttle where a corner asks for more than the throttle-on rate; its lap times are a little longer than before on the tight circuits because the throttle-on rate is deliberately low (Luxor 51 s, Monza/Mini 80 s). **Temporary:** Pause → *Tuning sliders* opens every handling and AI parameter as a numbered slider (56 of them) with a plain-language title, what it does and what lower/higher feels like; moves apply live to all cars and are saved with the game (they come back after closing and reopening; *Reset all* clears them). *Copy numbers* produces the changed and full sets as text to send back so the chosen values can be baked in and the panel removed.
+  - *Build 81 revision 8 — drift controller, fading tyre marks, rubber-line sliders:* a drift controller (`driftAngle`, `driftFollow`, `driftGrip`, `driftMinSpeed`, `driftSpeedRef`, `driftRateK`) lets the steering input set the drift angle directly: the yaw rate is eased onto the rate that holds the asked angle and back to zero when the stick is centred, so a slide builds, holds and unwinds smoothly and cannot overshoot into oversteer; it may exceed the turn-rate setting only by `driftRateK` while the drift builds. Softer tyres (`sideFriction` 3.8) so a 10° drift pulls about 1 g and fits the 30/50°/s turn rates (measured: 8–9° drift at full lock on throttle, 12–13° lifted, still accelerating through the corner, no spin). The live tyre marks the cars lay now fade out over 3 s (shader age attribute in `Skids`); the rubbered-in racing line drawn on the corners stays and has its own sliders (amount of the lap marked, end smoothness, number of tyre tracks, their width, spread and darkness, soft band width and darkness) that rebuild the line live. 69 sliders in all, saved with the game.
+  - *Recovered algorithms (structure from the report):* steering distributed as +u·S/N to the front wheels and −u·S/N to the rear wheels, each turned into a sideways force by the wheel load × clamp(wheel angular velocity × radius / steerVelocitySmoothing, −1, 1) × surface modifier; contact velocity = body velocity + yaw × wheel offset; slip angle = atan(vSide / max(|vForward|, 1)); lateral force = lerp(static branch −vSide·L, slip-angle branch −slip·C·(1+balanceGain)·(1+gain·|vForward|)·L·surface, t) with t = clamp01(groundSpeed·falloff − offset); low-speed forward static friction with its blend on wheel spin + ground speed; the forward/sideways coupling (forward capacity A = L·μ shrunk by the sideways force, forward force clamped to A, the residual reducing the sideways force and spinning the wheel); braking scaled by the velocity direction and the wheel's spin; wheel inertia 0.5·wheelMass·r²; rolling resistance −vForward·rr·L/k; local/shared wheel-load blending; a torqueScale separate from the translational force; the steering force kept in its own accumulator, not clamped by the coupling; no handbrake (the inspected controller writes zero to it).
+  - *Adaptations (marked `[adapt]` in the code):* no raycast suspension — the local wheel load is the game's existing four-corner load model (static split, fore/aft and lateral transfer) scaled so the four loads always sum to the car's weight, blended with the car's average (sharedWheelLoadStrength), and "L/springStiffness" is L / (static load / springCompression); the brake's sign comes from the wheel's spin direction so braking also works in reverse, its magnitude from |velocityDot|; the per-wheel grip the game already tracks (compound, temperature, pressure, camber, damaged wheel, mud, oil, rain) scales the forward coefficient, while the surface descriptor table (`SURFACES`: grass, kerb, road, wall, pit — side grip, speed gain, steering grip, balance, forward grip, coupling, rolling, degradation) and the wear interpolation (`WEAR`, each modifier lerped to 1 by tyre health) follow the recovered structure; a driven wheel's spin is bounded (`spinBound`) and a locking wheel stops at zero; forward static friction is released while a pedal is pressed; an input-layer fade of the steering input with speed (`steerFadeV0`/`steerFadeRef`, off = 0) because a force couple turns harder the faster the car goes; a small optional yaw damping; a parking aid below 4 m/s (the couple needs rolling wheels); an optional lateral cap (off by default). The engine, gearbox, forward aero drag, fuel, tyre temperature, damage and collisions stay in `car.js`; the model's mean slip × surface degradation feeds the game's tyre wear.
+  - *Not recovered:* the vehicle prefab settings, torque curves, surface tables, masses and inertias. **Every number in `HANDLING_DEFAULTS` and the per-car table is an original starting value for this game, not a value extracted from Circuit Superstars**, and the result does not claim exact equivalence with that game's handling.
+  - *Old routines replaced:* the physical four-tyre lateral integration for circuit cars (it still runs for tyre wear and temperatures only); the Build 80 dynamic bicycle model; the Build 79 heading-first driver layer (yaw governor, slide aid that bled off lateral velocity, digital-steer blend, speed scrub on turning) and the heading-first `TUNE.cs` model (only `aiReserve` remains); the AI's separate grip model and its wheel-angle steering — the AI now measures the model's own cornering limit per speed (`measureLatLimits`, run once per car at race start) to plan corner speeds and steers with a yaw-rate controller on the shared physics (no extra grip, no path following). Drift mode and the menu showcase keep the physical model.
+  - *Tuning controls* (`HANDLING_DEFAULTS` in `js/handling.js`, every value commented; per-drivetrain and per-car overrides in `HANDLING.byDrive` / `HANDLING.byCar` in `js/config.js`): `steerStrength` (how hard the couple turns the car; 9 ≈ 1.1 g at 40 km/h), `rearSteerShare`, `steerVelSmoothing` (how quickly steering comes in with wheel speed), `steerFadeV0`/`steerFadeRef` (steering authority at speed), `sideFriction` (cornering stiffness: lower = more slip for the same force), `balanceGainR` (rear stiffness over front: higher = more stable and less high-speed cornering), `sideFrictionGain` (stiffness growth with speed), `forwardFriction`/`fsInfluence`/`residInfluence` (how throttle and brakes eat into side grip and how a spinning or locking wheel loses it: the slides), `tcMargin`/`absMargin`, `sharedLoad`, `wheelMass`/`angularDrag` (wheel spin-up), `inertiaK`/`torqueScale` (yaw response), `yawDamp`, `lowSpeedAid`, `grassSide`/`grassFwd`/`grassSteer`, `kerbKick`/`kerbScrub`. AI corner-speed margin: `TUNE.cs.aiReserve`.
+  - *Physics overlay:* press **H** in a race (or Settings → Developer → Physics overlay): heading (red) and velocity (cyan) arrows, steering input and displayed wheel angle, front/rear slip angles, body slip, yaw rate and yaw moment, sideways/forward force totals and lateral g, the four wheel loads, the four wheels' spin, grip usage bars.
+  - *Tested (Chromium, software GPU, scripted keys, Celica unless noted; revision 3 tuning — couple 20, tyre stiffness 18, softer front / stiffer rear, stronger speed fade):* straight-line stability at 182 km/h (zero yaw, zero slip); 0–92 km/h in 2.5 s (unchanged); steering-force signs (front +10 kN, rear −7.9 kN for one input) and turn direction identical to the physical model; 0.5 s steering taps at 168 km/h: 2.3° body slip, no speed loss, settles on release; full lock from 92 km/h on throttle: 2.7° slip, speed still rising (109 → 129 km/h over the next second); brake + full lock from 182 km/h and power + full lock: 2.4° slip, no spin; counter-steer and release settle the car; a step input at 160 km/h (offline) peaks the yaw rate at 0.2 s before the lateral acceleration settles by 0.3 s (heading leads trajectory) and loses 3 km/h over 1.2 s of 2.1 g cornering with no throttle; full-lock cornering on throttle gains 29 km/h over 3 s at 2.2 g with 2.4° body slip; throttle/grip coupling (E30, full throttle + full lock from 60 km/h): TC off 3.3° slide with wheel spin, TC on 2.7° and no spin; launch wheel spin (E30, TC off: rear wheels 54 km/h over the ground; TC on: none); worn tyres (health 15%): 2.0 g against 2.4 g new; grass: 11° slip and heavy drag, kerb: 2.1 g; a wall hit at 33 km/h ends finite with the car stopped and front damage; braking to a stop, reversing with full lock and pulling away are clean; the same key script at 30, 60 and 144 fps ends with identical heading and position within ~4 m over 7 s (input sampling). Steady-state full-input cornering measured by the model (front-heavy split): 1.65 g at 40 km/h, 2.3 g at 70, 2.5 g at 100, 2.4 g at 140, 2.2 g at 180 (yaw rate 1.46 / 1.17 / 0.88 / 0.61 / 0.44 rad/s). AI on the shared model: Luxor 48 s (old physical model 46 s), Monza/Mini 76 s (74 s), Silverstone/911 86 s (83 s), Spa/E30 no off-track; a scripted pure-pursuit human laps Luxor in 55.4 s (54.9 s). 8-car fields ran 45 s on all 17 circuits with no script errors, no cars off, none stuck.
+  - *Not tested:* real hands on a keyboard, pad or touch screen (the feel itself); wet and gravel surfaces beyond the per-wheel grip they feed in; long races with heavy tyre wear; collisions between cars beyond what the field sweep exercised; online sessions. The native Burst path and the running Circuit Superstars game were never compared with this code.
+- **Camera (revision 5).** Framed closer (the car is about twice as large on screen, the track about a third of the width, as in the recording) with a stronger lead into the direction of travel.
+- **Audio.** Directional sound: the microphone sits on the camera and faces the way it faces, and everything the player's car makes (engine, exhaust pops, turbo, tyres, surfaces, brakes) is placed in the world at the car, so it is heard from where the car is on screen; rivals and impacts are placed the same way. The engine note passes through an exhaust stage: load-driven valve-style saturation (growl under power), a resonance that tracks the firing frequency, a presence shelf that opens with load, and an induction roar for the player's car. Gear changes are clearer: a deeper drive cut, a gearbox thump and clack, exhaust pops on hard upshifts (bangs and crackles on tuned cars), blips on downshifts. Pops and bangs keep their crack (brighter tailpipe filter, sharper attack).
+- **Crowd.** New spectator figures: shoulders and waist, hands, a proper head and neck, hair or cap, sunglasses, backpacks, scarves, small flags, and some filming on their phones; smooth mid-detail figures replace the box people at distance on Low.
+- **Loading.** Shaders now compile in parallel on the GPU process (`compileAsync`) instead of one by one on the main thread, and only the chosen car's engine loop is downloaded at boot; the other engines are fetched per race, behind the race loading screen. Nothing is simulated or drawn while a race is still being built.
+- **Automatic quality guard.** If frames keep taking longer than ~26 ms, the game steps down one notch at a time (smaller shadow map and lower resolution floor, then no post-processing, then no shadows) and says so once. Choosing a Graphics setting manually resets it.
+- **Minimap modes.** Settings → Display → Minimap (also in the pause menu): *Radar* (rotating, zooms with speed) or *Simple* (fixed whole-circuit map with every car plus a lap-progress strip with numbered positions). Both use the same panel size. The radar map's left/right now matches the race camera.
+- Removed the unused engine-loop manifest. Everything else from Build 78 is retained.
 
-Opened this way the browser uses `game.bundle.js` (a pre-built single-file copy of the code) and the `assets/*.js`
-copies of the models. On a web server or GitHub Pages it uses the normal files in `js/` and `assets/` instead.
+## Validation
 
-If you edit anything in `js/`, the change shows up straight away on a server or GitHub Pages. For the double-click
-version to pick it up too, rebuild the bundle (needs Node.js):
+Browser regression samples checked all **17 racing circuits** and **2,040 crew waiting positions**. Every waiting position was on the service surface, with at least 4.94 m of clearance from the nearest collision barrier; no circuit centerline was classified as a wall or pit surface.
 
-    npx esbuild js/main.js --bundle --format=iife --minify --alias:three=./lib/three/build/three.module.js --alias:three/addons=./lib/three/examples/jsm --outfile=game.bundle.js
+In same-frame comparisons of sampled 12-car Medium sessions, rendering calls fell from 818 to 633 at Nile, 602 to 477 at Marina and 727 to 539 at Monza when batching was enabled: approximately **21–26% fewer calls** with the same camera, scene and lighting. Image comparisons also passed after damage, wheel/body modifications, repairs and resizing; the maximum mean channel difference was 0.0013 on a 0–255 scale. All sampled draws had zero GPU errors. Desktop Medium/High, pit service and portrait/landscape touch views were exercised. High's effects chain uses two passes rather than three.
 
-If the game ever fails to start, a red box at the top of the page says why.
+Checks use Chromium with software graphics. Real GPU performance varies with device, browser, grid size and quality. Online matchmaking and remote synchronization were not exercised.
 
-## Put it on GitHub Pages
+## Driving and strategy
 
-1. Create a repository and upload everything in this folder (keep the folder structure).
-2. Repository → Settings → Pages → Source: "Deploy from a branch", branch `main`, folder `/ (root)`.
-3. After a minute the game is live at `https://<your-user>.github.io/<repo>/`.
+Arcade and Simulation use separate handling profiles. Both retain finite grip, low-speed steering lock, fuel, tyre wear, damage and pit strategy. Simulation includes combined tyre slip, load transfer, four-corner suspension, pressure/temperature behavior and physical setup effects. Driving assists, steering sensitivity, difficulty and AI pace/aggression remain adjustable.
 
+Ride height, rake, camber, toe, wheels and applicable body hardware change the visible car. Springs, dampers, anti-roll bars, aero, brake bias, differential and final drive affect their existing performance models. The garage camera focuses on the selected adjustment. Internal settings are represented through driving behavior rather than an invented exterior animation.
 
-## Switch on online play (Supabase)
+Hard AI retains physical upgrades, its own driving assistance, braking/corner previews, passing and rejoining checks, stationary-obstacle avoidance and single-move defense. Opponents obey the shared car physics; there is no teleportation.
 
-1. supabase.com -> New project. Pick the region closest to both players (this matters most for lag).
-2. Project Settings -> API. Copy the Project URL and the public key (labelled "anon public" or "publishable").
-3. Paste both into `config.js`, save, and upload the changed file to GitHub.
-4. Open the game from its GitHub Pages address (not by double-click), go to Online, press Create room,
-   then "copy invite link" and send it. The other player opens the link and lands in your room.
-5. The host picks track and laps and presses Start duel.
+The compact HUD leaves the center open. Delta/pace live in the top-right: green gains time and red loses time against a valid distance-matched lap trace. Click DELTA to change the reference. The + button opens optional detailed telemetry and radar. Invalid or unavailable references are identified instead of showing invented timing.
 
-No database tables are needed for racing. `supabase.sql` is only for the optional lap leaderboard.
-
-How the sync works: each browser simulates its own car and sends its state 20 times a second with a timestamp.
-The rival is drawn slightly in the past (80-320 ms, adjusting itself to the connection) and blended between
-real snapshots, so late or lost packets are absorbed instead of showing as jumps. The HUD shows ping and the
-current buffer during a duel. The free Supabase plan allows 100 messages a second; a duel uses about 40.
-
-## Engine audio
-
-- Samples live in `assets/audio/` (five engine loops made at 3000 rpm, two exhaust one-shots, and `audio_manifest.json`).
-  They are synthesised, not recordings of real cars.
-- Each car is assigned ONE engine identity in `js/config.js` (`snd`), with its own `idle` and `red` line, `turbo` and `pops`.
-- Pitch = simulated engine rpm / 3000. The rpm comes from the drivetrain in `js/car.js` (driven-wheel speed through the
-  selected gear, clutch slip from rest, free revs in the countdown, wheelspin, a torque cut on each shift).
-- Throttle/load only changes loudness and brightness. One looping source per engine; it is never restarted for rpm,
-  throttle or gear changes. Car changes crossfade over 200 ms.
-- `ENGINE_SETS` in `js/audio.js` is a list of loops per engine, so real idle/mid/high-rpm layers can be added later.
-- Settings has separate Engine, Sound effects and Music volumes. Developer mode has an audition panel
-  (engine, rpm, load, shift and pop triggers, output meter).
-
-## Build 68 notes
-
-- AI: the speed plan is built backwards from the end of the driver's view with a friction-circle budget (braking is limited by how much cornering a point already asks for); hairpins are taken a few percent under their static limit.
-- Showroom and garage: the car is always dead centre of the picture.
-- L toggles the headlights (the automatic night and rain lights no longer override your choice).
-- Feel: the picture breathes with power and braking, edges fringe with speed and slides, the horizon leans with g-force, wind buffets, the brake sound is back, a calm crowd ambience plays near the stands.
-- Scenery: new buildings, parked cars, trees with wind sway, flags, fans, smoke, birds, balloons and a denser crowd (see js/scenery.js).
-- Cars: six tabs of cosmetic upgrades (Aero, Body, Rally, Wheels, Livery, Finishes) fitted to each body. Cars that already carry a wing (see STOCK_WING in js/config.js) are not offered a wing.
-
-## Build 67 notes
-
-- Engine sound: a physical model, not recordings. `js/enginedsp.js` runs in an AudioWorklet: every cylinder fires at its own crank angle (the real firing order of the engine), a pressure pulse measured in crank degrees goes down that cylinder's own header into the collector and then a real two-way exhaust pipe with an open end (the resonances you hear as boom and drone at particular revs), through a silencer. Beside it: the intake (noise gated by each intake valve), the block ringing at its own frequencies, combustion rasp, valve-gear ticks, an air-cooling fan (911), a turbo's whistle, a supercharger's whine (Delta S4). `js/enginecfg.js` holds what each of the 18 cars physically has (cylinders and firing order, header lengths, exhaust length and silencer, induction). The firing frequency is always rpm / 60 x cylinders / 2. If an AudioWorklet is not available the old recorded engines play, and Settings > Audio has an "Engine sound" switch between the two.
-- Menu: the 2D scene is gone. The menu shows the selected car in a 3D showroom (`js/studio.js`): dark curved studio, lit turntable with a running ring of light, light panels sweeping the walls, beams and dust, a slow camera. The garage uses the same stage.
-- AI: cars no longer run wide at corners. The speed plan now looks as far ahead as the braking distance (it used to see only 140 m, less than a hairpin at 220 km/h needs), the braking it counts on is the braking the car has shown, and a car whose front tyres are past their grip eases the steering and the brake, comes off the power and trusts that speed a little less. The racing line keeps a wider margin from the road edge. Hard has a little more pace and a stronger catch-up.
-
-## Build 66 notes
-
-- Straights: control points are whole metres, which made straights wobble. `cleanPts` in `js/tracks.js` snaps runs of points that lie on one line onto their best-fit line and relaxes the gentle bends, so straights are dead straight (kerbs, barriers, pit lane and pit boxes follow).
-- Kerbs: constant-width strips with a short angled cut at each end, a little longer on long corners.
-- Pit boxes: the painted box and the yellow pad were rotated mirror-wise (right only on axis-aligned lanes); they now follow the lane exactly. The pit wall turns see-through while you are in the lane so the crew is never hidden.
-- AI: Hard is quicker (grip, power, top speed), makes far fewer mistakes, reacts faster and is pulled back into the fight harder when you lead.
-- Radio: 30% quieter at every slider position.
-- Headlights: the light pool exists from the start, so switching lights on no longer makes three.js rebuild every shader.
-- Menu: no backdrop blur, the light 2D scene on every graphics level, the garage drawn at 30 fps, at most 1x resolution, without post-processing.
-- Loading: `js/loader.js`. The first start prefetches the model, engine sounds and radio clips, warms the graphics and waits for one tap (which also unlocks sound); each race shows its circuit being drawn as it loads.
-
-## Race radio (build 65)
-
-- The race engineer is the supplied Expressive Race Engineer voice pack, trimmed to the 93 clips this game can truthfully say (`assets/radio/<category>/<id>.mp3`, about 4 MB, plus `manifest.json` with Arabic subtitles). The old synthesised engineer voice (eSpeak) is gone.
-- `js/radio.js` plays one clip at a time with a priority queue, per-call expiry, cooldowns, interruption for critical calls and a re-check just before speaking. `js/engineer.js` watches the real simulation (cars alongside, flags, pit stops, tyres, fuel, damage, laps, finish) and decides what to say.
-- Settings: Radio chatter (Essential / Balanced / Full), Race engineer voice on/off, Radio volume. While he speaks the music, engine and effects duck slightly.
-- The pack's `track_limits_warning` and `five_second_penalty` files are empty (0 bytes), so those two events show on screen and beep but are not spoken.
+Race, time trial, drift, career, Grand Prix, endurance, knockout, customization, setup, ghosts, replays, touch and gamepad support remain. Saves and progression stay in the current browser.
 
 ## Controls
 
 | Action | Keyboard | Gamepad |
 |---|---|---|
-| Steer | Left / Right or A / D | Left stick |
-| Accelerate | Up or W | RT |
-| Brake / reverse | Down or S | LT |
-| Handbrake (drift) | Space | A |
-| Nitro | Shift or N | X / RB |
-| Reset to track | R | |
-| Camera | C | |
-| Pause | Esc or P | |
-| Mute | M | |
-| Headlights on / off | L | |
+| Steering | A/D or Left/Right | Left stick |
+| Accelerate | W or Up | RT |
+| Brake | S or Down | LT |
+| Reverse | Hold brake after stopping, or hold V | Hold LT after stopping, or Y |
+| Handbrake | Space | A |
+| Nitro (Drift only) | Shift or N | X/RB |
+| Next pit tyre compound | B or tyre display | Tyre display |
+| Conserve / race / attack | 1 / 2 / 3 or Pace display | Pace display |
+| Reset / tow (invalidates lap) | R | — |
+| Telemetry | T | — |
+| Headlights | L | — |
+| Pause | Esc/P or pause button | Pause button |
+| Mute | M | — |
 
-Touch buttons appear automatically on phones and tablets.
+Touch controls appear on phones and tablets and can be adjusted in settings. Landscape provides more road visibility.
 
-## Files
+## Editing
 
-    index.html, style.css     menus and HUD
-    config.js                 Supabase keys
-    js/main.js                game loop, race rules, camera, HUD, menu, lobby
-    js/car.js                 car list and stats, physics, wheels, effects, AI
-    js/tracks.js              track list, GLB track loader, procedural track builder
-    js/config.js              ALL handling and race tuning values, and the car list
-    js/career.js              story chapters, goals, levels, daily challenge
-    js/post.js                bloom, sun shafts, speed blur, vignette
-    js/fx.js                  particles, skid marks, dust motes, rain
-    js/audio.js               synthesised sound
-    js/radio.js               race radio: clip player and queue
-    js/loader.js              loading screens
-    js/enginedsp.js           engine model (AudioWorklet source)
-    js/enginecfg.js           what each car's engine is
-    js/studio.js              the menu / garage showroom
-    js/carparts.js            the cosmetic upgrade parts (fitted to each body by a height-map scan)
-    js/scenery.js, scn_geo.js, scn_tpl.js, scn_live.js   trackside buildings, parked cars, trees, props and their animation
-    js/crowdsound.js          calm race-day crowd ambience (WebAudio)
-    js/engineer.js            race engineer: what to say and when
-    js/net.js                 Supabase rooms and leaderboard
-    assets/cars.glb           the 7 cars, wheels separated
-    lib/                      three.js and supabase-js, bundled so nothing loads from a CDN except the font
+Source modules are in **js/**. The bundled **game.bundle.js** also supports opening the game directly from disk. After editing, rebuild it with:
 
-## Adding a track
+```sh
+npm install
+npm run build
+```
 
-The quick way is a procedural track. Add an entry to `TRACKS` in `js/tracks.js`:
+The optional Supabase rooms/leaderboard integration uses the public URL and anonymous key in **config.js**. Serve over HTTP/HTTPS for online play. **supabase.sql** contains the optional leaderboard schema. Keep private service-role keys out of client code.
 
-    { id: 'mytrack', name: 'My Track', ar: 'حلبتي', type: 'proc', theme: 'day', laps: 3,
-      width: 15, runoff: 7, blurb: 'One line for the menu.',
-      pts: [[0,0],[150,0],[200,60],[120,140],[0,120],[-60,60]] },
+## Reference and fidelity
 
-`pts` are corner points in metres, in driving order, forming a closed loop; the first point is the start line, so
-put it on a straight. Keep corners at least ~30 m apart and do not let the loop cross itself.
-Themes: `day`, `desert`, `coast`, `night`.
-
-mesh), so it cannot just be dropped in. Send the model and it can be baked the same way.
-
-## Tuning the cars
-
-`CARS` at the top of `js/car.js`: `top` (top speed, m/s), `acc` (launch acceleration), `grip`, `rear`
-(below 1 = tail-happy), `loose` (how much throttle breaks rear grip), `off` (grip on grass), `price`.
-
-## Credits and licences
-
-  Non-commercial only. Remove or replace this track before selling the game or adding ads.
-- three.js (MIT), supabase-js (MIT).
-
-
-
-- All vehicles are generated in code by `js/carmodel.js` (smooth lofted bodies, wheel wells, glass cabins, wheels, lamps, wings). No external car models are used.
-
-
-- All vehicles are generated in code by `js/carmodel.js`, one builder per racing class (rally hatch, GT3 coupe, prototype, stock car, muscle car, roadster, trophy truck, modern and vintage open-wheel). No external car models are used.
+The supplied Circuit Superstars images guide the lower camera, warm lighting and compact presentation. Circuit Superstars and Assetto Corsa Competizione are references for the requested handling and race discipline. This remains an independently implemented browser game with authored procedural circuits, automatic gears and simplified physical models, not their proprietary engines, art or a telemetry-calibrated professional simulator. Circuit names indicate layout inspirations rather than surveyed replicas.
 
 ## Credits
-- Cars: This work is based on "1965-2002 Rally Cars" (https://sketchfab.com/3d-models/1965-2002-rally-cars-2146acc1e3de409baf46d03a070d0526) by supercarmodels (https://sketchfab.com/supercarmodels), licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). The models were split into bodies and wheels and given paint recolouring for this game.
-- Tracks: all circuits are generated in code. Monza Park, Spa Ardennes, Silverstone Airfield, Interlagos Hills and Marina Bay Night are original layouts inspired by the shapes of the real circuits; they are not surveyed copies.
 
-## Build 62 notes
-- Phones and tablets: the game asks for full screen on the first touch and locks landscape; browser zoom, double-tap zoom and pinch are disabled; several fingers work at once (steer and brake together). On iPhone Safari, full screen only works from "Add to Home Screen" (the included web manifest makes it open full screen).
-- Audio: menu music is stopped hard when a race starts (iOS ignores element volume), and the audio engine resumes itself after interruptions.
-- Sound is positional: other cars, crashes, whooshes and the grandstand come from where they are, with Doppler on passing cars.
-- The safety car and yellow flag only come out for hard crashes.
+- Original game: **Tafheet / EGYSeal by Hossam Hegazi**.
+- Car models: **1965–2002 Rally Cars** by **supercarmodels**, CC BY 4.0. Existing models support split body/wheels and recoloring. https://sketchfab.com/3d-models/1965-2002-rally-cars-2146acc1e3de409baf46d03a070d0526 — https://sketchfab.com/supercarmodels — https://creativecommons.org/licenses/by/4.0/
+- three.js and supabase-js: bundled libraries and existing notices retained.
+- Supplied per-car engine pack and Expressive Race Engineer clips: retained with existing attribution. The engine files are the supplied audio and have not been independently certified as recordings of the named vehicles.
