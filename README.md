@@ -1,8 +1,359 @@
-# Tafheet Circuit Series — Build 81
+# Tafheet Circuit Series — Build 96
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
 
-## This update (Builds 79–81)
+## Build 96
+
+**Stripes, done properly.** Racing stripes and side stripes are now painted into the body's own clear-coated paint by the car shader, in the car's own coordinates, instead of being separate stuck-on shapes. Every value is an original starting value.
+- **Where the stripes go.** The racing stripes (Twin, Wide, Triple, Bonnet band) run only on the top skin: bonnet, roof and boot. A small height map of each body (the highest surface over every point of its plan) keeps them off bumper lips, splitters and sills that also face upwards. They end square at the bonnet's front edge and the boot's rear edge, like real vinyl.
+- **Side stripes.** The Beltline and Double stripes sit on the door skin a hand's width under the measured bottom edge of the side glass. The Lower band sits just above the sill (higher with side skirts). The door number plates are kept clear.
+- **Pinstripe.** Each stripe has a fine contrasting pinstripe edge, anti-aliased in the shader, so it stays crisp at every distance.
+- **Auto colour.** The game reads the livery and paint under each stripe's actual path and picks the shade that stands out over the largest area. Light and dark are compared by contrast ratio, and a near tie goes to black. A red Mini with a white roof now gets black stripes instead of white ones that vanished on the roof. Any colour from the palette can still be chosen.
+- **Testing.** Checked on all 18 cars from the front, rear, side and top, and live in the garage.
+
+**Speed ceilings.** The race ceiling is 180 km/h for drivers and 185 km/h for the AI. Time trials have no ceiling. The ceiling is a limiter, not a target:
+- each engine still pulls with its own power curve towards its own top speed (natural, upgraded and damaged);
+- a 196 km/h Escort therefore takes far longer to reach the ceiling than a 244 km/h S4;
+- the Mini (159 km/h) and other slower cars never see it.
+
+The limiter eases the throttle over the last 1.5 km/h. Values are in `TUNE.cap`.
+
+**Damage costs performance.** The car-condition figure (the Body gauge) now drives the car directly, for the player and the AI alike. At 0% condition a car loses 32% of its engine power, 14% of its top speed, 12% of its cornering grip and 12% of its braking, falling linearly from 100% (`TUNE.dmgPerf`). These losses come on top of the existing part damage (engine, gearbox, wheels) and bent-suspension pull. The AI plans its corners and top speed with the same factors. When damage is costing power, the gauge turns amber and shows, for example, "−9% POWER".
+
+**Launch control.** While the lights are on, a rev gauge beside them shows the engine speed and a green launch band. When the lights go out:
+- **Perfect start:** revs in the band. A short burst of extra drive (+22%, fading over 1.5 s).
+- **Good start:** revs near the band (+8%).
+- **Wheelspin:** sitting on the limiter costs drive for a moment.
+- **Slow start:** too few revs bogs the engine.
+
+Keyboard players can feather the throttle to hold the needle in the green. The AI launches by exactly the same rules, with its grade drawn from its driver skill, so a Hard field gets away cleanly more often.
+
+**Skill chain and Style score.** Committed, clean driving is scored as it happens. Scoring never touches the physics.
+- **Events:** overtakes (more for a pass made out of the slipstream), near misses side by side, held drifts, time in the slipstream, a perfect start and clean laps.
+- **Chain:** every third event raises the multiplier, up to ×5. After 4.5 s without a new event, the chain is banked into the race's Style score.
+- **Losing it:** contact, a wall or the runoff loses the open chain.
+- **Payout:** the Style score is paid with the race reward and shown on the results line.
+
+The chain panel sits on the right edge of the HUD, with a feed of the latest events.
+
+**Photo mode.** Open it from the pause screen. The race freezes and a free camera orbits your car:
+- drag (or use the arrow keys) to turn around it;
+- the mouse wheel, pinch, or + and − move in and out;
+- sliders set the lens (shown in mm), a tilt and the exposure.
+
+The HUD, name tags and marker are hidden, and the panel can be hidden too. **Capture** (or Enter) saves a PNG at the full render resolution. Esc returns to the pause screen with the race camera exactly as it was.
+
+**Developer figures.** The physics overlay (H) and the telemetry (T) are developer tools now. They only open after the developer password is entered. The settings screen's developer mode uses the same password.
+
+**AI: smarter in close quarters.**
+- **Contact predictor.** Every AI car now runs a contact predictor every frame, as a last line of defence under the lane and gap logic. Both cars' real footprints (oriented boxes) are moved along their real velocities and spin over the next 0.85 s.
+- **Reacting to a predicted overlap.** The car moves away from where the other car will be, more urgently the sooner the overlap would come.
+  - If the other car is ahead, it brakes.
+  - If it is drifting sideways into a car alongside, it lifts. In this handling model, lifting tightens the line.
+  - A car that is sliding or spinning is given extra room, because where it goes next is uncertain.
+- **Squeezed with no lane left.** A car that is not ahead now drops in behind the car alongside instead of holding on at the edge. That was where most opening-lap contacts came from: a car pushed out wide slid back into the one inside it.
+- **Test results** (same harness, same seeds, Hard AI; values in `AI_CS.hit*`, original starting values):
+  - **Opening laps on 12 circuits:** car-to-car contacts fell from 8 incidents to 3.
+  - **Race with a mistake-making player on pole:** 4 circuits × 150 s with sudden spins and brake checks. AI-to-AI incidents fell from 5 to 3, AI contacts with the player from 7 to 3 and wall hits from 7 to 3. Overtakes and lap pace were unchanged.
+  - **Close-quarters scenarios:** a car parked across the line, two cars stopped nose to tail or leaning into each other, a three-car pile and a squeeze. Every one cleared in 3.5–7 s.
+
+### Build 96: performance, start-area lag and draw distance
+
+The slowdown when driving past the start/finish area was measured frame by frame (Chromium with a software GPU: draw calls, triangles, real lights, shader programs and the time of each step) and had three causes. All three are fixed without changing what you see; a new **Draw distance** setting adds an optional saving on top.
+
+- **The hitch exactly at the line was the save file.** Crossing the line wrote the whole save to the browser's storage two or three times in the same frame (sector records, the AI's lesson from your lap, a new best lap). A played-in save (lap traces, the AI's lessons, time-trial ghosts) is 0.2–1.1 MB of text, so every lap froze the game at the line: with a 1.1 MB save the step that crosses the line took **35–68 ms instead of 2–8 ms** on a desktop CPU, several times longer on a phone. Now nothing is written while a race is live: changes are kept and written once when you pause, at the results, when you leave the race or when the game is hidden or closed.
+- **Crowd drawn off screen.** Spectators are drawn in 60 m blocks, and a block was drawn whole as soon as any part of it was in view, so at the start grandstand (about 500 people in one or two blocks) most of the people drawn were off screen. Each figure is now checked against the view every frame and only those that can be seen are drawn (same people, same colours, same animation; the instance buffers are only re-sent when the visible set changes). Monza, Medium, 8 cars, sampled every 80 m round the lap: **271k → 206k triangles a frame** (start area 308k → 250k), and the start-area screenshots are identical.
+- **Night lamps.** Night circuits carried ten real spotlights all race long (four coloured stage lights over the start, two on the start gantry, four floodlight towers), and three.js works out every real light for every lit pixel on screen, wherever the light is. The lamps now share one fixed pool of eight real lights: each frame the lamps that were lit before (stage, gantry, the four towers nearest your car) and whose pool of light or lamp head is within 14 m of the visible ground borrow them, nearest first, so a lamp is lit before it reaches the edge of the screen. The number of lights never changes during a race, so no shader is ever rebuilt. Marina Bay and Cairo Midnight on Medium: **14 → 12 lights** in every lit shader (10 lamp spotlights → 8). Cairo Midnight never needed more than seven and Marina Bay eight in the test laps; if more lamps are ever near the view at once, the one farthest from the car (at the edge of the view or just off it) waits for a free light.
+- **Draw distance** (Settings → Display, and a button in the pause menu): *Auto*, *Near* (170 m), *Medium* (260 m), *Far* (420 m) or *Max* (no limit), measured around your car. Scenery blocks, spectators and lamps beyond it are not drawn, and the fog fades everything into the sky colour before that distance, so nothing pops; the camera's far plane follows, and the sky and the sun are drawn at the same angles. It applies at once, also in a paused race. *Auto* is *Far* on Low and *Max* on Medium and High, so the default picture is unchanged (the race camera shows about 80 m around the car at the normal zoom); *Near* and *Medium* trim the top of a zoomed-out view, the start showcase and replays.
+- Shaders were already compiled behind the loading screen (Build 91); the new fog keeps the theme's haze formula exactly and uses one program for every draw distance.
+- Checked: Monza, Marina Bay and Cairo Midnight (night), Brands Hatch and Giza Sand Ring (time trial on Low, the desert "stage"; the game has no separate rally stages) race without errors from both `file://` and `http://`; start-area screenshots before and after (Monza by day, Marina Bay at night, same random seed) are identical except for the pit crews' idle animation, which runs on the clock. The shader program count stays the same all round each lap.
+
+All new numbers (pool size 8, margin 14 m, the draw distances, the 30% fog band) are original starting values chosen by measurement in this game.
+
+### Build 96: packaging & data protection
+
+- **Fewer, smaller files.** The playable game is now 9 files and 18.8 MB instead of 17 files and 40.5 MB (zipped: 15.8 MB instead of 29.4 MB). Nothing looks, sounds or plays differently.
+  - **One copy of each pack.** Every pack is a single `assets/*.pak.js`. From disk it is run as a script; over http it is fetched as text, which keeps the loading bar moving. The binary `.pak` and `cars.glb` twins are gone.
+  - **Denser packing.** Packs store 7 bits per character instead of base64's 6. The text is about 20% larger than the raw bytes, against 33% for base64.
+  - **Car models:** `cars.glb` is now inside `cars.pak.js` (4.0 MB → 2.5 MB). Its data is deflated, byte-for-byte lossless; the textures are not touched.
+  - **Sound effects and engine loops** are stored as lossless FLAC. Every file was decoded in Chromium and matches its WAV sample for sample, so the engine loops stay seamless. Names stay `x.wav`. Radio calls and music are untouched MP3s; only their ID3 tags (title, cover picture) were dropped.
+  - **Code and stylesheet:**
+    - `config.js` moved into `index.html` (`window.GAME_CONFIG`).
+    - `supabase.js` is packed into `game.bundle.js`.
+    - `game.css` is minified into `index.html`. Every element's computed style was compared before and after across all menu tabs; the only differences are gradient stops written in a shorter but equivalent form.
+    - The game code is shipped deflated: 1.8 MB of code → 0.67 MB.
+  - **Loading:**
+    - **Boot packs** (cars, effects): read during boot, as before.
+    - **Second packs** (other engines, more radio calls): read in a quiet moment about 8 s after boot, both from disk and over http. They used to be read clip by clip with range requests over http. Each pack is downloaded once and then cached.
+    - **Extra boot cost:** unpacking adds about 80 ms of processing (measured in headless Chromium on the build machine). This is small next to the rest of the boot.
+  - `lib/` (three.js and supabase-js) and `js/` are only needed for `?dev` and for building. The importmap in `index.html` serves `?dev` only.
+- **Save game sealed.** `localStorage['tafheet.v1']` is now encrypted (ChaCha20) and signed (HMAC-SHA256). This covers money, cars, parts, records, settings and the developer flag.
+  - **Changed or damaged save:** it is refused. The game falls back to the backup (`tafheet.v1.bak`, the last save that checked out when a session started), and then to a fresh save. It never crashes.
+  - **Old plain saves** are read once and written back sealed. After that, a plain save typed into storage is refused.
+  - **Not covered:** replays (`tafheet.replay70`) stay plain; they hold no figures. There are no cloud saves to protect: Supabase is used only for duel rooms and the lap leaderboard.
+- **Code sealed.**
+  - **Unreadable file:** `game.bundle.js` is deflated, scrambled with a key split between it and the `index.html` loader, and checked against a hash before it runs. A changed file shows "game files are damaged or have been modified".
+  - **Self-check:** the bundle also checks its own text against a hash written into it at build time. Re-packing an edited bundle and fixing the loader's hash is still refused.
+  - **Debug handle:** `window.__game` (with the save, CARS, TUNE) is handed out only to automated tests, to `?dev` runs, and after the developer password. Before, anyone could change credits from the console.
+  - **Read-only tables:** part prices, tiers and part effects are frozen. CARS and TUNE are not, because the game and the developer tuning sliders write to them.
+- **Developer password:** both the pause-menu tools and Settings → Developer mode take `egyseal` (any case, spaces ignored). Only a salted SHA-256 is kept in the code. The old second password is gone.
+- **Build:** `bash tools/build.sh` rebuilds everything:
+  - the packs, from `tools/assets-src` with `tools/pack-assets.mjs`. It needs ffmpeg for FLAC; without ffmpeg the WAVs are packed as they are.
+  - the bundle, with esbuild.
+  - the seal and the stylesheet in `index.html`, with `tools/build.mjs`.
+
+  `SKIP_ASSETS=1` rebuilds only the code. Sources moved to `tools/assets-src/cars/cars.glb`, `tools/assets-src/_loose/menu.mp3` and `lib/supabase.js`.
+- **What this does not guarantee.** The game runs entirely in the player's browser, so nothing in it can be made impossible to change. The keys and the unpacking code have to ship with the game, and anyone who can read the sources (this repository) can follow them.
+
+  What the protection does:
+  - It stops casual tampering: editing the save in the storage panel, changing a price in `game.bundle.js` with a text editor, typing `__game.save.credits = …` into the console.
+  - It makes such edits useless: they are refused, not half-applied.
+
+  What it cannot stop:
+  - A determined person can still step through the code in the browser's debugger, or start the browser in automation mode to get the debug handle.
+  - Anyone who clears all of the site's storage can start again from a hand-written plain save.
+  - Online lap times are posted by the client. Trusted leaderboards would need a server-side check (for example a Supabase Edge Function that validates laps).
+
+## Build 95
+
+- **Speed cap 160 km/h** in every race except time trials. The five gears are now spread up to the cap, so fifth gear tops out at 160 instead of the engine hitting a wall in fourth.
+- **Player marker attached to the car:** it rides just above the middle of the roof with no lag, moving exactly with the car (only its bob and the drop-in at the start move it).
+- **AI stuck together in a turn:** a car stopped behind another stopped car now starts going round it after 1.1 s (was 2.2 s), and treats the other car as parked after 0.7 s (was 1.5 s).
+- **Harder Hard:** Hard rivals now run three tiers more than you on every performance part (was two tiers on five parts), on soft tyres.
+- **Stripes still hidden:** Racing stripes and Side stripe stay hidden until they are rebuilt.
+
+## Build 94
+
+- **Speed cap:** every car is held to 140 km/h in all races except time trials; the AI's speed plan knows the cap.
+- **Parked wheels on the track:** fixed. A car taken out of the race (Knockout) was removed from the scene, but its batched wheels kept being drawn where it stopped. Removed objects are no longer drawn.
+- **Softer car-to-car contact:** less bounce (restitution .2 → .05), less scrape grip (.4 → .22), 45% less spin from a hit, and car-to-car damage reduced by about a third.
+- **Track limits:** running wide off the track no longer invalidates the lap; only shortcuts and missed checkpoints do.
+- **Rally lamps light up:** fitted lamp pods now throw a long beam down the road and glow on each lamp, softly in daylight and at full strength with the headlights on.
+- **Stripes hidden for now:** the Racing stripes, Stripe colour and Side stripe options are hidden (they were misplaced) until they are rebuilt.
+- **Marker:** a breathing glow behind the arrow in your car's colour and a light sweep across its bevels.
+
+## Build 93
+
+- **Smaller, sleeker player marker:** the arrow is now about a third of a car's size on screen (13–20 px tall instead of 22–36) and shrinks a little more while you race. It is slimmer and sharper, with brighter faces, a tighter halo and a smaller burst ring, and it sits closer to the roof.
+
+## Build 92
+
+- **AI no longer swipes across each other onto the racing line.** Every car alongside (from just behind to a little ahead) is now a hard boundary: the target stays at least a car's width plus a margin on our side of where that car will be in 0.35 s, and the line is only rejoined once the car has cleared. When squeezed from both sides, the car holds its lane. In Hard 8-car races (200 s): Imola 0 contacts (was 2 per race), Brands Hatch 3 touches and no first-corner pile-up (was 2–5 including one).
+- **New 3D player marker.**
+  - **Shape:** a bevelled, notched arrowhead in your car's colour with a metallic finish and bright edges, a thin outline (dark on day maps, light at night) and a soft halo ring pulsing from its tip.
+  - **Animation:** it drops in with a spin and a bounce at the start and after a reset, bobs and sways gently, and leans with your car's rotation. It flips with a golden flash and burst ring when you gain a place, and gives a small shiver when you lose one.
+  - **Placement:** it stays the same size on screen and sits just above the roof line. It shrinks and fades a little while you race, and fades when a car passes under it.
+
+## Build 91
+
+- **AI: much faster through corners and corner sequences, and bolder in traffic.**
+  - **Racing line:** a new minimum-curvature line over the whole lap (worked coarse to fine, 40 m down to 2 m) gives proper out-in-out lines, linked S-bends and later apexes. It uses half of each kerb, inside at the apex and outside at the exit. The car's corridor now follows the line out to the kerbs instead of pulling it back.
+  - **Speed plan:** it respects the drift cap in S-bends and how quickly the line changes direction, so the extra speed stays under control.
+  - **Traffic (Hard; Medium gets about a quarter of it):**
+    - follows closer in the slipstream
+    - dives for the inside of the next corner
+    - backs off less alongside and after a touch
+    - passes from close behind
+
+    Fixed: a car in your wake no longer blocks every pass, and passing lanes follow the racing line.
+  - **Track learning:** the AI's lesson for each part of the circuit is gentler and gives speed back faster on clean laps.
+  - **Hard flying laps** (Celica): Brands Hatch 58.2 → 51.6 s, Monaco 64.8 → 60.3 s, Laguna Seca 57.1 → 51.6 s, Imola 52.5 → 48.0 s, Interlagos 61.5 → 54.7 s, Monza 48.4 → 44.6 s, all with 0 wall hits.
+  - **Other difficulties:** Medium gains about 6%; Easy is unchanged.
+  - **Pit approach:** a heading-for-the-pits car now keeps the racing line until the last 120 m (it used to hold the centreline for the whole lap).
+- **Tyre and kerb sound, rebuilt.**
+  - **Kerbs:** a soft, deep "thup" for every kerb block, timed to your speed. It runs from a slow thup-thup to a warm buzz and is split left and right by the wheels on each side. A gentle bump plays on entry. The old kerb sound clipped above full scale and clicked.
+  - **Tyres:**
+    - a rolling roar that follows speed and surface
+    - a light sandpaper scrub near the limit
+    - a squeal only in a real slide, which swells slowly and blends three bands
+    - its own tone for a lock-up and a howl for wheelspin
+    - a soft rustle on grass
+  - **Mix and placement:** high frequencies are cut back and a gentle compressor keeps it calm. The two nearest rivals have their own tyre and kerb sound at their car.
+- **Windows:** the model's own glass is back exactly as modelled: no smoothing, tint, windscreen banner or crack overlay. The Glass and Windscreen-banner options are gone.
+- **HUD:** the Oversteer and Understeer notices are gone.
+- **Start/finish area lag, fixed.**
+  - **Cause:** the stutter passing the stands was shaders compiling mid-race. Sponsor boards, the gantry sign and the fan-village props drew through the post-processing and shadow passes for the first time there.
+  - **Fix:** everything is now prepared behind the loading screen, so no shader compiles during a lap. The pit crews, grid marks and pit boxes share materials and draw together, so the start area uses about a third fewer draw calls (Monza: 263 → 176 on average).
+  - **Less per-frame work:** scenery that never moves is no longer re-positioned every frame, and idle crews off screen update 5 times a second.
+
+## Build 90
+
+- **Performance parts replace the old upgrades.** Engine, Tyres, Nitro and Armour are gone. There are now twelve parts in five groups, each with five tiers (Stock, Street, Sport, Race, Elite):
+  - **Engine:** intake and exhaust, ECU and camshafts, radiator and oil cooler.
+  - **Drivetrain:** close-ratio gearbox, clutch and flywheel, limited-slip differential.
+  - **Chassis:** coilovers and anti-roll bars, brake kit, weight reduction.
+  - **Tyres:** compound, width.
+  - **Body:** roll cage.
+
+  How they work:
+  - Every part changes something the physics really uses: engine force, top speed, grip, traction out of slow corners, braking force and fade, gear-change time, kerb stability, weight, drag, tyre wear, engine heat or damage. The old Tyres upgrade did nothing in the circuit handling model; grip now works through the handling model itself, so the AI's speed plan knows what its parts are worth.
+  - Each car has a Performance Rating (PR, 100–999) and a class (D, C, B, A, S), worked out from the same lap figures the set-up screen shows. A stock Mini is about 260 (D), a stock Audi S4 about 645 (A), and a fully built Group A or Group B car reaches S.
+  - A tier is bought once and stays in your parts bin, so any tier you own can be refitted for free. **Stock** and **Best** refit the whole car in one tap.
+  - Each part card shows what it does, its tiers, the price of the next tier and how much it adds to your PR. The car's lap figures are shown stock against now.
+
+  Measured with the AI driving: a fully built Celica laps Monza in 44.3 s (stock 48.4 s) and Brands Hatch in 52.1 s (58.2 s).
+
+  Old saves convert automatically: Engine becomes the engine parts, Tyres the tyre and suspension parts, and Armour the roll cage. Whatever you spent on Nitro is refunded, because Nitro no longer exists in circuit racing. On Hard, rivals now carry two tiers more than you on the engine, tyres, suspension and brakes.
+- **Main menu, redesigned.** The home page has three areas:
+  - **Left:** "Next race", with a live track map and a big RACE button that starts straight away.
+  - **Middle:** your car on stage with its PR badge.
+  - **Right:** a rotating featured-events carousel with countdowns, the login calendar, today's missions and the season track.
+
+  Around them:
+  - **Top bar:** a level ring with an XP bar, a streak flame, and a credit counter that rolls up.
+  - **Events tab:** shows a badge when rewards are waiting.
+  - **Live ticker:** your results, records, trophies and countdowns.
+  - **Polish:** pages slide in, and stats count up. It is built for desktop, tablet and phone, in English and Arabic.
+- **Things to come back for every day:**
+  - **Daily login calendar:** a 7-day calendar with a day-7 crate. Rewards grow 10% each completed week, up to +50%, and a streak shield saves one missed day.
+  - **Daily missions:** three a day, from 15 kinds, all measured from your real races: overtakes, clean races, podiums, lap targets, drift points, places gained, wins on Hard, rain races and more. You get one free swap and a bonus for clearing all three.
+  - **Event of the week:** one of eight special rule sets, for example Monsoon GP, Reverse grid, Mini Cup, Knockout, Drift king, Pro series, Endurance and Midnight run. Each has bronze, silver and gold rewards and a countdown.
+  - **Seasons:** each lasts 4 weeks and has 30 tiers of rewards (credits, XP, free parts, exclusive paints and cars).
+  - **Trophies and rewards:** trophies show progress cards, and rewards come with a celebration pop-up.
+- **Player marker:** a small 3D faceted gem in your car's colour, with a dark base on day maps and a pearl base at night. It stays the same size on screen at any camera distance, always sits just clear of the car, fades when another car passes under it, and shrinks once the race is under way.
+- **Driver name tags:** each rival gets a small pill with its position, name and team colour. Tags keep clear of each other and of your marker, fade with distance, and hide during the intro, replays and results. Turn them on or off in Settings → Gameplay (on by default).
+- **3D engine sound:** every car's engine now comes from the car itself, heard from the camera.
+  - It pans left, right and behind as cars move on screen and gets louder as rivals come close.
+  - Fast passes get a slight pitch rise and fall (Doppler).
+  - Your own engine stays as loud as before at the default camera.
+  - On computers, your car and the two nearest rivals use HRTF; phones use the lighter equal-power panning.
+- **AI cars stuck together at a corner:** found and fixed. A recovery that wanted to reverse was being cancelled. Cars counted any car within 12 m as blocking, so they never moved. A car waiting behind a stopped car never became "stuck". Cars on the grass waited for cars that were already driving away.
+  - Stopped groups now sort themselves out: the car furthest along goes first, the others go round it slowly on the clearer side, and nobody waits forever.
+  - Test: 96 cars parked at Monaco's and Brands Hatch's hairpins in 8 layouts. Before, 4 never got going; now all of them do.
+- **Race engineer silent after the first race:** fixed. If one radio clip never finished loading or playing (a stalled download, or the audio interrupted on a phone), the radio stayed "busy" for the rest of the session. Now every race clears it, a clip gives up after a few seconds, a watchdog ends a clip that never reports it finished, and the audio is resumed if the system paused it.
+- **Smoother cars:** body panels now have smooth shading, with one pass of curved subdivision where a curve showed facets. Panel lines and sharp folds stay crisp. The average race car gained only about 5% triangles.
+- **Visual parts and stickers, all checked on every car:**
+  - **Fixed:**
+    - Exhaust tips, headlight covers and tow hooks were placed before the car's lamps were known.
+    - Roof rack, lamp bar, antennas and roof number overlapped each other.
+    - Bonnet louvres, pins and roundel overlapped each other.
+    - The snorkel crossed the windscreen.
+    - The Alpine's wing sat on its glass.
+    - Stripes ran over wings and down the tail.
+    - The side stripe crossed the door number.
+    - The diffuser hit the exhausts.
+    - Mud flaps hid inside bumpers.
+    - Canards floated off the body.
+  - **Improved:**
+    - Your chosen race number now replaces the "2" printed on every livery's doors.
+    - "Body colour" parts take the livery's own colour.
+    - The paint has a clear-coat finish.
+- **Fewer files:** the playable game is now 20 files instead of about 285 (360 including sources). Sounds are in 4 packs (2 audio and 2 radio), each with a twin for opening from disk, and the stylesheets are one file.
+  - Over http, packs still load only the clips that are needed, using range requests.
+  - From disk, each pack is read once.
+  - The JavaScript sources, `lib/` and the original sound files are in the separate source zip; `tools/pack-assets.mjs` rebuilds the packs and `tools/build.sh` rebuilds the bundle and the stylesheet.
+  - One bug was fixed along the way: the "win" radio call was truncated and never played from disk.
+
+## Build 89
+
+- **Hard AI pace.** The rivals now use far more of the track. The racing line runs out to about a wheel's width from the white line on entry and exit and clips the inside kerb at the apex; it used to stop 2.8 m short of each edge and then use only 90% of what was left. The car's corridor also reaches the kerbs. On Hard, the drift the speed plan accepts mid-corner and the lateral budget both go up; Medium and Easy are unchanged. Measured flying laps for the AI driving a Celica on Hard, all with 0 wall hits and 0 seconds off track:
+  - Monza 48.5 s (Build 88: about 53 s)
+  - Brands Hatch 58.1 s (about 60 s)
+  - Monaco 64.3 s (about 68 s)
+  - Interlagos 61.0 s
+
+  For scale, the same car at Brands Hatch runs 67.5 s on Medium and 82.8 s on Easy.
+- **Chicanes and S-bends.** When the line turns one way and then the other within the next 35 m (or 1.4 s of travel), and both turns need at least 7 m/s² at the present speed, the AI sets up a smaller drift (at most 0.32 rad, about 18°) and never skips the brakes mid-corner, because a big slide one way has to be unwound before the next turn. This removes the pendulum that threw cars into the wall at Monaco's swimming-pool section: Hard 8-car Monaco races went from 10 wall hits and 15 contacts in 5 minutes to 0–1 wall hits and 0–3 contacts. The final Hard 8-car checks (5 minutes each at Monaco, Laguna Seca, Silverstone and Interlagos) had 0 wall hits and 0 seconds off track on all four. There were 4 car contacts in total, all at Silverstone: two on the opening lap and two later.
+- **No more weaving.** The AI used to fishtail down the straights, steering from lock to lock. Its preview of the road was shorter than the time the car takes to answer the wheel (the slide's alignment lag plus the heading loop), so it kept chasing its own lag. Two fixes:
+  - On open road the lookahead is now at least 1.2 times that response time (up to 42 m). It fades back to the old preview where the line ahead bends tightly, so it never cuts an inside wall.
+  - The yaw-rate damping is stronger (0.6 to 1.0).
+
+  Full-lock steering reversals above 90 km/h over 3 laps dropped from 62–89 to 18–30, and lap times improved. Separately, the AI's departure from the racing line for traffic, a pass or the track edge now changes at most 3.2 m/s (5.5 m/s when a car is alongside or the edge is close), while the racing line itself is followed at full rate.
+- **The AI learns a bad corner faster.** When the same spot catches cars out again in a race, each new incident there counts for more (up to 2.5x), so the track-sense correction settles in a few laps instead of many.
+- **No more standing still.** Two deadlocks are fixed. First, a car stopped beside another car that was behind it, because any overlapping car behind made it give way; now only a faster car coming through alongside does. Second, a boxed-in car slowed towards a standstill; now it tucks in at just under the speed of the slower neighbour. Together these left queues standing at hairpins such as La Source and the Monaco pool exit.
+- **Race-start showcase, redesigned.** It is still 11 s on the wall clock and still skippable, but it is now five long, continuous moves instead of a quick cut per car:
+  1. a drone flies in high and descends towards the front row, with the circuit name and a laps · cars line;
+  2. a low tracking shot runs down the side of the grid against the direction of travel, so the noses come towards the lens, and the caption follows the car in the middle of the frame;
+  3. a low hero arc round the pole-sitter's nose;
+  4. the same for your car;
+  5. a rise into the race camera.
+
+  Short dips cover the cuts. Every move is still collision-checked at 12–16 points, and the grid run takes the side that keeps the lens furthest from the cars.
+- **Player marker follows the light.** On day, desert and coast maps it is a near-black chevron with a thin white rim and a strip of your car's colour. On night maps (Marina Bay, Cairo Midnight) it is a pearl-white chevron with a dark rim.
+
+All values above are original starting values tuned by measurement in this game's own model; they are not taken from any other game's settings. The approach follows published ideas:
+- speed targets from the vehicle's own limits with a backward braking pass ([US patent 7785178](https://patents.justia.com/patent/7785178));
+- using the full width of the track and the kerbs ([Track Titan: use the track](https://www.tracktitan.io/study-plans/471c607b-2c8c-4ed3-86b0-08212eebbf78-racing-line-use-the-track); [GPFans: kerb riding](https://www.gpfans.com/en/f1-news/1021751/f1-kerb-riding));
+- racing in traffic without contact ([Sony AI, GT Sophy](https://ai.sony/blog/how-to-train-your-race-car)).
+
+## Build 88
+
+- **Results screen.** It now comes up 1.2 s after you take the flag (it used to wait for every car when you had a penalty, up to 45 s), and the table is live: cars still racing show their lap and gap with a pulsing marker and drop into their finishing place as they cross the line. The race clock keeps running after your finish, so their times are real.
+- **Fuel** consumption 20% lower than Build 87.
+- **Pause button:** the telemetry (+) button is gone; the pause button is a single glass disc with a clean two-bar icon, a soft shadow and a gold glow on hover.
+- **Player marker:** a slim chevron in your car's own colour with a white rim, soft shadow and glow, drawn as a high-resolution sprite; it floats well above the roof, breathes gently, and shrinks and fades back once the race is under way so it never covers the car.
+- **AI in traffic:** it now goes for a pass whenever the car ahead is slower than it could go itself (not only when it is already faster at that moment), from further back, and through gentler bends; a car alongside only backs off if it is behind and about to touch. Position changes in a 3-minute Monza race: 2–5 (was 0).
+- **AI in corners:** mid-corner it lifts and lets the drift scrub the speed instead of braking, unless it is far too fast or about to run wide; straight-line braking before the corner is unchanged. Hard 8-car races, 4 minutes: Brands and Laguna 0 wall hits and 0 contacts, Monaco and Silverstone one low-speed wall touch each.
+- **AI stuck in the pit lane:** a car that ends up in the lane without meaning to (run wide at the entry, or a stop given up) now knows where it is: it drives the lane at the limit to the exit and merges, instead of steering at the pit wall.
+- **Pit lane borders:** a solid concrete garage wall (1.05 m, white coping, red crash-pad band) now runs behind the crews and closes back to the outer barrier at both ends; it is a collision barrier like every other border, so no car can get behind the mechanics.
+- **Pit crews:** every mechanic in every crew now has his own clock — gesture timing, sway, step rhythm, the way he looks around — so no two crews (or two men) move in unison; when a car rolls past, the idle crew step back towards the wall and turn to watch it.
+
+## Build 87
+
+- **Hard is hard now.** Measured on solo flying laps, the AI was using far less of the car than the handling allows: its corner speeds were capped by an old tyre-grip estimate (about 1 g) while the arcade model, and a human driving it, can corner much harder. The cap and the planned drift angle now rise with difficulty (Easy unchanged at 1×, Medium about 1.8×, Hard 2.6× the old cap, Hard also plans a slightly larger drift), and Hard rivals race with at least 70% aggression. Flying laps, Celica: Monza Hard 59.3 → 53.0 s (Medium now 59 s, Easy 70 s), Brands Hatch Hard 67.3 → 60.3 s, Monaco 75 → 68–69 s. 8-car Hard fields: best laps 7–14% faster on Brands, Laguna, Monaco, Silverstone, Spa and Hurghada, the field within 3–6% of the leader; no wall hits or spins on track, one start-line touch at Brands, a few >40° slides at Laguna (14 in 5 minutes) and Brands (3); everything else clean.
+- **Fuel** consumption +50% again (×1.5).
+- **Engine sound, calmer:** a softer top end (the engine's filter now tops out near 5 kHz instead of 9), much less saturation (a round note instead of a rasp), no harsh presence lift, less loudness swing with the throttle, slower and smoother pitch and level changes, quieter induction, a quieter rev limiter, and exhaust pops and bangs 40% quieter with a softer attack.
+- **Tyre sound, realistic:** a new seamless "scuff" loop — abrasive, sandpaper-like texture made of tiny tread-block bursts — starts as a faint whisper as the car approaches the grip limit and grows into a rough scrub as the slip angle rises; the tonal squeal only joins in a real slide and swells and rises in pitch with the slip; locking or spinning a wheel feeds the same layers. All of it is smoothed, kept under the engine and fades as the car slows.
+- **Pause buttons:** the round **+** (telemetry) and **Ⅱ** (pause) buttons sit side by side with a clear gap on desktop and touch screens (they could overlap).
+
+## Build 86
+
+- **Realistic, much faster pit stops.** The crew works in parallel, as a real one does: four wheels in 3 s (+0.6 s per damaged corner), fuel at the rig's flow rate (a full tank in 9 s, so a splash is quicker), bodywork up to 6 s, engine up to 8 s, gearbox up to 7 s, plus 0.8 s on the jack. The stop lasts as long as the longest job. Before, the jobs ran one after another and a fuel-and-tyres stop took 35–45 s; a typical stop is now 4–10 s (measured on AI stops at Monza: about 9 s for an almost empty tank and new tyres). The pit gauges fill together and the board shows the jobs still running.
+- **The race-start showcase lasts 11 s** by the wall clock, even on a slow machine: a 2.4 s opening, the grid shared out over 7 s (a short shot plays the middle of its camera move at normal speed instead of rushing it), and 1.6 s into the race camera. The intro music fades out between 7 and 10 s, as before.
+
+## Build 85 — the AI, rebuilt for clean, winning racing
+
+Measured first, on the game's own physics (Chromium, software GPU, 8-car fields of rivals, Hard): on track the field was already mostly clean, but it slid a lot (13–27 slides past 40° per race on Laguna, Brands and Monaco, where Monaco also had wall hits), drove off the racing line for up to 10 s behind cars 40–90 m ahead, could not overtake (no slipstream in the current ruleset), and **the pit lane was where most of the crashing happened**: 7–11 wall hits and 8–14 car-to-car contacts per 5½-minute race, from cars steering the pit approach with a crude controller at racing speed, parking across the fast lane and leaving their box into the car in the next one. What changed:
+
+- **Track sense — the AI learns the circuit from its own driving** (`js/ailearn.js`). Every rival watches itself all the time and the whole field shares what it learns, per 8 m of track: a slide well past the angle it planned, running wide past its corridor, a wheel on the grass or a touch of a wall makes that stretch — above all the braking zone and turn-in before it — a little slower in the plan (by how bad it was); a clean pass at the limit gives a very small step back. Corrections are quick, giving speed back is slow, like a driver building a lap. What it learns is saved per circuit and per handling set, so every race starts from what the previous ones taught it (and a change to the handling starts a fresh lesson).
+- **Controlled drift line.** The AI sets up at most ~26° of slide on purpose (was ~31°) and plans corners for it, so it drifts through the corner on a smooth, repeatable line instead of hanging the tail out everywhere.
+- **Edge guard.** It looks 0.6 s ahead (sideways speed included); if the car would leave its corridor it aims back in and gives up a little speed now, instead of finding the grass or the wall at the exit.
+- **Racecraft.** It only goes for a pass when it is close and actually faster (or in the slipstream), the passing lane follows the rival instead of a spot chosen seconds ago, it drops the attempt if the gap opens, and otherwise stays on the racing line. The slipstream now works in every race, so equal cars can pass on the straights.
+- **Pit stops.** On the track the racing driver keeps the wheel and just moves over to the pit side for the entry; the pit-lane driver takes over only in the lane. A car leaving its box crosses to the fast lane slowly before it accelerates, and cars in the lane give room to a car swinging into or out of its box.
+- **The player's lesson is now a hint** (at most +5% where you were faster); the AI's own track sense has the last word.
+- **Measured after:** 8-car races of 3–5½ minutes (with pit stops) on Brands Hatch, Laguna Seca, Monaco, Spa, Silverstone, Marina and Hurghada: **0 wall hits, 0 car contacts, 0 seconds off track, 0 slides past 40°, 0 spins** — on the track and in the pit lane — with tyre wear, fuel and stops running as normal. Position changes in a 200 s Monza race: 8 (was 0–3).
+- **Opening lap:** more room to the car ahead for the first 30 s, and a side guard that keeps ~1 m of air to a car alongside (the car level or behind concedes). Opening 60–75 s of 8-car races on 10 circuits: no contact on six, one touch on three (Red Bull Ring, Corniche, Nile), and Monaco had three in one run and none in a repeat.
+- *Not tested:* a human driver in the field (the tests run all-AI fields); how it feels to race them.
+
+## Build 84
+
+- **Your new numbers are the defaults:** turn rate 115°/s, yaw responsiveness 0.79, turn rate holds to 42.5 m/s with fall-off 74, alignment fall-off at speed 88, speed kept through a slide 0.55, slide scrub 0.015, settle 0.38 s, kerb kick 0.26; rubbered-in line amount 1.6, smoothness 3.05, spread 3.15, track darkness 0.14, band width 3 m, band darkness 0.08. All AI values as sent. Old slider settings saved in a browser are cleared once.
+- **One ruleset.** The Simulation/Arcade (Professional/Arcade) choice and its preset button are gone from the menu; every race uses the circuit rules.
+- **Why the AI slowed down as the race went on, and the fix.** Long-race telemetry (Monza, 6 cars, 7 minutes) showed two causes. (1) The AI planned its corners with the old four-tyre model's grip, which fell with tyre wear, tyre temperature and contact-patch terms far more than the arcade handling it actually drives with (its lateral budget dropped 16% while the car itself had lost almost nothing), so it braked earlier and earlier every lap. (2) Below 35% tyre life it switched to the *Save* pace, which cuts engine power by 12%. Now the handling itself has a realistic tyre model (below) and the AI plans with exactly the same factor; worn tyres are nursed at race pace and only a real fuel shortage makes a driver lift and coast; a driver racing to win runs *Push*. Measured: lap times stay flat as the tyres wear (60.6 → 60.8 → 60.9 s with tyres going from 95% to 50%), where they used to drift away until the stop.
+- **Tyre wear, realistic.** Tyres last 60% longer (every wear rate ÷ 1.6). Grip fades gently over most of the tyre's life (about 4% down at half worn, 7% at 80% worn) and then falls off a cliff in the last 30% (32% down on a bald tyre); cold or overheated tyres lose a little more. In the handling: the nose bites less (lower turn rate), the car slides longer before it hooks up, it spins up more out of slow corners, and it brakes less hard — the same for the player and the AI.
+- **Fuel** consumption is 150% higher (×2.5).
+- **Dry by default.** Quick races start on *Dry*, Grand Prix rounds and daily challenges are dry, and online races no longer roll a 30% chance of rain. (You can still pick *Changeable* or *Rain*; the story events that are written around a storm keep their rain.)
+- **Race-intro music** plays at full volume to 7 s and fades out completely by 10 s (it still stops at once on a skip).
+- **Tyre squeal.** The squeal recordings were being cut at 1.5–2.6 kHz, which made them dull; they now play up to 6–8.5 kHz with a clean low cut and a presence lift, a little louder, and the loops were re-cut to be seamless (they clicked every 3 s).
+- **Pit lane.** The entry and exit are now one constant-width road: the lane leaves the track at a shallow angle at its full 12 m width (its first metres lie on the track itself, so it emerges from the track edge like a real junction) and swings out to the pit wall; there is no wedge-shaped funnel any more. The pit-side Armco always runs outside the lane and its service apron (it used to cut diagonally across the lane through the taper), stays clear of the track's own barrier line, and eases back to it over 40 m beyond each end with no kinks; scenery keeps clear of that widened run-off.
+
+## Build 83b (fixes)
+
+- **AI cars stopping and vanishing.** Rivals could not steer through the pit lane with the new handling: the pit-lane driver still asked for a wheel angle, while the stick now commands a rate of turn. Cars heading for the pits slowed, stalled at the entry, gave up after 4 s and stopped on the track (where others ran into them) and, when the fuel finally ran dry, were towed to the pits — the "disappearing" car. The pit driver now steers through the same yaw-rate model (measured: 5 of 5 cars forced to pit all complete the stop and rejoin; before, most gave up). Parking stays in the fast lane until 15 m before the box and arrives slower, and leaving the box no longer swings into the lane wall.
+- **Safety net.** If any car's physics state ever becomes invalid it is put straight back on the road (and logged), instead of vanishing and taking a car that touches it with it; the AI also never passes an invalid input to the physics.
+- **AI control.** Calmer drift angles (the AI sets up at most ~31° of slide on purpose, down from ~51°), so it looks in control while losing little time. 8-car all-AI races of 4+ minutes on Monza, Spa and Silverstone: 0–2 spins, no stopped cars on the track.
+- **Showcase camera.** Slower, near-constant-speed moves with a damped follow inside each shot (no corners, no jitter), lighter handheld drift, gentler orbits, crane rises and tracking moves, and slightly longer shots.
+- **Car models.** The race-time body simplification is removed (it could leave gaps and faceted panels): every car shows its full bodywork again. Race wheels keep the full rounded tyre profile and more segments, so tyres are round.
+- **Smoke and tyre trails.** Tyre smoke is a thin, short trail close to the tyre (shorter life, smaller, carried less by the car), and the live tyre marks are narrower and fade in 1.6 s.
+
+## Build 83
+
+- **Your handling numbers are the defaults.** The values tuned in the slider panel are baked into `HANDLING_DEFAULTS` (`js/handling.js`), the rubber-line settings into `RUBBER` (`js/main.js`), the AI values into `AI_CS` (`js/ai.js`) and `TUNE.cs.aiReserve` = 0.995. The per-car character table is emptied so every car drives with exactly this feel. The preset list starts with *Tafheet tuned* (exactly these numbers); the other presets are now small changes on top of it. Old slider settings saved in a browser are cleared once so everyone starts from the new defaults.
+- **Handling menu hidden.** The tuning sliders are no longer in the pause menu. Press the small **⋯** button in the pause menu, type the developer password **`egyseal`** and press OK: the *Tuning sliders* button appears for that session. (Change it in `DEV_PASS`, `js/main.js`.)
+- **Race-start showcase.** Before the countdown a cinematic introduces the grid: an opening crane over the field, then one shot per car from pole to the back of the grid with your car last (dolly-ins, orbits, crane moves, tracking and overhead shots with slow handheld drift and lens breathing), a lower-third caption in each team's colour, and a drone rise that lands exactly on the race camera. Every camera path is checked before it is used (never inside a wall, a car or the ground; clear line of sight to the car); a shot that fails falls back to a safe crane. **Skip** with any key or a click/tap anywhere on the screen (a quick dip to black, straight into the countdown). It plays its own music (*Silent Lap*, `assets/audio/showcase_silent_lap.mp3`, at the Music volume): the music stops when the track ends, when you skip, or when the showcase hands over to the race.
+- **Performance.** Race-detail models: race rims use a lighter geometry (spokes without bevels, no wheel nuts), spectators and pit crews use far lighter shapes, distant spectators switch to six-box figures sooner. Static track objects stop recomputing their matrices after the start. Medium, Monza, 10 cars: ~791k → ~455k triangles a frame; simulation CPU 4.6 → 3.2 ms a frame. Dynamic resolution reacts sooner, anti-aliasing is off on Low, the pixel ratio is capped on High, and the quality guard steps in earlier. The game now always runs the minified single-file build (`game.bundle.js`), also from a web server — one download instead of ~40 modules (add `?dev` to the address to run the source modules).
+- **Engine sound.** The lag/freeze at some points of a lap came from thousands of redundant audio-parameter automation events piling up each second; they are now de-duplicated, rival cars keep stable voice slots (no more voices being torn down and rebuilt as cars pass), and panning uses a cheap equal-power panner. Tyre slip and engine load feeding the sound are smoothed, so engine and tyre notes glide instead of stepping.
+- **Kerbs.** Louder and crisper: a 2.6 kHz presence lift and a low shelf on the rumble loop, a quicker attack, and a click-and-thump strike when a wheel hits the kerb.
+- **Tyre smoke and dust.** Particles fade in and out smoothly (no popping), smoke intensity follows the slide gradually, tyre marks fade over 3 s.
+- **Look.** A warm, vibrant cinematic grade: golden highlights, a faint cool lift in the shadows, extra vibrance on muted colours, a soft S-curve, a gentle vignette, and a touch of field-of-view widening with speed.
+- **Smarter AI that races to win.**
+  - *Drift-aware driving.* The AI now steers through the handling model itself: to make its path turn at the rate the line needs, it points the nose ahead of its direction of travel by the drift angle your tuned catch-up time needs (atan of turn rate × catch-up time) and asks for the yaw rate that holds it. It sets up the drift instead of reacting to it, so it is smoother and much faster with your slow-yaw, long-drift numbers. Its corner speeds are planned from the same model (the turn rate that keeps the drift at a racing angle), it does not brake hard while sliding (in this model braking in a slide turns the car sideways), and its steering output is low-pass filtered.
+  - *Racing to win.* Each driver knows its position. Anyone not leading pushes: a little more corner speed, closer following for the slipstream, quicker to try a pass and nitro to complete it; the leader pushes when someone is within ~45 m behind, and everybody pushes on the last lap.
+  - *Measured* (Chromium, software GPU, 6-car grid from pole, first lap from a standing start): Monza/Mini 84 → 75–76 s, Silverstone/911 no lap within 95 s → 85–88 s, Luxor/Celica 48 → 47–49 s (the spread is first-lap traffic); first-corner traffic at Spa no longer spins cars (max slide 54° against 88° before); 8-car fields on all 17 circuits: nothing off, nothing stuck.
+- **The AI learns from you** (`js/learn.js`). While you race, every frame of your driving is recorded per 5 m of track: your speed compared with what the AI's own physical plan says *your* car can do there (so the lesson works whatever car you drove), your line, how closely you follow, the places you gain and your contacts. Each clean, valid lap is folded into a profile saved per circuit (the newest lap counts for almost half). In later races on that circuit the rivals carry more speed where you proved a corner goes faster (up to +12%), lean towards your line there, and race with your level of aggression — Easy rivals take half of it, Medium three quarters, Hard all of it. The physics stay identical: they can only copy what their car can physically do.
+- **Clean-up.** Removed the retired dirt-arena menu scene (never started any more), fourteen unused building templates, and a handful of unused helpers and constants.
+
+## Earlier (Builds 79–82)
 
 - **Performance.** Draw distance now follows the screen: the ground footprint of the camera view is measured every frame and only scenery inside it (plus a 30 m margin) is drawn or shadowed, so nothing off-screen costs GPU time and nothing can appear late. Barriers are built in ~100 m lengths instead of one ring. Physics is capped at six sub-steps a frame so a slow frame can no longer snowball. Dynamic resolution runs on every tier (not only Auto), the desktop pixel-ratio cap is 1.25, and Auto reads the graphics card: integrated and mobile chips start on Medium. Draw calls in the sampled Monza frame fell from 262 to 156 and shaded triangles from ~1.0 M to ~0.26 M.
 - **Camera.** Every camera quantity (aim, zoom, framing) is a critically damped spring with its own velocity. The aim leads into the car's direction of travel and the road ahead; the hard edge-of-frame pin is replaced by a sprung framing offset. No stepping, no jerks at any frame rate.
@@ -11,6 +362,10 @@ Extract the complete ZIP into a folder and open **index.html**. All cars, sound,
 - **Crowd (revision 4).** Chunkier, larger toy-scale spectators that match the cars, bright kit colours, and about a third more of them.
 - **HUD.** A larger instrument cluster (condition, fuel, tyres with compound) with a live speed and gear readout, on a glass panel. The minimap is centred on you, turns with the car, zooms with speed (tight at low speed, wide at full speed), shows the road, kerbs, pit lane and start line, every car as an arrow, and a whole-circuit inset with the field's positions.
 - **Pit entry.** The lane is full width almost from the moment it leaves the track, like a real pit entry: a wide funnel beside the circuit behind the painted entry line, peeling away over a longer taper; the track-side edge never crosses onto the circuit. Minimum lane lengths are longer.
+- **Handling replaced: ROTATION-FIRST ARCADE DRIFT (Build 82, `js/handling.js`).** One authoritative controller for every car on a circuit, player and AI. The car has two independent directions — the heading (where the nose points) and the velocity (where it travels). Steering commands the heading's rate of turn directly (300°/s at full input at medium speed, a quarter of that at rest, easing off above 22 m/s; the rate is reached with a 40 ms time constant and decays with a 90 ms one on release). The velocity keeps its old direction and is pulled onto the heading by a progressive lateral grip — an exponential alignment with a 180 ms time constant (longer off the throttle, under braking, on grass and in rain; shorter at speed and once the stick is centred; doubled beyond 80° so a spun car grips again). The redirected speed is kept (a turn never creates speed; a long slide bleeds it slowly). ROTATE → SLIDE → GRIP → GO. The old four-wheel force model, its turn-rate governor and drift controller are gone, not layered under. Engine, brakes, aero drag, fuel, wear, damage, collisions, tyre marks, smoke, cameras, UI and race logic are unchanged and all read the same vehicle state.
+  - *Presets* (`HANDLING_PRESETS`, chosen in Pause → Tuning sliders → Preset, saved): Arcade balanced, Drift king, Grip racer, Rally loose, Precision, Heavy muscle, Kart. The per-drivetrain and per-car tables (`HANDLING` in `config.js`: yaw responsiveness, drift duration, lift-off slide, pick-up) apply on top of the preset; the sliders on top of both.
+  - *Mandatory tests (Chromium, software GPU, scripted keys, Celica, Arcade balanced):* **T1** sudden left at 100 km/h: heading 25° / travel 6° at 0.2 s, 49°/16° at 0.3 s, 76°/27° at 0.4 s — the nose leads, the travel catches up. **T2** holding left 1.5 s at 60 km/h: 411° of rotation, still 49 km/h. **T3** release after a 0.5 s turn: rotation dies in 0.2 s (the heading settles 25° past the release point), the drift goes from 64° to 1° in 0.6 s and the car travels along the heading it reached. **T4** left then right at 90 km/h: the rotation reverses in 0.13 s, no pendulum. **T5** 0.8 s left at 150 km/h on throttle: 30° slide, exits at 154 km/h. **T6** hairpin at 50 km/h: 170° of heading in 0.68 s while the travel still lags 150° behind, then grips and exits at 59 km/h with 0° drift. **T7** 170 km/h, no input, 3 s: 0.0° wander. **T8** the same script at 30/60/120 fps: heading within 0.1°, position within 0.3 m. **T9** AI on the same model with drift management: Luxor 44 s (old physical model 46), Monza/Mini 70 s (74), Silverstone/911 80 s (82), a scripted human 55.9 s; all 17 circuits with 8-car fields: no errors, nothing off, nothing stuck. Stop, reverse (gentle, 30% turn rate) and pull-away clean.
+  - *Not tested:* real hands on a keyboard, pad or touch screen — the feel itself.
 - **Handling: a four-wheel force model for every car (Build 81, `js/handling.js`).** Player and AI cars on a circuit run the same vehicle physics: a planar rigid body with its position, world velocity, heading and yaw rate as independent states, four wheel contact points with their own wheel angular velocities, stepped at the fixed 120 Hz rate (accumulator, catch-up capped at six sub-steps, render interpolation, no per-car allocation in the loop). The structure is a JavaScript translation of the wheel-force architecture described in the analysis of Circuit Superstars' managed assembly that was supplied with the request. Nothing snaps the velocity to the heading and nothing delays the position: the body rotates first because the steering is a force couple, and the trajectory follows because the tyres' lateral friction then redirects the momentum.
   - *Build 81 revision 4 — read against the reference assemblies:* the user supplied the reference game's managed assemblies; the logic (not the code) of its vehicle controller and AI was read from the IL and this implementation was corrected to it where it differed: the wheel's rolling target follows the ground speed (the full ground speed when the wheel travels sideways); the ground couples the wheel to it with at most the remaining forward grip, the residual drive/brake torque and a damping term add on top, a braking wheel stops at zero when moving forward, and the spin is bounded — so wheel spin needs far more drive than grip, as in the reference; the player's steer input is the raw axis in the reference (any ramp lives in its input assets), and an optional screen-space mode steers towards where the stick points (sign·√|sin(angle)|) — our speed fade stays as a labelled adaptation because the reference's steering strength per car is not in the assemblies. The AI control layer was rebuilt in the reference's structure (see `AI_CS` in `js/ai.js`): steering is a PD on a target angle that blends the direction to the lookahead point with the line's tangent there, measured against both the car's heading and its direction of travel (blended by speed) and corrected by how sideways the car is; the target speed falls with the angle to a farther lookahead (|sin|^sensitivity between top speed and a low speed) and is scaled by difficulty; the throttle is a PD on the speed error (negative = brake); overtake and side radars shift the target sideways; a car facing away from its target backs up with opposite lock until the error is small; lower difficulties add slow noise to steering and throttle, fading in after the start. Our racing line, lanes, passing and defending, the curvature speed plan (kept as a ceiling so braking points stay physical), stuck recovery and pit logic remain. Not adopted: the reference's per-car force multiplier for AI cars (every car here keeps the same physics), its raycast suspension and 3D rigidbody.
   - *Build 81 revision 5 — controllable drift, rubbered-in line, smarter AI:* the tyres are softer (`sideFriction` 6.5) with a much stiffer rear (`balanceGainR`) and a softer front, so steering rotates the body ahead of its path into a real, proportional drift (about 6–8° of body slip at full lock, 16° on the throttle with traction control off) that cannot become a spin: a slide cap (`maxSlip` ≈ 24°, `slipDamp`) damps rotation past it, an auto counter-steer (`autoCounter`) feeds the slide back into the couple as the stick returns to centre so the car straightens on its own in about 0.3 s, and a scrub-recovery term (`scrubRecover`) gives back most of the speed a drift would cost (full lock on throttle at 100 km/h now gains speed; a 0.5 s tap at 170 km/h loses nothing). The throttle/side-grip coupling is weaker (`fsInfluence` 1.0) so turning no longer chokes acceleration. Grass keeps more steering and side grip (`SURFACES`) so an excursion stays controllable, but slows the car hard. Reversing is steered kinematically with a lower speed limit (the slip-angle model is trailer-unstable backwards). A rubbered-in racing line is laid on every corner (`addRubberLine`, `js/main.js`): a soft dark band and two tyre tracks along the best line, tapering out onto the straights, so the grip the field leaves behind shows the line through the turns. The AI's steering gains and the angle-to-speed sensitivity were tuned on the new tyres (`AI_CS`) and its corner-speed margin raised (`aiReserve` .96): it laps Luxor in 49 s against a scripted human's 55 s, Monza/Mini 76 s, Silverstone/911 88 s, no off-track, and 8-car fields on all 17 circuits run clean.
@@ -65,7 +420,9 @@ Race, time trial, drift, career, Grand Prix, endurance, knockout, customization,
 | Next pit tyre compound | B or tyre display | Tyre display |
 | Conserve / race / attack | 1 / 2 / 3 or Pace display | Pace display |
 | Reset / tow (invalidates lap) | R | — |
-| Telemetry | T | — |
+| Telemetry (developer mode) | T | — |
+| Physics overlay (developer mode) | H | — |
+| Photo mode | Pause → Photo mode; drag/arrows orbit, wheel/+/− zoom, Enter captures, Esc returns | — |
 | Headlights | L | — |
 | Pause | Esc/P or pause button | Pause button |
 | Mute | M | — |
@@ -74,14 +431,14 @@ Touch controls appear on phones and tablets and can be adjusted in settings. Lan
 
 ## Editing
 
-Source modules are in **js/**. The bundled **game.bundle.js** also supports opening the game directly from disk. After editing, rebuild it with:
+Source modules are in **js/**. The sealed **game.bundle.js** also supports opening the game directly from disk. After editing, rebuild everything (asset packs, bundle, stylesheet) with one command, `bash tools/build.sh`, or:
 
 ```sh
 npm install
 npm run build
 ```
 
-The optional Supabase rooms/leaderboard integration uses the public URL and anonymous key in **config.js**. Serve over HTTP/HTTPS for online play. **supabase.sql** contains the optional leaderboard schema. Keep private service-role keys out of client code.
+The optional Supabase rooms/leaderboard integration uses the public URL and anonymous key in **index.html** (`window.GAME_CONFIG`, near the end; it was config.js before Build 96). Serve over HTTP/HTTPS for online play. **supabase.sql** contains the optional leaderboard schema. Keep private service-role keys out of client code.
 
 ## Reference and fidelity
 

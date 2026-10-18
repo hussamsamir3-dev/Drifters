@@ -1,10 +1,10 @@
 {
   "name": "tafheet-circuit-series",
-  "version": "81.0.0",
+  "version": "96.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild js/main.js --bundle --format=iife --minify --alias:three=./lib/three/build/three.module.js --alias:three/addons=./lib/three/examples/jsm --outfile=game.bundle.js"
+    "build": "bash tools/build.sh"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
