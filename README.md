@@ -1,6 +1,20 @@
-# Tafheet Circuit Series — Build 96
+# Tafheet Circuit Series — Build 97
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 97
+
+**Phone layout (landscape), built around the iPhone Dynamic Island, notch and home indicator.** Every edge distance now starts from the screen's safe area, so nothing sits under the island, the rounded corners or the home indicator. One layout serves every phone held sideways (`tools/css-src/mobile97.css`); tablets and desktops are unchanged.
+- **Thumbs.** Steering sits in the bottom-left corner, brake and gas in the bottom-right, and drift above brake (nitro above gas in drift mode). All are sized from the screen height so they stay big on small phones. A layout dragged in the touch-controls editor still wins over these defaults.
+- **Reading at a glance:**
+  - Position and the running order are top-left, and lap and timing top-right. Both are compact, with larger text.
+  - Speed, gear and the three gauges sit bottom-centre between the thumbs.
+  - The minimap is above the gas pedal; in drift mode it sits under the drift score on the left so it never covers the car.
+  - The skill chain sits under the position block.
+  - Pause is at the top centre, with brief messages under it, and the radio sits above the gauges.
+- **Start.** The lights and the launch rev gauge sit side by side above the car.
+- **Before this build,** the gauges overlapped the right-steer button, the minimap overlapped the brake, the chain overlapped the timing panel and the drift button, and the radio covered the pause button.
+- **Tested** on an iPhone 15 Pro (852×393, 59 px island insets), an iPhone 15 Pro Max (932×430) in drift mode, and an iPhone SE (667×375, no insets), with no overlaps.
 
 ## Build 96
 
