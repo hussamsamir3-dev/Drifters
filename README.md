@@ -1,6 +1,38 @@
-# Tafheet Circuit Series — Build 97
+# Tafheet Circuit Series — Build 99
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 99
+
+Tuned from the first AI-monitor notes (Nile Park, Hard).
+- **"AI slows down in turns it could take without slowing."** The cause: on its racing line a Hard driver still let a safety-net rule (the throttle-angle target, meant for a car off its line or pointing away from it) take up to 10% off its planned corner speed. On the line it now trusts its corner plan (`AI_CS.angleFloorHard` 1). Off the line the safety net works as before.
+  - Solo laps at Nile Park: Quattro 50.7 → 49.8 s, Escort Cosworth unchanged.
+  - An 8-car Hard race with a mistake-making leader: no contacts, no walls.
+- **"Run over the kerbs for maximum pace."** Tested and not adopted. Riding the whole kerb (and closer to the white line) was 1–2% slower and put wheels on the grass, because in this handling model a kerb strike kicks the car and scrubs speed. Three-quarters of the kerb was also slower. The line keeps using half of each kerb.
+- **"Oversteer sometimes."** The bigger committed drift from Build 98 is part of what makes Hard fast here. A smaller maximum drift angle was 1–2% slower, so the drift stays. Monitor notes that say where a slide costs time will show where to calm it locally.
+
+## Build 98
+
+**AI monitor (developer mode only).** After entering the developer password, press **F8** in a race or choose **AI monitor** on the pause screen.
+- **Autopilot:** your car drives itself.
+- **Camera:** it follows any car on the grid. **[** and **]**, or the arrows in the panel, step through them.
+- **The panel** shows what the followed driver is doing and why:
+  - its speed against its target and its planned corner speed, and the rule that set the target (plan, traffic, edge, angle…);
+  - throttle, brake and steering, and its slide angle;
+  - its gaps ahead and behind, and its last and best laps;
+  - its strength, aggression and attack;
+  - tyres, condition, contacts and wall hits;
+  - live flags: passing, defending, squeezed, jam, the contact it predicts, emergency braking, the edge guard and the pits.
+- **Pinning notes:** type a comment and press Enter (or **N** to jump to the box). This pins a note with a full snapshot of that moment: track, lap, track position, the car's state and all of the figures above.
+- **Exporting notes:** they are kept in the save. **Copy** or **Download** gives a JSON file to send back for tuning. **F8** closes the monitor and hands the car back.
+
+**Hard drives harder.** Solo laps showed that in this handling model a bigger committed drift and planning closer to the measured grip limit are faster. Hard drivers now:
+- accept a larger drift angle (0.92 rad mid-corner, up to 0.67 rad set up on purpose);
+- drift more through S-bends;
+- count on more of their brakes;
+- plan their corners 6% closer to the limit.
+
+The gain on solo laps at Interlagos: Quattro 53.8 → 52.3 s, Celica 55.7 → 54.7 s, with no walls or runoff. The same physics applies to everyone; this is only how hard the drivers push. The extras scale with attack squared, so Medium gets about a quarter and Easy none (`AI_CS.hardDriftOk`, `hardDriftMax`, `hardReserve`; original starting values).
 
 ## Build 97
 
@@ -436,6 +468,7 @@ Race, time trial, drift, career, Grand Prix, endurance, knockout, customization,
 | Reset / tow (invalidates lap) | R | — |
 | Telemetry (developer mode) | T | — |
 | Physics overlay (developer mode) | H | — |
+| AI monitor (developer mode) | F8 or Pause → AI monitor; [ ] switch car, N comment | — |
 | Photo mode | Pause → Photo mode; drag/arrows orbit, wheel/+/− zoom, Enter captures, Esc returns | — |
 | Headlights | L | — |
 | Pause | Esc/P or pause button | Pause button |
