@@ -1,6 +1,26 @@
-# Tafheet Circuit Series — Build 101
+# Tafheet Circuit Series — Build 102
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 102
+
+**The AI learns from your best lap.** On every circuit, the rivals now study your fastest clean lap, not just an average of all your laps. Qualifying laps count too. Your lap is recorded every 5 m, and the rivals take four things from it:
+- **Corner speed.** Your speed is compared with what the AI's own physics plan says your car could do at the very same points. Where you carried more speed through a corner, the rivals' target speed rises there, by up to +10% for Hard, +7.5% for Medium and +5% for Easy. This now also applies through the fast kinks and left-right changes where the plan used to play safe. A lesson only ever adds speed; it never slows a rival down.
+- **Braking.** Where you were on the brake pedal, the deceleration you actually reached is compared with what the plan counts on. Where you braked harder, the rivals brake later (up to 12% more braking in the plan).
+- **Gas point.** Where you were already back on full throttle in a corner or on its exit, the rivals go to full throttle there too, as long as their own car is not sliding past its planned angle.
+- **Racing line.** Through the corners where you were faster than the plan, the rivals move up to 80% of the way towards your line. Elsewhere they keep their own line, unchanged.
+
+**It keeps improving.** Every new best lap is studied the moment you set it, in the middle of a race too, and every rival replans straight away. A message says "Rivals are studying your best lap". A new best replaces 70% of the lesson, and a lap within 1.5% of your best confirms it (15%). The more best laps the coach has seen, the more the rivals trust it: 45% after the first best lap, rising to full trust. The rivals still drive exactly the same physics as you, so they can only copy what the car can actually do. Their own track sense still takes speed away wherever they cannot make a corner stick. Lessons are saved per circuit.
+
+**Check it in the AI monitor.** The developer AI monitor (F8) has a new **Lesson** row for each rival: the best lap it is learning from, how many best laps it has studied, and how much it trusts them.
+
+**Measured.** Three solo flying laps per run, before and after a lesson from a driver lapping at Hard pace. No wall hits or off-track moments in any run:
+- **Nile, Quattro, Hard:** 50.5 s → 49.3 s, quicker than the lap it learned from (50.3 s).
+- **Interlagos, Celica, Hard:** 55.0 s → 54.7 s.
+- **Medium, both circuits:** no change, within ±0.2 s.
+- **A lesson 4% faster through the corners:** Hard at Interlagos gains about 0.4 s.
+
+A driver who is genuinely faster than the AI will teach it more. All weights and limits are original starting values.
 
 ## Build 101
 
