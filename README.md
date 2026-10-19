@@ -1,6 +1,21 @@
-# Tafheet Circuit Series — Build 100
+# Tafheet Circuit Series — Build 101
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 101
+
+**Ghost cars you can see through.** In qualifying and in the pit lane, cars still pass through each other, but they now look and behave like normal cars until they are about to touch. The see-through effect only starts when two car bodies come within 3 cm of each other. The ghost car then strobes at the screen's frame rate: it is shown on one frame in three (one in two below about 80 fps), so it reads as a transparent car rather than a blinking one. As soon as the cars separate, it is solid again.
+
+**Qualifying lap count.** During qualifying the lap counter (HUD and minimap) counts the qualifying laps, for example 1/2 and 2/2. When the race grid forms, it resets to the race distance, for example 1/3.
+
+**Skipping qualifying.** If you skip qualifying, you start the race from the back of the grid, even if you had already set a lap. The results card says so.
+
+**A calmer engine.** The engine note was tiring to listen to for two reasons: at the race speed ceiling the engine sat at the red line along every straight, and the sound was strongest in the 2.5–4 kHz band, where the ear is most sensitive and a high-revving engine turns into a whine. The changes below are original starting values:
+- **Gearing.** With a speed ceiling, the gears are now spread up to 1.2 times the ceiling (was 1.01). At 180 km/h a fast car cruises at about 80% of its rev range instead of at the limiter, and slower cars sit a little lower than before. Engine power and top speed are unchanged.
+- **Tone.** A broad cut of 5 dB around 3.1 kHz and a gentle 2.5 dB lift below 170 Hz give a warmer, deeper note.
+- **Top end.** The engine's top-end filter now closes near 3.7 kHz at full load and high revs (was about 4.8 kHz).
+- **Firing note.** The firing-frequency resonance is broader and softer (a hum rather than a buzz).
+- **Volume.** The engine gets up to 18% quieter in the top 2,500 rpm.
 
 ## Build 100
 
