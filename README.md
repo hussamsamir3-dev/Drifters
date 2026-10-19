@@ -1,6 +1,53 @@
-# Tafheet Circuit Series — Build 99
+# Tafheet Circuit Series — Build 100
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 100
+
+- **Qualifying before every circuit race.** Your grid slot is earned, so the starting-grid choice is gone from the menu.
+  - **The session:** every car runs two laps and the best one counts. All cars are ghosts, flashing and passing through each other, so nobody can be hit.
+  - **Ending it:** the session ends when you complete your second lap, or press **Skip ▸** on the qualifying chip. Skipping without a lap starts you from the back.
+  - **The race start:** a qualifying table shows times and gaps to pole. The field is then lined up in that order with fresh cars, full tanks and new tyres, and the lights start the race.
+  - **What's off during qualifying:** penalties, the safety car, AI pit stops and the skill chain.
+  - **Exceptions:** knockout races and online duels have no qualifying.
+- **Pit lane ghosting.** A car in the pit lane is a ghost: it flashes, passes through other cars, and the AI does not treat it as traffic. A car leaving the pits stays a ghost for a second, and until it is clear of everyone, so it never turns solid inside another car.
+- **Lapped cars let you through.** A car about to be lapped (a leader within about 70 m behind) keeps racing at its own pace but moves to the side away from the leader, chosen once and kept. It never defends against the leader and lifts while the leader is close behind or alongside. An AI leader takes the open side at once. In a scripted test, a car a lap down let an equally fast leader through cleanly in about 10 s, with no contact, then raced on. The old blanket throttle cut is gone.
+- **Engine smoke.** A car in poor condition smokes from the engine bay: grey when hurt, darker as it gets worse, fire when the engine is wrecked. A big hit gives a puff of smoke straight away. Rear- and mid-engined cars smoke from the back.
+- **Pit crews at speed.** An idle pit crew is now drawn as its merged static copy unless it is one of the two nearest to your car while you are below ~90 km/h, close enough to see the mechanics fidget. Before, passing the pits meant animating up to twelve full crews every frame. CPU profiling of the race loop at the Monza start showed their per-frame posing at about 10% of the frame's script time; working crews always animate.
+- **Markers in the car's real colours.** Each car's signature colour is read from what is actually painted on it (the livery texture, and your paint where the livery uses the base colour), weighted by visible area. A car that is mostly white, silver or black gets that colour.
+  - **Your marker** uses it and now floats just above your car on screen, at the car's own depth. It follows the car exactly and never covers it.
+  - **Rivals' name tags** carry it on the position chip, and are placed around each car's real on-screen outline, never on it.
+
+### Build 100: loading and performance
+
+Measured in headless Chromium with a software GPU (SwiftShader) on a 2-core build machine, Medium graphics, 8-car race, over http. Absolute seconds are far longer than on a real graphics card (every shader is compiled on the CPU) and vary by ±30% from run to run, so the before and after runs were made back to back in the same way; the number of shader programs compiled is exact.
+
+**Where the race loading time went.** Almost all of it was shader programs. A race compiled them three times over, one by one on the main thread:
+- `setupExtras` drew the whole scene once with the pit crews' tools shown, and again with rain and headlights on, each time with a blocking compile, *before* the lights, the floodlights and the lamp pool were set up. Every lit material was therefore compiled for a light count the race never uses, and then again for the real one (Monza: 152 programs compiled for 111 in use).
+- Leaving a race disposed the circuit and the cars, which made three.js free every program. The next race, even on the same circuit, compiled them all again (Monza a second time: 208 programs).
+- The 15 s wait for the engine sounds came before the shader warm-up instead of beside it.
+
+**What changed** (nothing looks, sounds or plays differently):
+- **One parallel warm-up.** The crews' tools, the rain and the headlights stay revealed through the race's own warm-up (`compileAsync`, which uses `KHR_parallel_shader_compile`, then `warmRace`), with the final lights in place, and are put back afterwards (`warmDone`). Programs are compiled once, for the light setup the race really uses.
+- **Programs are kept for the session** (`keepPrograms`, batching.js). Each program is held once more, so a later race reuses every program it shares with earlier ones (cars, scenery, crowd, track). Materials whose `onBeforeCompile` had no cache key of their own are first given one made from the shader code they really produce (`stableKeys`), so day and night variants, or two different animations, never share a program.
+- **Engine sounds load beside the shader warm-up.** The race waits at most a further 2.5 s for them at the end; a car whose engine is not in yet plays the basic loop and switches over by itself when it arrives (this fallback already existed).
+- **No resolution changes while loading.** The dynamic resolution counted the loading screen's long frames: it shrank the picture and resized the canvas (a full stall of the graphics card) during loading, and the race then started with a frame-time average that kept lowering the resolution through the first seconds at the start line. It now pauses while a race loads and starts from a clean average when the lights come on.
+- **Road and grass textures are painted once per session** (by day, night, desert) instead of for every race; they are random tarmac and grass either way.
+
+**Race load (Start → lights), seconds; programs compiled in brackets:**
+
+| | Before | After |
+|---|---|---|
+| Monza, first race of the session | 109.5 (152) | 69.5 (89) |
+| Marina Bay (night), second race | 116.2 (122) | 72.0 (81) |
+| Brands Hatch, third race | 83.1 (104) | 12.2 (7) |
+| Monza again, fourth race | 93.3 (208) | 17.4 (6) |
+
+The "Loading the engine sounds" step fell from 62–76 s (it also covered the blocking compiles) to under 2 s. Boot (page open → menu) is unchanged at 33–41 s here; its time is the graphics context start-up (about 12 s on this machine) and the menu's shaders, which are now kept for the races.
+
+**Start area.** The resolution fix above is the change that reaches the start line: the race no longer begins by resizing the canvas and lowering the resolution while the lights are on. A frame-by-frame lap profile (`perf100tools/lapframe2.mjs`: update and render time per frame, draw calls, triangles, shadow casters, lights, allocations, for the start area against the rest of the lap) was written, but on this software GPU one lap takes longer than 15 minutes, so no per-frame before/after figures are given here and no other start-area change was made in this build.
+
+**Checked.** Same-seed start-grid screenshots at Monza before and after: road, grass, kerbs, stands and scenery are identical. The only pixels that differ are the pit crews' idle animation, which runs on the clock (as in Build 96), and the edges of the idling cars. Monza, Marina Bay and Brands Hatch load and reach the lights with no console errors over http, and Brands Hatch also from `file://`. The 2.5 s sound wait is an original starting value.
 
 ## Build 99
 
@@ -497,3 +544,4 @@ The supplied Circuit Superstars images guide the lower camera, warm lighting and
 - Car models: **1965–2002 Rally Cars** by **supercarmodels**, CC BY 4.0. Existing models support split body/wheels and recoloring. https://sketchfab.com/3d-models/1965-2002-rally-cars-2146acc1e3de409baf46d03a070d0526 — https://sketchfab.com/supercarmodels — https://creativecommons.org/licenses/by/4.0/
 - three.js and supabase-js: bundled libraries and existing notices retained.
 - Supplied per-car engine pack and Expressive Race Engineer clips: retained with existing attribution. The engine files are the supplied audio and have not been independently certified as recordings of the named vehicles.
+
