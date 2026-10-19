@@ -1,6 +1,22 @@
-# Tafheet Circuit Series — Build 103
+# Tafheet Circuit Series — Build 104
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 104
+
+**See-through ghosts, no flashing.** In qualifying and in the pit lane, a ghost car no longer strobes. When it comes within 3 cm of another car, it fades to 30% opacity in about a tenth of a second, so you see straight through it, and it fades back to solid over a quarter of a second once the cars are apart. Each car uses its own see-through copy of its materials. Those shaders are compiled behind the loading screen, so the first ghost never stalls a frame.
+
+**Pit crews wait in the garage.** Between stops, each crew stands back in its garage in loose groups facing each other, clear of the pit lane. When its car comes into the pit lane (yours, an online rival's, or an AI car heading for that box), the crew walks briskly out to its places at the box edge and stands ready. After the stop, it walks back in.
+
+**A realistic crowd.** The spectators were rebuilt with adult proportions:
+- **Bodies.** A head about an eighth of their height, shoulders about three times the head's width, and a shaped torso with a shirt hem over the trousers. Arms and legs each have two jointed segments, with elbows, knees, hands and shoes.
+- **Variety.** Men and women (narrower shoulders, wider hips, long hair), caps, sunglasses, backpacks, scarves, phones and flags. Team shirts, some with stripes, short or long sleeves, and jeans, black, khaki, grey or olive trousers or shorts. Five skin tones.
+- **Following the race.** Every head follows the nearest car going past, and the shoulders turn with it.
+- **Cheering.** Near a car, fans jump and punch the air with pumping elbows, others clap or point, and phone holders raise their phones and film.
+- **Idle.** People breathe, shift their weight from foot to foot, fold their arms, put their hands in their pockets or talk with their hands.
+- **Walking.** Walkers swing their arms against their legs, with a knee bend.
+
+All of this runs on the graphics card, as before, and the far figures still use the cheap low-detail model.
 
 ## Build 103
 
