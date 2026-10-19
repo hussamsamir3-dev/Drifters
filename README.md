@@ -1,6 +1,19 @@
-# Tafheet Circuit Series — Build 102
+# Tafheet Circuit Series — Build 103
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 103
+
+**One speed ceiling.** Every car in a race, yours and the AI's, is now limited to 185 km/h (it was 180 km/h for drivers and 185 km/h for the AI). Time trials still have no ceiling. Cars whose own top speed is lower, such as the Mini at 159 km/h, still top out at their own speed. The value is an original starting value in `TUNE.cap`.
+
+**Launch control removed.** The rev gauge under the start lights and the start grades (perfect, good, wheelspin, slow) are gone, for you and for the AI. Every car now gets away on its own engine and grip alone. The perfect-start points in the skill chain went with it.
+
+**Bigger exhaust pops.** All values are original starting values.
+- **More often.** Lifting off now pops from half the rev range (was 60%) and from 32 km/h. Crackle cars pop on every lift and pop cars on 80% of them (was 90% and 50%). The pause between runs is 1.4–3 s (was 2.4–5 s).
+- **Longer runs.** Crackle cars fire 6–12 pops per run (was 4–9) and pop cars 2–5 (was 1–3). The first pop is a big bang three times in four.
+- **Bigger flames.** Each pop shoots a larger, longer blue-white and orange flame from the tailpipe, with a bright flash. Big bangs are 45% bigger and throw sparks.
+- **Louder, with body.** Pops are 23% louder, and each one has a short low thump underneath, so you feel it as well as hear it.
+- **Rivals are heard.** A rival popping within about 45 m of the camera is heard too, quieter with distance. The pops stop the moment a driver is back on the throttle.
 
 ## Build 102
 
