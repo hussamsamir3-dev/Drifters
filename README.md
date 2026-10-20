@@ -1,6 +1,76 @@
-# Tafheet Circuit Series — Build 104
+# KARVA | كارڤا — Build 106
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 106
+
+**The game is now KARVA | كارڤا — Own the Curve. (امتلك المنعطف)**, an arcade motorsport game.
+- **Title screen.** The game opens on the KARVA key art. A single tail-light curve draws itself across it, then "Press any key" (on phones, "Tap to start"). That tap is also what starts the sound.
+- **Menu backdrop.** Behind the showroom is the key art's dusk coast, without the lettering: the sky, the mountains and the city lights over the sea, on top of the wet road with its light trails and kerb. It always fills the screen, cropped evenly, never stretched. The showroom has no walls any more. The car stands on a glossy asphalt stage that fades into the coast, and the turntable has a red edge, a chrome rim and red running lights. Behind it, two light trails sweep like the logo's swoosh, a tail-light red one and a chrome one, each with a glint running along it.
+- **Look.**
+  - **Logo:** the chrome KARVA | كارڤا logo sits in the top bar and on the loading screens.
+  - **Panels:** wet-asphalt glass with a chrome top edge and one cut corner.
+  - **Colour:** red marks what you press and what is active; amber is kept for rewards.
+  - **Buttons:** the RACE button is a tail-light blade with a chrome play badge, and secondary buttons are chrome.
+  - **Text:** two new typefaces, embedded so the game still works offline: **Chakra Petch** for display text (cut and slanted like the logo's letters) and **Cairo** for everything you read and for all Arabic. Both use the SIL Open Font License.
+- **Name everywhere.** The window title, the home-screen app name, start gantries, trackside boards, the blimp, tyre lettering, the podium backdrop, replay wipes, photo and video file names and the AI monitor export all say KARVA now. Your saves, records and online rooms keep working: their internal keys are unchanged.
+- **New files.** assets/karva-hero.jpg, assets/karva-bg.jpg and assets/karva-logo.png (the key art, the backdrop and the logo), and manifest.webmanifest.
+
+Also in this build:
+- **Online:** AI cars in online races now drive with exactly your assists, like everywhere else.
+- **Online rejoin:** reloading during an online race now waits for the next race instead of trying to load one you are not in.
+- **Rivals:** rivals make small mistakes under pressure a little more often on Easy and Medium.
+
+## Build 105
+
+A big update: six new features and a round of fixes. Every tuning number introduced here is an original starting value.
+
+### New
+**Daily challenges and a login streak.** Every day brings three new challenges, the same for the whole day, generated from the date: finish at a given circuit, slipstream passes, a clean top-five finish, overtakes, Style score, a lap-time target, drift score and more. Progress shows live in the race, with a toast when one is complete. Claim the rewards (credits, XP, season points, parts) from the home column or the Events page; clearing all three adds a bonus crate. The login streak runs on a 7-day calendar with a crate on day 7. One streak freeze keeps your streak through a single missed day, and it recharges each time you reach day 7.
+
+**Named AI rivals with grudges.** The field is a fixed roster of drivers, each with a name in Arabic and English, a nickname, a flag, a helmet colour and a personality: Aggressor, Defender, Gentleman, Veteran, Showman or Rookie. The personality decides how a rival races (attacking, defending, how eagerly it passes, how it makes small mistakes under pressure), never how fast its car is. Every rival remembers you across races: contact you cause, pushing them wide, rough passes and blocking build a grudge; clean racing builds respect. A rival with a grudge races you harder, defends harder against you and lets you know on the radio; the grudge shows on its name tag and in the order list, and it fades with clean races. Your nemesis is introduced before the race. The new Rivals screen shows each rival's grudge, respect and head-to-head record.
+
+**TV-style replays and a highlight reel.** The replay now has a TV director: cameras on towers outside the corners, low kerb cameras at the apexes, pan cameras on the straights, a helicopter, chase, onboard and finish-line cameras. It cuts to battles, overtakes, contacts and the finish, with a position tower, a lower-third caption on each cut, a REPLAY bug, wipes and slow motion. You can pause, change speed, scrub (event markers on the bar), jump between events, change the camera mode and hide the UI. After a race, **Highlights** plays a 30-45 s reel of the best moments with captions ("Last-lap battle: Omar Farouk fights Salma Trabelsi for P2") and a closing title card. **Save video** records it, with sound, as a .webm file.
+
+**Podium ceremony.** When the top three are home, a 10-15 s ceremony plays before the results: the podium with sponsor boards, the three drivers on the steps with their trophies, champagne spray, confetti (fireworks at night), the crowd, and a moving camera. Your own position is shown, and you can skip it.
+
+**Pyramids of Giza circuit (أهرامات الجيزة).** A new track across the Giza plateau, laid out at 0.65 of the real distances. It passes the three pyramids in their true proportions and arrangement: Khufu, Khafre with its remaining smooth casing at the top, and Menkaure with its red granite lower courses. Also there: the queens' pyramids, the Great Sphinx facing east, the causeway, the temples, mastaba fields, dunes, Bedouin camps, a camel caravan and the Cairo skyline in the haze. The Giza Sand Ring now has the pyramids on its horizon too.
+
+**8-driver online races.** Online rooms now take up to eight drivers, and AI cars can fill the empty grid slots.
+- **Lobby:** join by room code, invite link or quick match. You see everyone's car and ready state, and chat or send quick messages. The race counts down automatically once everyone is ready.
+- **Host controls:** the host picks the track, laps, weather and AI fill/difficulty, and can remove a player.
+- **Race:** the host runs race control and the AI cars, and every screen shows the same official classification and times.
+- **Disconnects:** a driver who leaves is taken over by the AI. If the host leaves, another player becomes host. Late joiners wait for the next race.
+
+### Fixed and improved
+**The AI drives exactly the same car as you.** A full audit of the AI and player cars, now identical:
+- **Upgrades:** on Hard, rival cars carried three upgrade tiers more than yours on every part; they now carry exactly your parts.
+- **Handling and assists:** stability control, the yaw governor, lift-off grip, rear braking grip, ABS and traction control now follow one rule for every car.
+- **Fuel and oil:** AI fuel use had a random "driver style" factor, and its slide on oil lasted 0.4 s; both now work as they do for you.
+- **Slipstream and speed ceiling:** one rule and one value for every car.
+- **Difficulty** now comes only from how well the AI drives.
+
+**Slipstream.** In another car's wake your drag drops, so your top speed rises by up to 4%, including above the 185 km/h race ceiling. How much depends on how close you are and how well centred in the wake. The same rule applies to the AI, which plans with it. You see streaks of air from the car ahead, speed lines and a slightly wider view, a SLIPSTREAM meter on the HUD, and you hear a rising rush of wind.
+
+**Realistic particles.** Smoke, dust, spray and flames are now soft, textured clouds that turn, grow and fade, lit by the sun and sky, and they fade gently where they meet the ground. Tyre smoke billows and hangs, runoff throws up dust plumes, wet tyres throw droplets, and sparks streak.
+
+**Rally lights are real lights.** Lamp pods and light bars fitted in the garage light the road ahead from where they are mounted, in their own colour. They switch on and off with your headlights, on every car.
+
+**Pit crews ready at the box.** While their car comes down the pit lane, the crew stands at its working spots around where the car will stop:
+- the wheel men crouched at their wheels;
+- the jacks waiting ahead of the car and beside it, clear of its path;
+- the fueller at the filler and the lollipop man in front.
+
+The stop starts the moment the car halts. Between stops they wait in the garage.
+
+**Exit AI test.** The developer AI monitor has an "Exit AI test" button that hands the car back to you mid-race.
+
+**A living environment.** Every circuit now has one wind, with gusts:
+- **Plants and flags:** trees, palms, bushes and grass sway in it, and flags, banners and bunting flutter.
+- **Air:** fine, soft particles drift through the air: sand on the desert tracks, leaves and pollen on the green ones, mist by the sea.
+- **Sky:** clouds drift across the sky and flocks of birds circle.
+- **Trees and plants:** trees are full, leafy crowns shaded from the inside out, palms have arching fronds, dead fronds and dates, and desert shrubs are proper tufts.
+- **Desert ground and rocks:** the desert ground is rippled sand, and rocks show their strata.
 
 ## Build 104
 

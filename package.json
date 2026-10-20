@@ -1,6 +1,6 @@
 {
-  "name": "tafheet-circuit-series",
-  "version": "104.0.0",
+  "name": "karva",
+  "version": "106.0.0",
   "private": true,
   "type": "module",
   "scripts": {
