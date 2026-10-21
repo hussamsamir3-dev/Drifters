@@ -1,6 +1,6 @@
 {
   "name": "karva",
-  "version": "119.0.0",
+  "version": "120.0.0",
   "private": true,
   "type": "module",
   "scripts": {

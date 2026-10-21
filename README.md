@@ -1,6 +1,22 @@
-# KARVA | كارڤا — Build 119
+# KARVA | كارڤا — Build 120
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 120
+
+**Qualifying shows the order the grid will use.** In qualifying every car is a ghost, and the HUD position used to be the order on the road, so you could drive through the field, see P1, and then start the race from the place your lap times gave. Now, all through qualifying, the HUD position, the timing order and the qualifying chip ("Lap 2/2 · P3 · 1:03.214") show the real qualifying order: cars with a valid lap by their best valid lap time, then cars still without a time. When the session ends, the results table and the race grid use exactly that order, so you start the race where you qualified. Only valid laps count (a lap with a circuit shortcut or a missed checkpoint does not), as in real qualifying, and there is no "Overtake" in qualifying any more.
+
+**Online: back to the race from the pause menu.** An online race cannot stop for one driver, so the pause menu is now a menu over the running race: Resume (or Esc / the pause button again) closes it and you are straight back in. It used to re-open itself and keep the engine and sounds muted.
+
+**Online between two machines.**
+- *Your Supabase keys no longer disappear with updates.* They lived only in index.html, which every update replaces, so after an update the game quietly fell back to "this browser only" rooms, which can never reach another machine. Keys are now also read from **karva-config.js** (next to index.html; updates never include it; copy karva-config.example.js to start), kept on each device once seen, and can be pasted in the game.
+- *An "Online server" panel in the Online tab* says which rooms you get ("Internet rooms: server connected", or "This browser only"), tests the connection, and lets you paste the Project URL and anon key. If the server does not answer it shows the reason (for example CHANNEL_ERROR: wrong URL or key, or Realtime public access switched off in the Supabase project).
+- *Fewer messages.* Supabase's free plan allows about 100 Realtime messages a second for the whole project, counting each delivery as well as each send. A duel used to send 24 car updates a second each, which already went over it, and Supabase then drops messages and links. Now 12 a second in a duel, fewer with more drivers (8, 6, 4, 3), AI updates 6 a second; the remote cars are interpolated, so they still move smoothly.
+- *The start reaches everyone.* The host repeats the race start until every driver has loaded (a lost start message used to leave that driver in the lobby), waits up to 60 s (was 30) for every circuit to load, and never gives the car of a driver who is still loading to the AI for the first 3 minutes (a slow phone used to arrive in a race already taken over: "Your connection dropped: the AI drove your car").
+- *One start, one grid.* While the host's circuit was still loading, the lobby thought the room was idle: a driver still marked ready could set off a second countdown, and the host then sent a second start with a different grid in the middle of the first (the two machines ended up in different races). A start that is loading now counts as racing. Quick match also waits 2.5 s (was 1.2) for open rooms to answer over the internet.
+- *The room's creator stays host.* The host was the driver with the earliest join time, written by each machine from its own clock; a guest whose clock ran behind became host on joining. A new arrival now always counts as later than everyone already in the room.
+
+All new numbers are original starting values.
 
 ## Build 119
 
