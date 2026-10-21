@@ -1,5 +1,9 @@
 -- Run this once in Supabase → SQL Editor. It is only needed for the lap leaderboard.
--- Online duels use Realtime broadcast channels and need no tables at all.
+-- Online rooms (build 105: up to eight drivers, AI fill, quick match) use Realtime only and need no tables or policies:
+--   'tafheet:<CODE>'  one channel per room: presence (each driver's name, car, ready state; the host's room settings) and broadcast
+--                     (race messages: compact car states, the host's AI cars and official order);
+--   'tafheet:lobby'   the quick-match directory: hosts with free seats answer a broadcast 'ask' with their room code.
+-- Nothing below changed for build 105, so a project set up for an older build keeps working as it is.
 create table if not exists public.lap_times (
   id         bigint generated always as identity primary key,
   track      text not null,

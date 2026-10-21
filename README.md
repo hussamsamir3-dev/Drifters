@@ -1,6 +1,145 @@
-# KARVA | كارڤا — Build 106
+# KARVA | كارڤا — Build 118
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 118
+
+- **A dynamic skid.** Every layer of the skid (roar, rubber grind, tyre scream, hum) now changes live with what the car and its tyres are doing (js/skid.js, `update(..., env)`):
+  - **Speed:** a slow slide mostly moans and scrubs, quieter and lower. A fast one screams higher and fuller, and its grind runs quicker and its roar brighter.
+  - **Tyre wear:** fresh tyres scream crisp and clean. Worn tyres scream less, lower and greasier, waver more, and grind coarser and louder.
+  - **Tyre temperature:** cold tyres chirp higher and squeal more. Overheated tyres go smoother, lower and greasier.
+  - **Compound:** soft rubber screams fuller and lower, hard rubber thinner and higher.
+  - **Car:** each car's voice (weight, grip, power, drivetrain, era) from build 113 still applies on top.
+  - **Ground:**
+    - **Tarmac:** the full skid.
+    - **Kerbs:** a brighter, thinner scream with more grind.
+    - **Wet:** no scream (water kills it); the slide becomes a brighter hissing swish.
+    - **Grass:** a dull, low rush with no scream.
+    - **Sand and gravel (desert circuits):** a gritty crunch with no scream.
+    
+    The skid now also follows a slide off the track, where it used to go silent.
+  - **Measured on one car (Escort RS1800), main scream tone:** slow 594 Hz → fast 701 Hz; worn tyres 598 Hz; cold tyres 676 Hz; hot soft tyres 572 Hz; kerb 704 Hz. Wet, grass and sand have no scream tone.
+
+## Build 117
+
+- **The tyre scream is back in the drift, kept pleasant.** Builds 114–116 had only a muffled hum where the squeal used to be, so a drift had no rubber scream. Now the real recorded squeal comes in on a committed slide, on top of the roar and the rubber grind:
+  - **Layers:** the mid band (two copies, so it's smooth and never shows its loop), the low band under it for a gentle slide, and a faint touch of the high band only in a big one.
+  - **Tone:** clearly a screaming tyre, but with the glare above 3 kHz pulled down and a 4.2 kHz low-pass. Its main tone sits around 550–680 Hz.
+  - **Feel:** it swells in and fades out smoothly.
+  - **Per car:** heavier, grippier cars scream lower (e.g. Quattro ~550 Hz, Mini ~680 Hz), and the pitch rises with the slide and the speed.
+- **Settings → Audio → Skid sound** now has four styles: Soft roar, Roar and scream (default), Warm hum, and the new Screaming tyres (the most scream). Every style includes the scream.
+
+## Build 116
+
+- **More tyre slide sound.**
+  - **Louder:** the skid (roar, hum and rubber grind) plays about 5 dB louder (level 0.06 → 0.11), and the scrub just before a slide comes up too (0.08 → 0.10).
+  - **Starts sooner:** it comes in with smaller slides (from about 5° of slip instead of 7.5°) and reaches full strength sooner.
+  - **Lingers:** it fades out a little more slowly after the slide, so drifts carry their sound.
+  - **Still soft:** the character from builds 114–115 is unchanged.
+
+## Build 115
+
+- **Rubber grind in the skid.** A sliding tyre doesn't slide smoothly: the tread grabs and tears free from the tarmac dozens of times a second. The skid now has that gritty, granular "grrrr" of rubber being ground, low and warm, under the roar and hum. It's made from the game's real rubber-on-asphalt (scuff) and scrub recordings, gated by an irregular train of grains: a short snap and a quick decay, at uneven gaps of about 35–60 per second. The grind:
+  - speeds up with the car and the slide;
+  - is slower and chunkier on heavy cars;
+  - is strongest on front-drive cars and grippy tyres;
+  - grows a little in a held drift;
+  - stays soft, with only about 4% of its energy above 2 kHz.
+  
+  All three Skid sound styles include it: Soft roar a little more, Warm hum a little less.
+
+## Build 114
+
+- **A soft skid.** A recorded tyre squeal is sharp by nature, so the skid is no longer built around it (js/skid.js):
+  - **Roar:** the main sound is now a soft, deep rubber roar, the "whooosh" of tyres sliding sideways. It's made of slowed, smooth noise and the recorded scrub of rubber, through a low band and two low-passes so nothing sharp gets through.
+  - **Hum:** underneath, a gentle, muffled hum from the low squeal recording, as if heard from inside the car.
+  - **No chirp:** breaking loose gives a soft low "whoomp" of weight instead of a chirp.
+  - **Gentle:** it swells in and fades out slowly, and a held drift grows a little fuller and deeper.
+  - **Measured:** the sound's brightness centre is now about 730–840 Hz, with only 2–3% of its energy above 2 kHz.
+  - **Each car still has its own voice:** weight sets the depth, tyre grip the fullness, power how much a held drift grows, drivetrain the balance of roar and hum, era the warmth.
+  - **Softer elsewhere too:** lock-ups and wheelspin are now muffled low tones, the scrub before a slide is softer, and rival cars' slides use the same muffled low tone, quieter.
+- **New: Settings → Audio → Skid sound:** Soft roar / Roar and hum (default) / Warm hum.
+
+## Build 113
+
+- **A calmer skid, and a different one on every car** (js/skid.js).
+  - **Calmer:** the squeal now lives in the low and mid recorded bands (the high band only as a faint edge on a very big slide). The glare above 2 kHz is pulled well down, each car has its own warm low-pass, saturation is lighter, the pitch moves in a narrower range, it swells in and fades out more gently, and the chirp is softer. Its brightness centre dropped from about 1.9 kHz to about 0.85–1.05 kHz, and it plays at about 70% of build 112's level.
+  - **Each car's own tyre voice, from its real figures:**
+    - **Weight:** heavier cars groan lower with more rubber scrub under them; light cars hum higher and lighter.
+    - **Tyre grip:** grippier tyres hold a fuller, steadier howl; older, narrower tyres a thinner one that wavers more.
+    - **Power:** powerful cars build more in a held drift.
+    - **Drivetrain:** rear-drive cars howl and chirp the most, four-wheel-drive cars scrub more and squeal less, and front-drive cars mostly scrub.
+    - **Era:** classics are softer and warmer, Group A cleaner, Group B fuller and rougher.
+  - **Rivals too:** rival cars' squeal is voiced by their own car the same way, a little quieter and with its glare taken down.
+
+## Build 112
+
+- **A real skid instead of the whistle.** Build 111's "singing tyre" was a synthesised tone and whistled, so it's gone. Your car's skid is now built from the game's own tyre recordings (js/skid.js):
+  - **Howl:** the three recorded squeal bands, two copies each slightly apart, so the squeal is thick and never shows its loop. A light slide moans low, a committed drift howls, a big fast slide screams, cross-faded smoothly, with pitch following the slide and the speed. A body boost around 800 Hz, the glare around 3 kHz removed, and gentle saturation make it full instead of piercing.
+  - **Tear:** the recorded scrub of rubber dragged sideways sits low under the howl: the weight of the car sliding.
+  - **Chirp:** a short sharp yelp when the tyres break loose and when you flick the car from one side to the other mid-slide.
+  - **Builds when held:** over about 2.5 seconds of drifting, the howl climbs into the fuller band, the tear deepens and the skid comes up a little, so a long clean drift sounds bigger.
+  - **Release:** the skid falls away over a quarter of a second as its pitch dips, like a tyre gripping again.
+
+## Build 111
+
+- **Far fewer leaves.** 6 / 9 / 12 on Low / Medium / High (was 45 / 70 / 90), and none over the middle of the view.
+- **A better camera filter.**
+  - **Contact shading:** the filter now reads the depth of the scene. Where a pixel sits in a crease (the road right beside a car, the ground at the foot of a barrier, the step of a kerb), it gets a little darker, so cars sit on the track instead of floating on it.
+  - **Glow:** a softer, wider glow around lamps and bright highlights (two rings of samples instead of one).
+  - **Sharpening:** a tighter limit, so edges sharpen without bright halos.
+  - **Same on High:** the composer's picture now carries its depth too, so High gets the same contact shading.
+- **A new slide sound for your car** (replaced in build 112). The recorded squeal was replaced by a "singing tyre" voice:
+  - **Tone:** a warm tone with a soft fifth and octave, through a gentle band, so it sings instead of shrieking. Its pitch follows the slide (low hum for a small slide, climbing for a big fast one) and glides without steps.
+  - **Life:** vibrato that deepens with the slide, a slight random wander, and a little stick-slip chatter as the tyre breaks loose, which smooths out once the drift settles.
+  - **Rubber:** a soft breath of rubber hiss underneath.
+  - **Reward:** hold a drift and a shimmering upper chord swells in over about two seconds.
+  - **Release:** when the slide ends, the tone dips as it fades instead of cutting off.
+  - Lock-ups, wheelspin, grass and the scrub before a slide keep their own sounds. Rival cars' squeal is a little quieter (0.07 → 0.04).
+
+## Build 110
+
+- **All the air particles are gone.** Build 109 only removed the wind particles over the circuit. This build also removes the dust motes that drifted through the menu and the desert haze, the dust in the showroom's light beams, the blowing desert dust along the track, and the smoke puffs drifting from the food stalls, vents and chimneys. The only particles left in the air are the camera leaves. (The tiny camera flashes in the grandstands and the cars' own tyre smoke, sparks and exhaust stay.)
+- **Leaves around the camera.** The glowing motes of build 109 are now small leaves drifting slowly through the air between the camera and the track. A gentle breeze carries them across the view while they sway, spin and tumble edge-on and back, catching the light as they turn. By day they're mostly green with some yellow, orange and brown; in the desert they're dry tan and brown; at night they're dimmed and cooled. Rain darkens them and thins them out. They thin out toward the middle of the screen so your car stays clear. 45 / 70 / 90 leaves on Low / Medium / High, in one small draw call.
+- **New: realistic camera filter** (Settings → Display → Camera filter: Realistic / Off; on by default except on Low). It is inspired by the look of the "Enhancing Photorealism Enhancement" research (Richter, AlHaija and Koltun, 2021). That research uses a trained neural network that can't run in a phone browser at race speed, and this filter does not reproduce it. It's an original, hand-written filter that goes after the same impression in one full-screen pass:
+  - **Natural colour:** toy-bright greens become olive and darker, very saturated colours are calmed a little, and light gets a daylight balance (warm highlights, cool shadows; moonlight blue at night).
+  - **Local contrast:** edges, tyre marks, tarmac and grass texture come out like a sharp camera image.
+  - **Halation:** lamps and sun glints bleed a soft warm glow.
+  - **Filmic tone curve (AgX-style):** highlights roll off like a camera sensor, followed by a light contrast curve.
+  - **Lens:** slight colour fringing toward the corners, natural lens fall-off, and fine sensor grain.
+  - **Cost:** one extra full-screen pass (eleven texture reads per pixel). On High it's built into the existing post-processing pass. If a phone can't keep up, the automatic quality guard turns the filter off together with the post-processing.
+
+## Build 109
+
+- **Magic motes around the camera.** The wind particles that filled the whole circuit (leaves, fluff, dust streaks, sea mist, up to 1,500 sprites) are gone. In their place, a light scatter of tiny glowing motes and soft four-point sparkles drifts in the air between the race camera and the track. They float in slow loops and twinkle, and slide past with a gentle parallax as the camera moves. They gather around the edges of the view and fade out toward the middle, so your car always stays clear. By day they are gold, white, ice blue and violet; at night amber and gold, and brighter; in the desert sand gold; fainter in the rain. The whole effect is one small draw call: 110 / 190 / 260 motes on Low / Medium / High, animated on the graphics card.
+- **Fewer tyre particles.** The tyres now make about half the smoke and dust puffs, fewer flung clods and rubber flecks, and a lighter burnout. Rival cars smoke only within 80 m of you (was 126 m), at 30% of your car's rate (was 45%). The particle pools shrank from 4,200 + 1,200 to 1,500 + 700 on Medium, so the game also checks far fewer slots every frame. In a test race on Brands Hatch, the number of live particles went from 266 on average (576 at peak) to about 110–130 (about 245 at peak).
+
+## Build 108
+
+**Smoother frame rate, especially on phones.** I profiled a full 8-car race and fixed what was costing frames:
+- **No more forced re-layout every frame.** The arrow above your car and the rival name tags read the screen size in the middle of every frame, which made the browser recalculate the whole HUD's layout each frame. The size is now read once per resize. This removed one forced layout per frame and cut the game-logic time per frame by about a quarter (≈10 ms → ≈7 ms for 8 cars on the test machine).
+- **No resolution hitch every second.** The automatic resolution scaler could resize the picture once a second when the game ran near its limit, and each resize drops a frame. It now steps down only after 2 seconds of slow frames, steps up only after 6 seconds of easy ones, waits 3 seconds between changes, and stops going back up in a race once a step up had to be undone.
+- **Lighter rival cars.** Tyres were more than half of each car's triangles. Wheels now follow the graphics setting (yours: 32 / 24 / 18 segments on High / Medium / Low; rivals: 24 / 18 / 14). Below High, rival tyres leave the shadow to the car body. The 8-car grid went from about 270k to about 235k triangles on Medium. This changes looks only, not physics.
+- **Cheaper HUD on phones.** In a race, the pause button no longer blurs the moving picture behind it, and the minimap and gauge icons drop their drop-shadow filters. Each of those had to be recomputed by the phone's GPU every frame.
+- **A phone steps quality down a little sooner** when it can't hold about 48 fps.
+- **New: FPS counter** (Settings → Display → FPS counter). It shows frames per second, the slowest frame in the last half second, and the graphics level with the render scale. In a race it sits beside the pause button.
+
+## Build 107
+
+**KARVA now fits phones held sideways, checked on the iPhone 16 Pro Max.** Tested at full screen (932 × 430, with the Dynamic Island and home-bar gaps) and in Safari with its toolbars (932 × 370). Also tested on a small iPhone (667 × 375).
+- **Safe areas.** Every menu screen, dialog, Pause and the results page now starts inside the safe areas. No button sits under the Dynamic Island, the rounded corners or the home bar. The race HUD already worked this way.
+- **Menus.**
+  - Smaller top bar: all nine tabs fit beside the level and credits, and on very small phones the tabs scroll.
+  - Home keeps Race, the four modes and the tools on screen without scrolling.
+  - Long columns (the home side panel, Events, Garage, Tuning, Settings) scroll inside their own panel instead of running off the bottom.
+  - The news ticker is hidden on phones to give its space back to the panels.
+- **Pause.** One compact card: the options, then Resume, then Photo mode, Restart and Back to menu side by side.
+- **Results.** The table is compact, and Race again and Menu stay pinned at the bottom while the rest scrolls. The highlights offer moved to the top-right corner, so it no longer covers the table.
+- **Dialogs.** Welcome back, Rivals and qualifying results stay inside the screen and scroll if needed.
+- **Rotation.** The 3D view now measures its real size on screen and measures again after a rotation and whenever Safari's toolbars slide in or out. iPhones report a stale size for a moment after turning, which could leave the picture the wrong shape.
+- **Portrait.** The "Rotate your phone" card shows the KARVA logo and now covers everything, including the Welcome back window (before, that window could sit on top of it).
+- **Full screen on iPhone.** In a Safari tab, the title screen shows how to get the whole screen: tap Share, then Add to Home Screen. Opened from the Home Screen, KARVA runs full screen in landscape.
+- **Fix.** A car's live gap on the results table can no longer read "+-".
 
 ## Build 106
 
