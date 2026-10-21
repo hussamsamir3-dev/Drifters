@@ -2,6 +2,6 @@
 // (Supabase dashboard -> Project Settings -> API: "Project URL" and the "anon public" key). The anon key is safe to publish.
 // Game updates never include karva-config.js, so your keys survive every update. Everyone who plays from your site uses them.
 window.GAME_CONFIG = {
-  SUPABASE_URL: '',        // e.g. 'https://abcdxyz.supabase.co'
-  SUPABASE_ANON_KEY: '',   // the long "anon public" key
+  SUPABASE_URL: 'https://wgcenysiukyygxhcimne.supabase.co',        // e.g. 'https://abcdxyz.supabase.co'
+  SUPABASE_ANON_KEY: 'sb_publishable_xhU02FtVSjGYS0RPhYr3Xg_HH3hsCFD',   // the long "anon public" key
 };
