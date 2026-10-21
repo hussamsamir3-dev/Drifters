@@ -1,6 +1,15 @@
-# KARVA | كارڤا — Build 120
+# KARVA | كارڤا — Build 121
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 121
+
+**Qualifying is a full session.** It used to end the instant you finished your second lap, while the other drivers were still out on theirs, and the table and the grid were made from whatever times they had at that moment. Now, when your run is done, your car cruises on autopilot (its laps do not count for you, nothing is recorded or studied from them) and every driver completes its timed laps; the chip says "Qualifying · waiting for 2 drivers · P5 · 1:03.841". The session ends when the last driver has finished its run, or 90 s after yours, or when you press **Results ▸**. Each driver's time is the best valid lap of its own two timed laps (a car that keeps lapping cannot improve afterwards).
+- During qualifying the position list on the left shows the whole field in qualifying order, the same order as the HUD position, the results table and the grid.
+
+**One simple minimap.** The radar disc, its ring and the whole-circuit inset are gone, and so is the Radar/Simple switch. The map now zooms in on your car and turns with it (heading up, eased), the circuit is one light line with a soft dark edge, rivals are small dots (online drivers orange), the start line is a red tick, and the map fades out gradually toward its edges so only the stretch around you shows.
+
+**The race waits for the field.** The final results used to come up 1.2 s after your flag, while others were still racing. Now, after your flag, a chip shows "Finished P5 · 2 cars still racing", the race runs on until everyone is home (or 60 s, or press **Results ▸**), and only then the podium and the final classification come up. Online races keep the host's timing as before.
 
 ## Build 120
 
