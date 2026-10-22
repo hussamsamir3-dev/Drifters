@@ -1,0 +1,12 @@
+{
+  "name": "karva",
+  "version": "122.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash tools/build.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
