@@ -1,6 +1,16 @@
-# KARVA | كارڤا — Build 123
+# KARVA | كارڤا — Build 124
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 124
+
+**Qualifying is a race.** Before every circuit race there is now a 2-lap qualifying race, raced for real: the cars are solid (no more ghosts), the race rules apply (track-limit warnings and penalties, contact penalties), and the order in which the cars cross the line at the end of lap 2, penalty seconds included, is the starting grid of the main race. Lap times no longer decide it.
+- The chip shows "Qualifying race · Lap 1/2 · P3", and the HUD position is your place on the road, as in any race.
+- When you cross the line your car carries on on autopilot ("you finished P3 · waiting for 1 driver"); the session closes when the last car is home (or 90 s after you, or press **Results ▸**). A car still out there at that point is placed behind the finishers, in road order.
+- The results screen ("Qualifying race") lists everyone by finishing time with the gap to the winner; "You start P…" is your finishing place.
+- Skip ▸ before you finish still puts you at the back of the grid.
+
+**Corner cuts cost 3 s in a race.** A cut (all four wheels off the track while shortening the way, Build 123) now adds a 3 s penalty in the race and in the qualifying race, because positions are decided on the road and deleting the lap alone would not take the gain back. The lap is still deleted for records and personal bests.
 
 ## Build 123
 
