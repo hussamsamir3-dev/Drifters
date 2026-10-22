@@ -1,6 +1,10 @@
-# KARVA | كارڤا — Build 122
+# KARVA | كارڤا — Build 123
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 123
+
+**Corner cutting deletes the lap.** Track limits were not checked at all in qualifying, and only huge jumps were caught anywhere else. On the twistier Build 119 layouts, driving across the grass or sand instead of round the road makes a lap 2-6% shorter depending on the circuit (measured on all 18 layouts), about 3 s on a 54 s lap: a qualifying time of 50.8 against a field of 53.9-54.3 in the same cars. Now a trip with all four wheels off the track that shortens the way (more distance gained along the circuit than actually driven, by over 3 m) deletes that lap, in qualifying and in the race, for every car alike, and you see "Lap deleted — track limits". Running wide (the outside of a corner, a slide onto the grass) is still fine; keeping two wheels on the tarmac or kerb is legal, as on real circuits. Checked: AI laps on six of the twistiest circuits were never deleted; a cut straight across a 90° bend, or round its inside on the grass, is. The race's existing track-limit warnings and 5 s penalties are unchanged.
 
 ## Build 122
 
