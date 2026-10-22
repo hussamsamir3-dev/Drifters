@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>KARVA | Build 121</title>
+<title>KARVA | Build 122</title>
 <meta name="theme-color" content="#0c1017">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="KARVA"><meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
@@ -284,7 +284,7 @@ addEventListener('unhandledrejection',function(e){ if(!window.__booted) fatal((e
 // seal below (written by tools/build.sh) and runs it. A changed file is refused. Add ?dev to the address (over http) to run the source
 // modules in js/ instead; without js/ and lib/ next to the game, ?dev quietly runs the bundle.
 (function(){
-  var SEAL=/*@seal*/'1969327c187549f3'/*@*/, K=0x5ee1a96b, ESC=[0,10,13,34,92,127];
+  var SEAL=/*@seal*/'7150bce22dbaa9f5'/*@*/, K=0x5ee1a96b, ESC=[0,10,13,34,92,127];
   function fnv2(s){var a=0x811c9dc5,b=0x9e3779b1;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);a=Math.imul(a^c,0x01000193);b=Math.imul(b^c,0x5bd1e995)^(b>>>15);}return (a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');}
   function unb7(s,n){var o=new Uint8Array(n),acc=0,bits=0,j=0,i=0;while(j<n){var c=s.charCodeAt(i++);if(c===127)c=ESC[s.charCodeAt(i++)-48];acc=(acc<<7)|c;bits+=7;if(bits>=8){bits-=8;o[j++]=acc>>bits;acc&=(1<<bits)-1;}}return o;}
   // a small raw-deflate decoder for browsers without DecompressionStream (also used by js/assets.js)

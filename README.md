@@ -1,6 +1,10 @@
-# KARVA | كارڤا — Build 121
+# KARVA | كارڤا — Build 122
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 122
+
+**Minimap.** Zoomed out about twice as far (about 230 m from the centre to the edge, a little more at speed), so you see the coming corners. Your arrow and every rival sit exactly on the circuit line (each car is placed at its nearest point on the line): on a thin line, a car on the far side of a wide track used to sit visibly beside it. The map now turns with the road where you are, not with the car's body, so a slide no longer swings it round; your arrow still shows which way your car is pointing.
 
 ## Build 121
 
