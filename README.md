@@ -1,6 +1,10 @@
-# KARVA | كارڤا — Build 124
+# KARVA | كارڤا — Build 125
 
 Extract the complete ZIP into a folder and open **index.html**. All cars, sound, fonts, graphics libraries and game code are included. Keep the folders together. A local HTTP server is also supported: run `python3 -m http.server 8080` in this folder and open `http://localhost:8080`.
+
+## Build 125
+
+**Ghost mode is back in the qualifying race.** Every car is a ghost again during qualifying (cars pass through each other and flicker see-through when they overlap), as before Build 124. Everything else of the qualifying race stays: 2 laps, the order across the line (penalties included) is the grid.
 
 ## Build 124
 
